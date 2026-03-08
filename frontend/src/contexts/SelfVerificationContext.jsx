@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useCall
 import { useAccount, useWalletClient } from "wagmi";
 import { createPublicClient, http } from "viem";
 import toast from "react-hot-toast";
-import { IdentitySDK } from '@goodsdks/citizen-sdk';
+import { IdentitySDK, ClaimSDK } from '@goodsdks/citizen-sdk';
 
 const SelfVerificationContext = createContext(undefined);
 
@@ -28,26 +28,121 @@ export function SelfVerificationProvider({ children }) {
     const [isVerified, setIsVerified] = useState(false);
     const [isVerifying, setIsVerifying] = useState(false);
     const [identitySDK, setIdentitySDK] = useState(null);
+    const [claimSDK, setClaimSDK] = useState(null);
+    const [entitlement, setEntitlement] = useState(0n);
     const hasCheckedRef = useRef(false); // Prevent repeated checks on re-renders
     const lastAddressRef = useRef(null);
 
-    // Initialize IdentitySDK once wallet connects — uses static publicClient for reads
+    // Initialize IdentitySDK and ClaimSDK once wallet connects — uses static publicClient for reads
     useEffect(() => {
-        if (isConnected && walletClient) {
-            try {
-                const sdk = new IdentitySDK({
-                    publicClient: staticPublicClient,
-                    walletClient,
-                    env: 'production'
-                });
-                setIdentitySDK(sdk);
-            } catch (error) {
-                console.error("Failed to initialize IdentitySDK:", error);
+        let isMounted = true;
+
+        async function initSDKs() {
+            if (isConnected && walletClient && address && isMounted) {
+                try {
+                    console.log("🛠️ Attempting to initialize SDKs for:", address);
+
+                    // Attempt init which handles account retrieval automatically if possible
+                    const iSDK = await IdentitySDK.init({
+                        publicClient: staticPublicClient,
+                        walletClient,
+                        env: 'production'
+                    });
+
+                    const cSDK = await ClaimSDK.init({
+                        publicClient: staticPublicClient,
+                        walletClient,
+                        identitySDK: iSDK,
+                        env: 'production'
+                    });
+
+                    console.log("✅ SDKs initialized successfully for:", address);
+                    if (isMounted) {
+                        setIdentitySDK(iSDK);
+                        setClaimSDK(cSDK);
+                        hasCheckedRef.current = false; // Reset check
+                    }
+                } catch (error) {
+                    console.warn("⚠️ SDK.init failed, retrying with manual constructor:", error.message);
+
+                    // Fallback to manual constructor if init fails
+                    try {
+                        const iSDK = new IdentitySDK({
+                            account: address,
+                            publicClient: staticPublicClient,
+                            walletClient,
+                            env: 'production'
+                        });
+                        const cSDK = new ClaimSDK({
+                            account: address,
+                            publicClient: staticPublicClient,
+                            walletClient,
+                            identitySDK: iSDK,
+                            env: 'production'
+                        });
+                        console.log("✅ SDKs initialized via manual constructor");
+                        if (isMounted) {
+                            setIdentitySDK(iSDK);
+                            setClaimSDK(cSDK);
+                            hasCheckedRef.current = false;
+                        }
+                    } catch (retryError) {
+                        console.error("❌ Both SDK initialization methods failed:", retryError);
+                        toast.error(`SDK Error: ${retryError.message || "Initialization failed"}`);
+                    }
+                }
+            } else if (isMounted) {
+                if (isConnected && (!walletClient || !address)) {
+                    console.log("⏳ Wallet connected, but waiting for details...", { walletClient: !!walletClient, address });
+                }
+                setIdentitySDK(null);
+                setClaimSDK(null);
+                setEntitlement(0n);
             }
-        } else {
-            setIdentitySDK(null);
         }
-    }, [isConnected, walletClient]); // NOTE: not watching publicClient since it's static
+
+        initSDKs();
+        return () => { isMounted = false; };
+    }, [isConnected, walletClient, address]);
+
+    const checkEntitlement = useCallback(async () => {
+        if (!claimSDK || !address) return 0n;
+        try {
+            const result = await claimSDK.checkEntitlement();
+            setEntitlement(result.amount);
+            return result.amount;
+        } catch (error) {
+            console.error("Check Entitlement Error:", error);
+            return 0n;
+        }
+    }, [claimSDK, address]);
+
+    // Periodically check entitlement
+    useEffect(() => {
+        if (isConnected && claimSDK) {
+            checkEntitlement();
+            const interval = setInterval(checkEntitlement, 60000); // Every minute
+            return () => clearInterval(interval);
+        }
+    }, [isConnected, claimSDK, checkEntitlement]);
+
+    const claimG$ = useCallback(async () => {
+        if (!claimSDK) {
+            toast.error("Claim SDK not ready");
+            return;
+        }
+
+        const toastId = toast.loading("Checking eligibility and claiming...");
+        try {
+            const receipt = await claimSDK.claim();
+            toast.success("G$ claimed successfully!", { id: toastId });
+            checkEntitlement();
+            return receipt;
+        } catch (error) {
+            console.error("Claim Error:", error);
+            toast.error(error.message || "Failed to claim G$", { id: toastId });
+        }
+    }, [claimSDK, checkEntitlement]);
 
     // Check verification status — guarded to only run once per address change
     const checkVerificationStatus = useCallback(async () => {
@@ -66,8 +161,8 @@ export function SelfVerificationProvider({ children }) {
         if (cached) {
             try {
                 const { verified, timestamp } = JSON.parse(cached);
-                const oneHour = 60 * 60 * 1000;
-                if (verified && Date.now() - timestamp < oneHour) {
+                const oneWeek = 7 * 24 * 60 * 60 * 1000; // Extend cache to 1 week
+                if (verified && Date.now() - timestamp < oneWeek) {
                     setIsVerified(true);
                     hasCheckedRef.current = true;
                     lastAddressRef.current = address;
@@ -186,11 +281,13 @@ export function SelfVerificationProvider({ children }) {
             isVerified,
             isVerifying,
             verifyIdentity,
+            claimG$,
+            entitlement,
             cancelVerification: () => setIsVerifying(false),
             checkVerificationStatus,
             SelfVerificationComponent,
         }),
-        [isVerified, isVerifying, verifyIdentity, checkVerificationStatus, SelfVerificationComponent]
+        [isVerified, isVerifying, verifyIdentity, claimG$, entitlement, checkVerificationStatus, SelfVerificationComponent]
     );
 
     return (

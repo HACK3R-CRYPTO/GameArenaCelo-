@@ -12,9 +12,11 @@ via_ir = true
 # RPC endpoints
 [rpc_endpoints]
 sepolia = "${SEPOLIA_RPC_URL}"
+celo = "https://forno.celo.org"
 
 # Etherscan API key for verification
 [etherscan]
 sepolia = { key = "${ETHERSCAN_API_KEY}" }
+celo = { key = "${CELOSCAN_API_KEY}", url = "https://api.celoscan.io/api" }
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

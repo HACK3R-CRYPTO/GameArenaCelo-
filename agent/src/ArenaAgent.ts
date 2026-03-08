@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, http, parseAbiItem, formatEther, parseEther, parseAbi } from 'viem';
+import { createPublicClient, createWalletClient, http, parseAbiItem, formatEther, parseEther, parseAbi, encodeAbiParameters } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import * as dotenv from 'dotenv';
 import chalk from 'chalk';
@@ -7,25 +7,30 @@ import { MoltbookService } from './services/MoltbookService.js';
 dotenv.config();
 dotenv.config({ path: '../contracts/.env' });
 
-const ARENA_ABI = parseAbi([
-    "event MatchProposed(uint256 indexed matchId, address indexed challenger, address indexed opponent, uint256 wager, uint8 gameType)",
-    "event MatchAccepted(uint256 indexed matchId, address indexed opponent)",
-    "event MovePlayed(uint256 indexed matchId, address indexed player, uint8 move)",
-    "function acceptMatch(uint256 _matchId) external payable",
-    "function playMove(uint256 _matchId, uint8 _move) external",
-    "function resolveMatch(uint256 _matchId, address _winner) external",
-    "function matchCounter() view returns (uint256)",
-    "function matches(uint256) view returns (uint256 id, address challenger, address opponent, uint256 wager, uint8 gameType, uint8 status, address winner, uint256 createdAt)",
-    "function hasPlayed(uint256 _matchId, address _player) view returns (bool)",
-    "function playerMoves(uint256 _matchId, address _player) view returns (uint8)"
-]);
+const ARENA_ABI = [
+    { type: "event", name: "MatchProposed", inputs: [{ name: "matchId", type: "uint256", indexed: true }, { name: "challenger", type: "address", indexed: true }, { name: "opponent", type: "address", indexed: true }, { name: "wager", type: "uint256", indexed: false }, { name: "gameType", type: "uint8", indexed: false }] },
+    { type: "event", name: "MatchAccepted", inputs: [{ name: "matchId", type: "uint256", indexed: true }, { name: "opponent", type: "address", indexed: true }] },
+    { type: "event", name: "MovePlayed", inputs: [{ name: "matchId", type: "uint256", indexed: true }, { name: "player", type: "address", indexed: true }, { name: "move", type: "uint8", indexed: false }] },
+    { type: "function", name: "acceptMatch", inputs: [{ name: "_matchId", type: "uint256" }], outputs: [], stateMutability: "payable" },
+    { type: "function", name: "playMove", inputs: [{ name: "_matchId", type: "uint256" }, { name: "_move", type: "uint8" }], outputs: [], stateMutability: "nonpayable" },
+    { type: "function", name: "resolveMatch", inputs: [{ name: "_matchId", type: "uint256" }, { name: "_winner", type: "address" }], outputs: [], stateMutability: "nonpayable" },
+    { type: "function", name: "matchCounter", inputs: [], outputs: [{ name: "", type: "uint256" }], stateMutability: "view" },
+    { type: "function", name: "matches", inputs: [{ name: "", type: "uint256" }], outputs: [{ name: "id", type: "uint256" }, { name: "challenger", type: "address" }, { name: "opponent", type: "address" }, { name: "wager", type: "uint256" }, { name: "gameType", type: "uint8" }, { name: "status", type: "uint8" }, { name: "winner", type: "address" }, { name: "createdAt", type: "uint256" }], stateMutability: "view" },
+    { type: "function", name: "hasPlayed", inputs: [{ name: "_matchId", type: "uint256" }, { name: "_player", type: "address" }], outputs: [{ name: "", type: "bool" }], stateMutability: "view" },
+    { type: "function", name: "playerMoves", inputs: [{ name: "_matchId", type: "uint256" }, { name: "_player", type: "address" }], outputs: [{ name: "", type: "uint8" }], stateMutability: "view" }
+] as const;
+
 
 const REGISTRY_ABI = parseAbi([
     "function registerAgent(string calldata _name, string calldata _model, string calldata _description, string calldata _metadataUri) external",
     "function agents(address) view returns (string name, string model, string description, string metadataUri, address owner, uint256 registeredAt, bool active)"
 ]);
 
-const ARENA_ADDRESS = (process.env.VITE_ARENA_PLATFORM_ADDRESS || '0x30af30ec392b881b009a0c6b520ebe6d15722e9b') as `0x${string}`;
+const ARENA_ADDRESS = (process.env.VITE_ARENA_PLATFORM_ADDRESS || '0x5C0eafE7834Bd317D998A058A71092eEBc2DedeE') as `0x${string}`;
+const USER_ADDRESS = '0xa479b8c6030cBB01f8E9F6AcB2Ad2C757C81894d';
+const G_TOKEN_ADDRESS = '0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A' as `0x${string}`;
+
+const ERC20_ABI = parseAbi(["function transferAndCall(address to, uint256 value, bytes data) external returns (bool)", "function balanceOf(address account) external view returns (uint256)"]);
 const REGISTRY_ADDRESS = '0x95884fe0d2a817326338735Eb4f24dD04Cf20Ea7';
 
 if (!process.env.PRIVATE_KEY) {
@@ -39,14 +44,14 @@ const account = privateKeyToAccount(PRIVATE_KEY);
 
 import { type Chain } from 'viem';
 
-const MONAD_MAINNET = {
-    id: 143,
-    name: 'Monad Mainnet',
-    network: 'monad-mainnet',
-    nativeCurrency: { name: 'MON', symbol: 'MON', decimals: 18 },
+const CELO_MAINNET = {
+    id: 42220,
+    name: 'Celo Mainnet',
+    network: 'celo',
+    nativeCurrency: { name: 'CELO', symbol: 'CELO', decimals: 18 },
     rpcUrls: {
-        default: { http: [process.env.VITE_RPC_URL || 'https://rpc.monad.xyz'] },
-        public: { http: [process.env.VITE_RPC_URL || 'https://rpc.monad.xyz'] },
+        default: { http: [process.env.VITE_RPC_URL || 'https://forno.celo.org'] },
+        public: { http: [process.env.VITE_RPC_URL || 'https://forno.celo.org'] },
     },
     contracts: {
         multicall3: {
@@ -57,15 +62,17 @@ const MONAD_MAINNET = {
 } as const;
 
 const publicClient = createPublicClient({
-    chain: MONAD_MAINNET,
-    transport: http()
+    chain: CELO_MAINNET,
+    transport: http('https://forno.celo.org'),
 });
+
 
 const walletClient = createWalletClient({
     account,
-    chain: MONAD_MAINNET,
-    transport: http()
+    chain: CELO_MAINNET,
+    transport: http('https://forno.celo.org'),
 });
+
 
 const GAME_NAMES = ['RockPaperScissors', 'DiceRoll', 'UNUSED', 'CoinFlip', 'UNUSED_TicTacToe'];
 
@@ -149,6 +156,22 @@ const completedMatches = new Set<string>(); // Skip these on future scans
 let lastKnownMatchCount = 0n;
 const moltbook = new MoltbookService();
 
+// Robust helper to handle different Viem return formats (named or indexed)
+function normalizeMatch(m: any, id: bigint) {
+    if (!m) return null;
+    return {
+        id: id,
+        challenger: (m.challenger || m[1]) as string,
+        opponent: (m.opponent || m[2]) as string,
+        wager: (m.wager || m[3]) as bigint,
+        gameType: (m.gameType !== undefined ? m.gameType : m[4]) as number,
+        status: (m.status !== undefined ? m.status : m[5]) as number,
+        winner: (m.winner || m[6]) as string,
+        createdAt: (m.createdAt || m[7]) as bigint
+    };
+}
+
+
 const activeGameLocks = new Set<string>();
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -212,30 +235,35 @@ async function scanForMatches() {
         for (let i = 0; i < results.length; i++) {
             const res = results[i];
             if (!res || res.status !== 'success') continue;
-            const m = res.result as any;
-            const matchId = toCheck[i];
-            if (matchId === undefined) continue;
+            const matchId = toCheck[i]!;
             const matchIdStr = matchId.toString();
 
+            const raw = res.result as any;
+            const m = normalizeMatch(raw, matchId);
+            if (!m) continue;
+
+            // Match #4/stuck match debug
+            console.log(chalk.gray(`Match #${matchIdStr}: status=${m.status}, challenger=${m.challenger.slice(0, 6)}.., opponent=${m.opponent.slice(0, 6)}..`));
+
             // Status 2 = Completed, 3 = Cancelled — mark and skip forever
-            if (m[5] === 2 || m[5] === 3) {
+            if (m.status === 2 || m.status === 3) {
                 completedMatches.add(matchIdStr);
                 continue;
             }
 
-            if (processingAcceptance.has(matchIdStr)) continue;
-
             // 1. Accept pending matches (Status 0)
-            if (m[5] === 0 && (m[2].toLowerCase() === account.address.toLowerCase() || m[2] === '0x0000000000000000000000000000000000000000')) {
-                await handleChallenge(matchId, m[1], m[3], m[4]);
+            if (m.status === 0 && !processingAcceptance.has(matchIdStr) && (m.opponent.toLowerCase() === account.address.toLowerCase() || m.opponent === '0x0000000000000000000000000000000000000000')) {
+                await handleChallenge(matchId, m.challenger, m.wager, m.gameType);
             }
 
+
             // 2. Process Accepted Matches (Play Move OR Resolve)
-            if (m[5] === 1) {
+            if (m.status === 1) {
                 await tryPlayMove(matchId, m);
                 await tryResolveMatch(matchId, m);
             }
         }
+
     } catch (e) {
         console.error(chalk.red("Error scanning for matches:"), e);
     }
@@ -243,7 +271,7 @@ async function scanForMatches() {
 
 async function startAgent() {
     try {
-        console.log(chalk.gray('Connecting to Monad RPC...'));
+        console.log(chalk.gray('Connecting to Celo RPC...'));
         const blockNumber = await Promise.race([
             publicClient.getBlockNumber(),
             new Promise((_, reject) => setTimeout(() => reject(new Error('RPC connection timeout (15s)')), 15000))
@@ -283,7 +311,7 @@ async function startAgent() {
                 abi: REGISTRY_ABI,
                 functionName: 'register',
                 args: [ipfsUri],
-                chain: MONAD_MAINNET,
+                chain: CELO_MAINNET,
                 account
             });
             console.log(chalk.green(`✅ Agent Registered! TX: ${txHash}`));
@@ -296,7 +324,9 @@ async function startAgent() {
 
     console.log(chalk.gray(`Wallet: ${account.address} | Platform: ${ARENA_ADDRESS}`));
 
-    setInterval(scanForMatches, 30000); // Check every 30s — event watchers handle real-time
+    setInterval(scanForMatches, 2000); // Check every 2s for lightning response
+
+
     await scanForMatches();
 
     publicClient.watchEvent({
@@ -330,7 +360,8 @@ async function startAgent() {
                     address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'matches', args: [matchId!]
                 }), "readMatchEvent") as any;
 
-                if (m[5] !== 1) continue;
+                if (m.status !== 1) continue;
+
 
                 console.log(chalk.blue(`\nMove Detected: Match #${matchId} by ${player}`));
 
@@ -350,18 +381,27 @@ async function handleChallenge(matchId: bigint, challenger: string, wager: bigin
 
     console.log(chalk.yellow(`\nMatch Proposed: #${matchId} (${GAME_NAMES[gameType]}) from ${challenger}`));
 
-    const balance = await publicClient.getBalance({ address: account.address });
+    const balance = await publicClient.readContract({
+        address: G_TOKEN_ADDRESS,
+        abi: ERC20_ABI,
+        functionName: 'balanceOf',
+        args: [account.address]
+    }) as bigint;
     // Allow up to 50% of balance (reserve rest for gas/other matches)
     const maxWager = balance / 2n;
 
     if (wager > maxWager) {
-        console.log(chalk.red(`Challenge rejected: Wager ${formatEther(wager)} MON too high (Max allowed: ${formatEther(maxWager)} MON)`));
+        console.log(chalk.red(`Challenge rejected: Wager ${formatEther(wager)} G$ too high (Max allowed: ${formatEther(maxWager)} G$)`));
         return;
     }
 
     try {
+        const encodedArgs = encodeAbiParameters(
+            [{ type: 'uint8' }, { type: 'uint256' }],
+            [1, matchId]
+        );
         const { request } = await publicClient.simulateContract({
-            address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'acceptMatch', args: [matchId], value: wager, account
+            address: G_TOKEN_ADDRESS, abi: ERC20_ABI, functionName: 'transferAndCall', args: [ARENA_ADDRESS, wager, encodedArgs], account
         });
         const hash = await walletClient.writeContract(request);
         console.log(chalk.green(`Match #${matchId} accepted! Hash: ${hash}`));
@@ -384,15 +424,17 @@ async function handleChallenge(matchId: bigint, challenger: string, wager: bigin
     }
 }
 
-async function tryPlayMove(matchId: bigint, matchData: any) {
+async function tryPlayMove(matchId: bigint, m: any) {
+
     const matchIdStr = matchId.toString();
     if (activeGameLocks.has(matchIdStr)) return;
 
     // Only play if Agent is a participant (Challenger or Opponent)
-    const isChallenger = matchData[1].toLowerCase() === account.address.toLowerCase();
-    const isOpponent = matchData[2].toLowerCase() === account.address.toLowerCase();
+    const isChallenger = m.challenger.toLowerCase() === account.address.toLowerCase();
+    const isOpponent = m.opponent.toLowerCase() === account.address.toLowerCase();
 
     if (!isChallenger && !isOpponent) return;
+
 
     // Check if we already played
     const hasPlayed = await withRetry(() => publicClient.readContract({
@@ -405,16 +447,20 @@ async function tryPlayMove(matchId: bigint, matchData: any) {
     // wait for the challenger to play first so they can't see our move
     if (isOpponent) {
         const challengerPlayed = await withRetry(() => publicClient.readContract({
-            address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'hasPlayed', args: [matchId, matchData[1]]
+            address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'hasPlayed', args: [matchId, m.challenger]
         }), "challengerPlayed") as boolean;
 
+        console.log(chalk.gray(`Match #${matchId}: challengerPlayed=${challengerPlayed}, waiting...`));
         if (!challengerPlayed) return; // Wait for challenger to go first
     }
 
+
+
     activeGameLocks.add(matchIdStr);
     try {
-        const gameType = matchData[4];
-        const opponentAddr = isChallenger ? matchData[2] : matchData[1];
+        const gameType = m.gameType;
+        const opponentAddr = isChallenger ? m.opponent : m.challenger;
+
 
         console.log(chalk.magenta(`🤖 Agent playing move for Match #${matchId} (${GAME_NAMES[gameType]})...`));
 
@@ -445,15 +491,17 @@ async function tryPlayMove(matchId: bigint, matchData: any) {
     }
 }
 
-async function tryResolveMatch(matchId: bigint, matchData: any) {
+async function tryResolveMatch(matchId: bigint, m: any) {
+
     const matchIdStr = matchId.toString();
     if (activeGameLocks.has(matchIdStr + '_resolve')) return;
 
     // Check if BOTH have played
     const [challengerPlayed, opponentPlayed] = await withRetry(() => Promise.all([
-        publicClient.readContract({ address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'hasPlayed', args: [matchId, matchData[1]] }),
-        publicClient.readContract({ address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'hasPlayed', args: [matchId, matchData[2]] })
+        publicClient.readContract({ address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'hasPlayed', args: [matchId, m.challenger] }),
+        publicClient.readContract({ address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'hasPlayed', args: [matchId, m.opponent] })
     ]), "checkBothPlayed") as [boolean, boolean];
+
 
     if (!challengerPlayed || !opponentPlayed) return; // Wait for both
 
@@ -463,28 +511,31 @@ async function tryResolveMatch(matchId: bigint, matchData: any) {
 
         // specific game logic fetching
         const [challengerMove, opponentMove] = await withRetry(() => Promise.all([
-            publicClient.readContract({ address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'playerMoves', args: [matchId, matchData[1]] }),
-            publicClient.readContract({ address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'playerMoves', args: [matchId, matchData[2]] })
+            publicClient.readContract({ address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'playerMoves', args: [matchId, m.challenger] }),
+            publicClient.readContract({ address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'playerMoves', args: [matchId, m.opponent] })
         ]), "fetchMoves") as [number, number];
 
-        const winner = determineWinner(matchData[4], matchData[1], Number(challengerMove), matchData[2], Number(opponentMove));
+        const winner = determineWinner(m.gameType, m.challenger, Number(challengerMove), m.opponent, Number(opponentMove));
+
 
         const { request } = await publicClient.simulateContract({
             address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'resolveMatch',
             args: [matchId, winner as `0x${string}`], account
         });
         const hash = await walletClient.writeContract(request);
-        console.log(chalk.green(`✅ Match #${matchId} Resolved! Winner: ${winner === matchData[1] ? 'Challenger' : 'Opponent'}`));
+        console.log(chalk.green(`✅ Match #${matchId} Resolved! Winner: ${winner === m.challenger ? 'Challenger' : 'Opponent'}`));
+
 
         // Social Update: Match Result
         await moltbook.postMatchResult(
             matchId.toString(),
-            matchData[1], // Challenger
-            matchData[2], // Opponent
+            m.challenger,
+            m.opponent,
             winner,
-            formatEther(matchData[3] * 2n), // Total Prize Estimation (approx)
-            GAME_NAMES[matchData[4]] || 'Unknown'
+            formatEther(m.wager * 2n),
+            GAME_NAMES[m.gameType] || 'Unknown'
         );
+
 
     } catch (e: any) {
         const errMsg = e.shortMessage || e.message || '';
@@ -492,16 +543,17 @@ async function tryResolveMatch(matchId: bigint, matchData: any) {
             console.log(chalk.gray(`Match #${matchId} already resolved by another party.`));
             // Still post to Moltbook — we participated in this match
             try {
-                const resolvedWinner = matchData[6]; // winner field from match struct
+                const resolvedWinner = m.winner; // winner field from match struct
                 if (resolvedWinner && resolvedWinner !== '0x0000000000000000000000000000000000000000') {
                     await moltbook.postMatchResult(
                         matchId.toString(),
-                        matchData[1], matchData[2], resolvedWinner,
-                        formatEther(matchData[3] * 2n),
-                        GAME_NAMES[matchData[4]] || 'Unknown'
+                        m.challenger, m.opponent, resolvedWinner,
+                        formatEther(m.wager * 2n),
+                        GAME_NAMES[m.gameType] || 'Unknown'
                     );
                 }
             } catch (postErr: any) {
+
                 console.error(chalk.yellow(`[MOLTBOOK] Post failed after external resolve: ${postErr.message}`));
             }
         } else {

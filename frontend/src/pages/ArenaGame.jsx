@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useAccount, useReadContract, useWriteContract, usePublicClient, useWatchContractEvent, useBalance } from 'wagmi';
+import { useAccount, useReadContract, useWriteContract, usePublicClient, useWatchContractEvent, useBalance, useConnect } from 'wagmi';
+import { injected } from 'wagmi/connectors';
 import { BookOpen } from 'lucide-react';
-import { useAppKit } from '@reown/appkit/react';
-import { parseEther, formatEther, parseAbiItem } from 'viem';
-import { CONTRACT_ADDRESSES, ARENA_PLATFORM_ABI, AGENT_REGISTRY_ABI } from '../config/contracts';
+import { parseUnits, formatUnits, parseAbiItem, encodeAbiParameters } from 'viem';
+import { CONTRACT_ADDRESSES, ARENA_PLATFORM_ABI, AGENT_REGISTRY_ABI, ERC20_ABI } from '../config/contracts';
 import { toast } from 'react-hot-toast';
 import { useArenaEvents } from '../hooks/useArenaEvents';
 import { MATCH_STATUS, GAME_TYPES, MOVES, getMoveDisplay } from '../utils/gameLogic';
 import DocsModal from '../components/DocsModal';
 import MoltbookFeed from '../components/MoltbookFeed';
+import { useSelfVerification } from '../contexts/SelfVerificationContext';
 
 
 
@@ -16,9 +17,19 @@ import MoltbookFeed from '../components/MoltbookFeed';
 
 const ArenaGame = () => {
     const { address, isConnected, chainId } = useAccount();
-    const { data: balance, isError, isLoading } = useBalance({ address });
-    const { open } = useAppKit();
+    const { data: balance, isError, isLoading } = useBalance({
+        address,
+        token: CONTRACT_ADDRESSES.G_TOKEN,
+        query: {
+            refetchInterval: false,
+            staleTime: 30000 // Cache for 30s to prevent spam
+        }
+    });
+    const { connect } = useConnect();
+    const open = () => connect({ connector: injected() });
     const publicClient = usePublicClient();
+
+    const { isVerified, isVerifying, verifyIdentity, cancelVerification, SelfVerificationComponent } = useSelfVerification();
     const [wager, setWager] = useState('0.1');
     const [selectedGameType, setSelectedGameType] = useState(0);
     const [matches, setMatches] = useState([]);
@@ -30,15 +41,8 @@ const ArenaGame = () => {
     const [activeTab, setActiveTab] = useState('chain'); // 'chain', 'social', or 'fame'
     const [leaderboard, setLeaderboard] = useState([]);
 
-    // Fetch Agent Identity (EIP-8004 Standard)
-    const { data: agentBalance } = useReadContract({
-        address: CONTRACT_ADDRESSES.AGENT_REGISTRY,
-        abi: [{ inputs: [{ internalType: "address", name: "owner", type: "address" }], name: "balanceOf", outputs: [{ internalType: "uint256", name: "", type: "uint256" }], stateMutability: "view", type: "function" }],
-        functionName: 'balanceOf',
-        args: [CONTRACT_ADDRESSES.AI_AGENT]
-    });
-
-    const agentProfile = agentBalance && agentBalance > 0n ? { active: true } : null;
+    // Mock Agent Identity active state (Registry EIP-8004 not deployed on Celo yet)
+    const agentProfile = { active: true };
 
     const { writeContractAsync: writeArena } = useWriteContract();
 
@@ -281,7 +285,8 @@ const ArenaGame = () => {
         args: [address],
         query: {
             enabled: !!address,
-            refetchInterval: false // DISABLE POLLING
+            refetchInterval: false, // DISABLE POLLING
+            staleTime: 10000 // Cache for 10s to prevent rapid spam during event callbacks
         }
     });
 
@@ -405,16 +410,25 @@ const ArenaGame = () => {
             toast.error('Please connect your wallet');
             return;
         }
+        if (!isVerified) {
+            toast.error('Identity verification required');
+            verifyIdentity();
+            return;
+        }
 
         setLoading(true);
         const toastId = toast.loading('Initiating challenge...');
         try {
+            const encodedArgs = encodeAbiParameters(
+                [{ type: 'uint8' }, { type: 'address' }, { type: 'uint8' }],
+                [0, CONTRACT_ADDRESSES.AI_AGENT, selectedGameType]
+            );
+
             const hash = await writeArena({
-                address: CONTRACT_ADDRESSES.ARENA_PLATFORM,
-                abi: ARENA_PLATFORM_ABI,
-                functionName: 'proposeMatch',
-                args: [CONTRACT_ADDRESSES.AI_AGENT, selectedGameType],
-                value: parseEther(wager)
+                address: CONTRACT_ADDRESSES.G_TOKEN,
+                abi: ERC20_ABI,
+                functionName: 'transferAndCall',
+                args: [CONTRACT_ADDRESSES.ARENA_PLATFORM, parseUnits(wager, 18), encodedArgs]
             });
 
             toast.loading('Waiting for confirmation...', { id: toastId });
@@ -437,16 +451,25 @@ const ArenaGame = () => {
             toast.error('Please connect your wallet');
             return;
         }
+        if (!isVerified) {
+            toast.error('Identity verification required');
+            verifyIdentity();
+            return;
+        }
 
         setLoading(true);
         const toastId = toast.loading('Proposing match...');
         try {
+            const encodedArgs = encodeAbiParameters(
+                [{ type: 'uint8' }, { type: 'address' }, { type: 'uint8' }],
+                [0, '0x0000000000000000000000000000000000000000', selectedGameType]
+            );
+
             const hash = await writeArena({
-                address: CONTRACT_ADDRESSES.ARENA_PLATFORM,
-                abi: ARENA_PLATFORM_ABI,
-                functionName: 'proposeMatch',
-                args: ['0x0000000000000000000000000000000000000000', selectedGameType],
-                value: parseEther(wager)
+                address: CONTRACT_ADDRESSES.G_TOKEN,
+                abi: ERC20_ABI,
+                functionName: 'transferAndCall',
+                args: [CONTRACT_ADDRESSES.ARENA_PLATFORM, parseUnits(wager, 18), encodedArgs]
             });
 
             toast.loading('Waiting for confirmation...', { id: toastId });
@@ -463,15 +486,29 @@ const ArenaGame = () => {
     };
 
     const handleAcceptMatch = async (matchId, wagerAmount) => {
+        if (!isConnected) {
+            toast.error('Please connect your wallet');
+            return;
+        }
+        if (!isVerified) {
+            toast.error('Identity verification required');
+            verifyIdentity();
+            return;
+        }
+
         setLoading(true);
         const toastId = toast.loading('Accepting match...');
         try {
+            const encodedArgs = encodeAbiParameters(
+                [{ type: 'uint8' }, { type: 'uint256' }],
+                [1, BigInt(matchId)]
+            );
+
             const hash = await writeArena({
-                address: CONTRACT_ADDRESSES.ARENA_PLATFORM,
-                abi: ARENA_PLATFORM_ABI,
-                functionName: 'acceptMatch',
-                args: [BigInt(matchId)],
-                value: wagerAmount
+                address: CONTRACT_ADDRESSES.G_TOKEN,
+                abi: ERC20_ABI,
+                functionName: 'transferAndCall',
+                args: [CONTRACT_ADDRESSES.ARENA_PLATFORM, wagerAmount, encodedArgs]
             });
 
             toast.loading('Waiting for confirmation...', { id: toastId });
@@ -513,7 +550,7 @@ const ArenaGame = () => {
                         <div className="bg-[#0a0a0a] border border-white/10 px-4 py-2 rounded min-w-[140px]">
                             <span className="text-[10px] text-gray-500 block uppercase">Balance</span>
                             <div className="text-white font-bold text-sm font-mono">
-                                {balance ? Number(formatEther(balance.value)).toFixed(4) : '--'} <span className="text-purple-500">MON</span>
+                                {balance ? Number(formatUnits(balance.value, 18)).toFixed(4) : '--'} <span className="text-blue-400">G$</span>
                             </div>
                         </div>
                         <div className="bg-[#0a0a0a] border border-white/10 px-4 py-2 rounded flex flex-col items-end">
@@ -575,10 +612,10 @@ const ArenaGame = () => {
                             <div className="bg-black/50 border border-white/5 rounded p-4 mb-6">
                                 <div className="flex justify-between text-[10px] text-gray-500 uppercase mb-2">
                                     <span>Wager Amount</span>
-                                    <span>Potential Win: <span className="text-green-400">{(parseFloat(wager || '0') * 2 * 0.98).toFixed(3)} MON</span></span>
+                                    <span>Potential Win: <span className="text-green-400">{(parseFloat(wager || '0') * 2 * 0.95).toFixed(3)} G$</span></span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-purple-500 font-bold">MON</span>
+                                    <span className="text-blue-400 font-bold">G$</span>
                                     <input
                                         type="number"
                                         value={wager}
@@ -593,6 +630,10 @@ const ArenaGame = () => {
                             {!isConnected ? (
                                 <button onClick={() => open()} className="w-full py-4 bg-white/5 border border-white/10 rounded text-sm font-bold hover:bg-white/10 transition-all uppercase">
                                     Connect Wallet
+                                </button>
+                            ) : !isVerified ? (
+                                <button onClick={verifyIdentity} className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-bold transition-all uppercase shadow-[0_0_20px_rgba(37,99,235,0.3)]">
+                                    Verify Humanity (Self Protocol)
                                 </button>
                             ) : (
                                 <button
@@ -653,7 +694,7 @@ const ArenaGame = () => {
                                                     </div>
                                                 </div>
                                                 <div className="text-right flex flex-col items-end">
-                                                    <div className="text-purple-400 font-bold">{formatEther(m.wager)}</div>
+                                                    <div className="text-blue-400 font-bold">{formatUnits(m.wager, 18)} G$</div>
 
                                                     {m.status === 1 && (
                                                         <button
@@ -737,7 +778,7 @@ const ArenaGame = () => {
                                                         <span className={isMeOpponent ? "text-purple-400" : ""}>{opponentDisplay}</span>
                                                     </div>
                                                     <div className="flex justify-between mt-1 items-center">
-                                                        <span className="text-gray-500 font-bold">{formatEther(m.wager)} MON</span>
+                                                        <span className="text-gray-500 font-bold">{formatUnits(m.wager, 18)} G$</span>
                                                         <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${m.status === 2
                                                             ? (isAiWinner ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-green-500/10 text-green-400 border border-green-500/20')
                                                             : 'bg-white/5 text-gray-500'}`}>
@@ -804,7 +845,17 @@ const ArenaGame = () => {
                 </div>
 
                 {/* Modal - Terminal Style */}
-                {activeMatch && (
+                {isVerifying ? (
+                    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div className="bg-[#0a0a0a] border border-blue-500/50 rounded w-full max-w-lg shadow-[0_0_50px_rgba(37,99,235,0.1)]">
+                            <div className="bg-blue-900/10 border-b border-blue-500/20 p-4 flex justify-between items-center">
+                                <h3 className="text-blue-400 font-bold tracking-wider">{">> "} VERIFY_IDENTITY</h3>
+                                <button onClick={cancelVerification} className="text-gray-500 hover:text-white">✕</button>
+                            </div>
+                            <SelfVerificationComponent />
+                        </div>
+                    </div>
+                ) : activeMatch && (
                     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                         <div className="bg-[#0a0a0a] border border-purple-500/50 rounded w-full max-w-lg shadow-[0_0_50px_rgba(139,92,246,0.1)]">
                             <div className="bg-purple-900/10 border-b border-purple-500/20 p-4 flex justify-between items-center">
@@ -816,8 +867,8 @@ const ArenaGame = () => {
                                 <div className="text-center mb-8">
                                     <div className="text-sm text-gray-500 mb-1">MATCH_ID: #{activeMatch.id}</div>
                                     <div className="text-2xl font-bold text-white mb-2">{GAME_TYPES.find(g => g.id === activeMatch.gameType)?.label}</div>
-                                    <div className="inline-block bg-purple-500/10 text-purple-300 px-3 py-1 rounded text-xs border border-purple-500/20">
-                                        STAKE: {formatEther(activeMatch.wager)} MON
+                                    <div className="inline-block bg-blue-500/10 text-blue-300 px-3 py-1 rounded text-xs border border-blue-500/20">
+                                        STAKE: {formatUnits(activeMatch.wager, 18)} G$
                                     </div>
                                 </div>
 

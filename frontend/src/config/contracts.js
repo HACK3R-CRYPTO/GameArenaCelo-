@@ -1,9 +1,11 @@
+import ArenaPlatformABIJson from './ArenaPlatformABI.json';
+
 // Contract addresses
 export const CONTRACT_ADDRESSES = {
-  ARENA_PLATFORM: import.meta.env.VITE_ARENA_PLATFORM_ADDRESS || '0x30af30ec392b881b009a0c6b520ebe6d15722e9b',
+  ARENA_PLATFORM: '0x5C0eafE7834Bd317D998A058A71092eEBc2DedeE', // Just deployed to Celo Mainnet
   AI_AGENT: import.meta.env.VITE_AI_AGENT_ADDRESS || '0x2E33d7D5Fa3eD4Dd6BEb95CdC41F51635C4b7Ad1',
   AGENT_REGISTRY: import.meta.env.VITE_AGENT_REGISTRY_ADDRESS || '0x34FCEE3eFaA15750B070836F19F3970Ad20fE8d1',
-  ARENA_TOKEN: import.meta.env.VITE_ARENA_TOKEN_ADDRESS || '0x2117449ea6630857d4d656d0d2f5e1c689c67777',
+  G_TOKEN: '0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A', // GoodDollar on Celo
 };
 
 export const AGENT_REGISTRY_ABI = [
@@ -116,8 +118,21 @@ export const ERC20_ABI = [
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "to", "type": "address" },
+      { "internalType": "uint256", "name": "value", "type": "uint256" },
+      { "internalType": "bytes", "name": "data", "type": "bytes" }
+    ],
+    "name": "transferAndCall",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "nonpayable",
+    "type": "function"
   }
 ];
+
+export const ARENA_PLATFORM_ABI = ArenaPlatformABIJson;
 
 // ABIs - Import from compiled contract artifacts
 export const TOURNAMENT_PLATFORM_ABI = [
@@ -611,365 +626,7 @@ export const ARCADE_PLATFORM_ABI = [
   }
 ];
 
-export const ARENA_PLATFORM_ABI = [
-  {
-    "inputs": [],
-    "name": "matchCounter",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "matchId",
-        "type": "uint256"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint8",
-        "name": "move",
-        "type": "uint8"
-      }
-    ],
-    "name": "MovePlayed",
-    "type": "event"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_treasury",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "constructor"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "matchId",
-        "type": "uint256"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "opponent",
-        "type": "address"
-      }
-    ],
-    "name": "MatchAccepted",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "matchId",
-        "type": "uint256"
-      }
-    ],
-    "name": "MatchCancelled",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "matchId",
-        "type": "uint256"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "winner",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "prize",
-        "type": "uint256"
-      }
-    ],
-    "name": "MatchCompleted",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "matchId",
-        "type": "uint256"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "challenger",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "opponent",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "wager",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "enum ArenaPlatform.GameType",
-        "name": "gameType",
-        "type": "uint8"
-      }
-    ],
-    "name": "MatchProposed",
-    "type": "event"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_matchId",
-        "type": "uint256"
-      }
-    ],
-    "name": "acceptMatch",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_matchId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint8",
-        "name": "_move",
-        "type": "uint8"
-      }
-    ],
-    "name": "playMove",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_matchId",
-        "type": "uint256"
-      }
-    ],
-    "name": "cancelMatch",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_player",
-        "type": "address"
-      }
-    ],
-    "name": "getPlayerMatches",
-    "outputs": [
-      {
-        "internalType": "uint256[]",
-        "name": "",
-        "type": "uint256[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "matchCounter",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "name": "hasPlayed",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "name": "playerMoves",
-    "outputs": [
-      {
-        "internalType": "uint8",
-        "name": "",
-        "type": "uint8"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "name": "matches",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "id",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "challenger",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "opponent",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "wager",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint8",
-        "name": "gameType",
-        "type": "uint8"
-      },
-      {
-        "internalType": "uint8",
-        "name": "status",
-        "type": "uint8"
-      },
-      {
-        "internalType": "address",
-        "name": "winner",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "createdAt",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_opponent",
-        "type": "address"
-      },
-      {
-        "internalType": "uint8",
-        "name": "_gameType",
-        "type": "uint8"
-      }
-    ],
-    "name": "proposeMatch",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_matchId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "_winner",
-        "type": "address"
-      }
-    ],
-    "name": "resolveMatch",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  }
-];
+
 
 // Chain IDs
 export const SEPOLIA_CHAIN_ID = 11155111;

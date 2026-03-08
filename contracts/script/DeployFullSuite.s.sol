@@ -68,7 +68,7 @@ contract DeployFullSuiteScript is Script {
 
         // 7. Deploy ArenaPlatform
         console.log("\n8. Deploying ArenaPlatform...");
-        ArenaPlatform arena = new ArenaPlatform(treasury);
+        ArenaPlatform arena = new ArenaPlatform(treasury, address(0));
         console.log("ArenaPlatform deployed at:", address(arena));
 
         // 8. Setup Permissions

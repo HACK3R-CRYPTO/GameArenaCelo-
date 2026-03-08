@@ -11,7 +11,7 @@ contract DeployArenaOnly is Script {
 
         vm.startBroadcast(deployerPrivateKey);
 
-        ArenaPlatform arena = new ArenaPlatform(treasury);
+        ArenaPlatform arena = new ArenaPlatform(treasury, address(0));
         console.log("ArenaPlatform deployed at:", address(arena));
 
         vm.stopBroadcast();

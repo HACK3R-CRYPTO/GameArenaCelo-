@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 
 const LandingOverlay = ({ onEnter }) => {
     const [text, setText] = useState('');
-    const fullText = ">> SYSTEM_INITIALIZING...\n>> CONNECTING_TO_MONAD_NETWORK...\n>> ESTABLISHING_SECURE_LINK...\n>> ACCESSING_ARENA_PROTOCOL...";
+    const fullText = ">> SYSTEM_INITIALIZING...\n>> CONNECTING_TO_CELO_NETWORK...\n>> ESTABLISHING_SECURE_LINK...\n>> ACCESSING_ARENA_PROTOCOL...";
     const [showButton, setShowButton] = useState(false);
 
     useEffect(() => {
@@ -57,11 +57,11 @@ const LandingOverlay = ({ onEnter }) => {
 
                         <div className="flex gap-4 justify-center text-xs text-gray-500">
                             <a
-                                href="https://nad.fun/tokens/0x2117449eA6630857D4D656D0D2f5e1C689C67777"
+                                href="https://gooddollar.org"
                                 target="_blank"
                                 className="text-purple-400 hover:text-purple-300 underline underline-offset-4 font-bold transition-all"
                             >
-                                BUY_ARENA_TOKEN
+                                GET_G_TOKEN
                             </a>
                             <span>|</span>
                             <a
@@ -73,11 +73,11 @@ const LandingOverlay = ({ onEnter }) => {
                             </a>
                             <span>|</span>
                             <a
-                                href="https://monad.xyz"
+                                href="https://celo.org"
                                 target="_blank"
                                 className="hover:text-purple-400 underline underline-offset-4 decoration-white/20 hover:decoration-purple-400"
                             >
-                                MONAD_NETWORK
+                                CELO_NETWORK
                             </a>
                         </div>
                     </div>

@@ -3,12 +3,16 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
  * @title ArenaPlatform
- * @dev 1v1 Wagering platform for AI Agents and Players
+ * @dev 1v1 Wagering platform for AI Agents and Players using GoodDollar (G$) Token
  */
 contract ArenaPlatform is Ownable, ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
     enum MatchStatus {
         Proposed,
         Accepted,
@@ -35,8 +39,9 @@ contract ArenaPlatform is Ownable, ReentrancyGuard {
     }
 
     uint256 public matchCounter;
-    uint256 public platformFeePercent = 2; // 2% fee for arena matches
+    uint256 public platformFeePercent = 2; // 2% fee goes to GoodCollective UBI Pool
     address public platformTreasury;
+    IERC20 public wagerToken; // The G$ Token
 
     mapping(uint256 => Match) public matches;
     mapping(address => uint256[]) public playerMatches;
@@ -65,70 +70,66 @@ contract ArenaPlatform is Ownable, ReentrancyGuard {
         uint8 move
     );
 
-    constructor(address _treasury) Ownable() {
+    constructor(address _treasury, address _wagerToken) Ownable() {
         platformTreasury = _treasury;
+        wagerToken = IERC20(_wagerToken);
     }
 
+    /**
+     * @dev ERC-677 Receiver Hook for "1-Click" Deposits
+     * Supports proposing and accepting matches without requiring a separate approve tx.
+     * `data` format:
+     * - Propose: abi.encode(uint8(0), opponent, gameType)
+     * - Accept: abi.encode(uint8(1), matchId)
+     */
+    function onTokenTransfer(
+        address sender,
+        uint256 value,
+        bytes calldata data
+    ) external nonReentrant returns (bool) {
+        require(msg.sender == address(wagerToken), "Only wager token allowed");
+        require(data.length >= 32, "Invalid data length");
+
+        uint8 actionType = abi.decode(data[:32], (uint8));
+
+        if (actionType == 0) {
+            // Propose Match
+            (, address opponent, GameType gameType) = abi.decode(
+                data,
+                (uint8, address, GameType)
+            );
+            _proposeMatch(sender, opponent, gameType, value);
+        } else if (actionType == 1) {
+            // Accept Match
+            (, uint256 matchId) = abi.decode(data, (uint8, uint256));
+            _acceptMatch(sender, matchId, value);
+        } else {
+            revert("Invalid action type");
+        }
+        return true;
+    }
+
+    /**
+     * @dev Standard ERC-20 Propose Match (Requires prior approval)
+     */
     function proposeMatch(
         address _opponent,
-        GameType _gameType
-    ) external payable nonReentrant returns (uint256) {
-        require(msg.value > 0, "Wager must be > 0");
-
-        uint256 matchId = matchCounter++;
-        matches[matchId] = Match({
-            id: matchId,
-            challenger: msg.sender,
-            opponent: _opponent,
-            wager: msg.value,
-            gameType: _gameType,
-            status: MatchStatus.Proposed,
-            winner: address(0),
-            createdAt: block.timestamp
-        });
-
-        playerMatches[msg.sender].push(matchId);
-        if (_opponent != address(0)) {
-            playerMatches[_opponent].push(matchId);
-        }
-
-        emit MatchProposed(
-            matchId,
-            msg.sender,
-            _opponent,
-            msg.value,
-            _gameType
-        );
-        return matchId;
+        GameType _gameType,
+        uint256 _wager
+    ) external nonReentrant returns (uint256) {
+        require(_wager > 0, "Wager must be > 0");
+        wagerToken.safeTransferFrom(msg.sender, address(this), _wager);
+        return _proposeMatch(msg.sender, _opponent, _gameType, _wager);
     }
 
-    function acceptMatch(uint256 _matchId) external payable nonReentrant {
+    /**
+     * @dev Standard ERC-20 Accept Match (Requires prior approval)
+     */
+    function acceptMatch(uint256 _matchId) external nonReentrant {
         Match storage m = matches[_matchId];
         require(m.status == MatchStatus.Proposed, "Match not available");
-        require(
-            m.opponent == address(0) || m.opponent == msg.sender,
-            "Not your match"
-        );
-        require(msg.value == m.wager, "Must match wager amount");
-        // Removed self-challenge check to allow testing with one wallet
-        // require(m.challenger != msg.sender, "Cannot challenge yourself");
-
-        m.opponent = msg.sender;
-        m.status = MatchStatus.Accepted;
-
-        // If it was an open challenge, add it to the acceptor's list
-        bool alreadyInList = false;
-        for (uint i = 0; i < playerMatches[msg.sender].length; i++) {
-            if (playerMatches[msg.sender][i] == _matchId) {
-                alreadyInList = true;
-                break;
-            }
-        }
-        if (!alreadyInList) {
-            playerMatches[msg.sender].push(_matchId);
-        }
-
-        emit MatchAccepted(_matchId, msg.sender);
+        wagerToken.safeTransferFrom(msg.sender, address(this), m.wager);
+        _acceptMatch(msg.sender, _matchId, m.wager);
     }
 
     function playMove(uint256 _matchId, uint8 _move) external nonReentrant {
@@ -177,11 +178,11 @@ contract ArenaPlatform is Ownable, ReentrancyGuard {
         m.winner = _winner;
         m.status = MatchStatus.Completed;
 
-        (bool feeSuccess, ) = platformTreasury.call{value: fee}("");
-        require(feeSuccess, "Fee transfer failed");
+        // Route UBI fee to GoodCollective Pool
+        wagerToken.safeTransfer(platformTreasury, fee);
 
-        (bool prizeSuccess, ) = _winner.call{value: prize}("");
-        require(prizeSuccess, "Prize transfer failed");
+        // Route prize to winner
+        wagerToken.safeTransfer(_winner, prize);
 
         emit MatchCompleted(_matchId, _winner, prize);
     }
@@ -192,8 +193,7 @@ contract ArenaPlatform is Ownable, ReentrancyGuard {
         require(m.challenger == msg.sender, "Only challenger can cancel");
 
         m.status = MatchStatus.Cancelled;
-        (bool success, ) = m.challenger.call{value: m.wager}("");
-        require(success, "Refund failed");
+        wagerToken.safeTransfer(m.challenger, m.wager);
 
         emit MatchCancelled(_matchId);
     }
@@ -202,5 +202,67 @@ contract ArenaPlatform is Ownable, ReentrancyGuard {
         address _player
     ) external view returns (uint256[] memory) {
         return playerMatches[_player];
+    }
+
+    // --- Internal Logic ---
+
+    function _proposeMatch(
+        address _challenger,
+        address _opponent,
+        GameType _gameType,
+        uint256 _wager
+    ) internal returns (uint256) {
+        require(_wager > 0, "Wager must be > 0");
+
+        uint256 matchId = matchCounter++;
+        matches[matchId] = Match({
+            id: matchId,
+            challenger: _challenger,
+            opponent: _opponent,
+            wager: _wager,
+            gameType: _gameType,
+            status: MatchStatus.Proposed,
+            winner: address(0),
+            createdAt: block.timestamp
+        });
+
+        playerMatches[_challenger].push(matchId);
+        if (_opponent != address(0)) {
+            playerMatches[_opponent].push(matchId);
+        }
+
+        emit MatchProposed(matchId, _challenger, _opponent, _wager, _gameType);
+        return matchId;
+    }
+
+    function _acceptMatch(
+        address _acceptor,
+        uint256 _matchId,
+        uint256 _wagerAmount
+    ) internal {
+        Match storage m = matches[_matchId];
+        require(m.status == MatchStatus.Proposed, "Match not available");
+        require(
+            m.opponent == address(0) || m.opponent == _acceptor,
+            "Not your match"
+        );
+        require(_wagerAmount == m.wager, "Must match wager amount");
+
+        m.opponent = _acceptor;
+        m.status = MatchStatus.Accepted;
+
+        // If it was an open challenge, add it to the acceptor's list
+        bool alreadyInList = false;
+        for (uint i = 0; i < playerMatches[_acceptor].length; i++) {
+            if (playerMatches[_acceptor][i] == _matchId) {
+                alreadyInList = true;
+                break;
+            }
+        }
+        if (!alreadyInList) {
+            playerMatches[_acceptor].push(_matchId);
+        }
+
+        emit MatchAccepted(_matchId, _acceptor);
     }
 }

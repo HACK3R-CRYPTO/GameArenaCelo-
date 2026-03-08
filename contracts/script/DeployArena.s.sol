@@ -27,7 +27,7 @@ contract DeployArenaScript is Script {
         // 2. Deploy ArenaPlatform
         console.log("\n3. Deploying ArenaPlatform...");
         address treasury = deployer; // Use deployer as treasury
-        ArenaPlatform arena = new ArenaPlatform(treasury);
+        ArenaPlatform arena = new ArenaPlatform(treasury, address(0));
         console.log("ArenaPlatform deployed at:", address(arena));
         
         vm.stopBroadcast();

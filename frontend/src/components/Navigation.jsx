@@ -1,40 +1,14 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { useAccount, useDisconnect } from 'wagmi';
-import { useAppKit, useAppKitAccount } from '@reown/appkit/react';
+import { useAccount, useDisconnect, useConnect } from 'wagmi';
+import { injected } from 'wagmi/connectors';
 
 function Navigation() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { address, isConnected } = useAccount();
-  const { caipAddress } = useAppKitAccount();
   const { disconnect } = useDisconnect();
-  const { open } = useAppKit();
-  const [displayName, setDisplayName] = useState('');
-
-  useEffect(() => {
-    if (caipAddress && isConnected) {
-      // Extract email or identifier from CAIP address
-      // CAIP format: eip155:1:0x... or email format
-      const parts = caipAddress.split(':');
-      if (parts.length > 2) {
-        const identifier = parts[parts.length - 1];
-        // Check if it looks like an email
-        if (identifier.includes('@')) {
-          setDisplayName(identifier);
-        } else if (identifier.startsWith('0x')) {
-          // It's a wallet address, format it
-          setDisplayName(`${identifier.slice(0, 6)}...${identifier.slice(-4)}`);
-        } else {
-          // Use the identifier as-is (might be a username)
-          setDisplayName(identifier);
-        }
-      } else if (address) {
-        // Fallback to formatted address
-        setDisplayName(`${address.slice(0, 6)}...${address.slice(-4)}`);
-      }
-    }
-  }, [caipAddress, address, isConnected]);
+  const { connect } = useConnect();
 
   // Close mobile menu when resizing to larger screens
   useEffect(() => {
@@ -43,7 +17,6 @@ function Navigation() {
         setMobileMenuOpen(false);
       }
     };
-
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [mobileMenuOpen]);
@@ -56,6 +29,10 @@ function Navigation() {
   const isActivePath = (path) => {
     if (path === '/') return location.pathname === '/';
     return location.pathname === path || location.pathname.startsWith(path);
+  };
+
+  const handleConnect = () => {
+    connect({ connector: injected() });
   };
 
   const navLinks = [
@@ -113,7 +90,7 @@ function Navigation() {
               <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-white/5 border border-white/10">
                 <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
                 <span className="font-mono text-xs text-gray-300 truncate max-w-[120px]">
-                  {displayName || formatAddress(address)}
+                  {formatAddress(address)}
                 </span>
               </div>
               <button
@@ -121,13 +98,15 @@ function Navigation() {
                 onClick={() => disconnect()}
                 title="Disconnect"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
               </button>
             </div>
           ) : (
             <button
               className="btn-primary px-5 py-2 rounded text-sm font-bold font-mono"
-              onClick={() => open()}
+              onClick={handleConnect}
             >
               CONNECT_WALLET
             </button>
@@ -180,7 +159,7 @@ function Navigation() {
             {isConnected ? (
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between px-3 py-2 bg-black/40 rounded-lg border border-white/5">
-                  <span className="font-mono text-sm text-cyan-300">{displayName || formatAddress(address)}</span>
+                  <span className="font-mono text-sm text-cyan-300">{formatAddress(address)}</span>
                   <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(0,255,136,0.6)]"></div>
                 </div>
                 <button
@@ -193,7 +172,7 @@ function Navigation() {
             ) : (
               <button
                 className="w-full btn-cyber py-3 rounded-lg font-bold"
-                onClick={() => { open(); setMobileMenuOpen(false); }}
+                onClick={() => { handleConnect(); setMobileMenuOpen(false); }}
               >
                 Connect Interface
               </button>

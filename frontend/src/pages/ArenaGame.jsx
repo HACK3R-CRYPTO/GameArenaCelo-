@@ -578,14 +578,20 @@ const ArenaGame = () => {
 
                             </div>
                         </div>
-                        <a
-                            href="https://gooddollar.org"
-                            target="_blank"
-                            className="bg-purple-900/20 border border-purple-500/30 px-4 py-2 rounded flex flex-col items-center justify-center hover:bg-purple-900/40 transition-colors group"
-                        >
-                            <span className="text-[10px] text-purple-300 block uppercase font-bold group-hover:text-white">GET G$</span>
-                            <span className="text-xs text-purple-400 font-mono">gooddollar.org</span>
-                        </a>
+                        <div className="flex flex-col items-center gap-2">
+                            <claim-button
+                                environment="production"
+                                class="h-10 w-full"
+                            />
+                            <a
+                                href="https://gooddollar.org"
+                                target="_blank"
+                                className="text-[10px] text-purple-400 hover:text-purple-300 transition-colors uppercase font-bold"
+                            >
+                                LEARN_ABOUT_G$
+                            </a>
+                        </div>
+
 
                     </div>
                 </div>
@@ -602,12 +608,29 @@ const ArenaGame = () => {
                                 <div className="w-16 h-16 mx-auto bg-purple-900/20 rounded-full border border-purple-500/20 flex items-center justify-center text-3xl mb-4">
                                     🤖
                                 </div>
-                                <h2 className="text-xl font-bold text-white mb-2">CHALLENGE_THE_AI</h2>
-                                <p className="text-xs text-gray-500 max-w-sm mx-auto leading-relaxed">
+                                <h2 className="text-xl font-bold text-white mb-2 uppercase">Challenge_The_AI</h2>
+                                <p className="text-xs text-gray-500 max-w-sm mx-auto leading-relaxed mb-6">
                                     {agentProfile.description || "Autonomous agent initialized. Select game type to begin."}
                                 </p>
 
+                                {!isVerified && isConnected && (
+                                    <div className="mb-8 p-4 bg-purple-900/10 border border-purple-500/20 rounded text-center">
+                                        <div className="text-2xl mb-2">🛡️</div>
+                                        <p className="text-xs text-purple-300 mb-4 uppercase tracking-wider font-bold">Identity Verification Required</p>
+                                        <p className="text-[10px] text-gray-500 mb-6 leading-relaxed">
+                                            To ensure fair gameplay and secure your G$ wagers, we require one-time Face Verification via GoodDollar.
+                                        </p>
+                                        <button
+                                            onClick={verifyIdentity}
+                                            disabled={isVerifying}
+                                            className="px-6 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded text-[10px] font-bold transition-all uppercase disabled:opacity-50"
+                                        >
+                                            {isVerifying ? 'INITIALIZING...' : 'START_VERIFICATION'}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
+
 
                             {/* Game Selection */}
                             <div className="grid grid-cols-3 gap-3 mb-6">
@@ -644,14 +667,18 @@ const ArenaGame = () => {
                                 </div>
                             </div>
 
-                            {/* Action Buitton */}
+                            {/* Action Button */}
                             {!isConnected ? (
                                 <button onClick={() => open()} className="w-full py-4 bg-white/5 border border-white/10 rounded text-sm font-bold hover:bg-white/10 transition-all uppercase">
                                     Connect Wallet
                                 </button>
                             ) : !isVerified ? (
-                                <button onClick={verifyIdentity} className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-bold transition-all uppercase shadow-[0_0_20px_rgba(37,99,235,0.3)]">
-                                    Verify Humanity (Self Protocol)
+                                <button
+                                    onClick={verifyIdentity}
+                                    className="w-full py-4 bg-purple-900/40 border border-purple-500/30 text-purple-300 rounded text-sm font-bold transition-all uppercase cursor-help"
+                                    title="Verify identity to unlock wagering"
+                                >
+                                    VERIFICATION_LOCKED
                                 </button>
                             ) : (
                                 <button

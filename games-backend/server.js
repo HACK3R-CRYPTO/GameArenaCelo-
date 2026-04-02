@@ -201,11 +201,20 @@ async function saveScore(entry) {
   });
 }
 
-async function getLeaderboard(game, limit = 50) {
-  const { data } = await supabase
+async function getLeaderboard(game, limit = 50, seasonFilter = true) {
+  let query = supabase
     .from('scores')
     .select('*')
-    .eq('game', game)
+    .eq('game', game);
+
+  if (seasonFilter) {
+    const season = currentSeasonNumber();
+    const { start } = seasonBounds(season);
+    const startDate = new Date(start * 1000).toISOString();
+    query = query.gte('created_at', startDate);
+  }
+
+  const { data } = await query
     .order('score', { ascending: false })
     .limit(limit);
   return data || [];
@@ -350,21 +359,15 @@ app.post('/api/submit-score', async (req, res) => {
     wagerTxHash = await resolveOnChain(wagerId, score);
   }
 
-  // Record score on-chain via GamePass (get tx hash)
+  // Record score on-chain via GamePass (get tx hash — stores all-time best)
   let scoreTxHash = null;
-  let onChainBest = score;
   if (passContract && passContract.recordScore) {
     const gameType = game === 'rhythm' ? 0 : 1;
     try {
       const tx = await passContract.recordScore(playerAddress, gameType, BigInt(score));
       const receipt = await tx.wait();
       scoreTxHash = receipt.hash;
-      // Read back the on-chain best score (source of truth)
-      try {
-        const best = await passContract.bestScore(playerAddress, gameType);
-        onChainBest = Number(best);
-      } catch (_) {}
-      console.log(`⛓️  Score on-chain: ${playerAddress.slice(0, 8)}... → ${score} pts, best: ${onChainBest} (tx: ${receipt.hash.slice(0, 10)}...)`);
+      console.log(`⛓️  Score on-chain: ${playerAddress.slice(0, 8)}... → ${score} pts (tx: ${receipt.hash.slice(0, 10)}...)`);
     } catch (e) {
       console.warn(`⚠️  On-chain score failed: ${e.message}`);
     }
@@ -372,11 +375,11 @@ app.post('/api/submit-score', async (req, res) => {
 
   const txHash = wagerTxHash || scoreTxHash;
 
-  // Save to Supabase using on-chain best score as source of truth
+  // Save actual game score to Supabase (per-season, not all-time best)
   await saveScore({
     wallet_address: playerAddress.toLowerCase(),
     game,
-    score: onChainBest,
+    score,
     game_time: gameTime,
     season_number: season,
     wagered: wagered || null,

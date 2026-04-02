@@ -34,8 +34,10 @@ const ArenaGame = () => {
     const [activeMatch, setActiveMatch] = useState(null);
     const [selectedMove, setSelectedMove] = useState(null);
     const [showDocs, setShowDocs] = useState(false);
-    const [activeTab, setActiveTab] = useState('chain'); // 'chain', 'social', or 'fame'
+    const [activeTab, setActiveTab] = useState('chain');
     const [leaderboard, setLeaderboard] = useState([]);
+    const [waitingMatchId, setWaitingMatchId] = useState(null); // tracks match we just created
+    const [playedMoveIds, setPlayedMoveIds] = useState(new Set()); // matches where we already played
 
     // Fetch Agent Identity — ERC-8004 official Celo Mainnet registry
     const agentTokenId = CONTRACT_ADDRESSES.AGENT_TOKEN_ID
@@ -312,6 +314,40 @@ const ArenaGame = () => {
         }
     }, [playerMatchIds, matches.length, fetchMatchDetails]);
 
+    // Auto-open play modal when the waiting match is ready
+    useEffect(() => {
+        if (!waitingMatchId || activeMatch) return;
+        const ready = matches.find(m => m.id === waitingMatchId && m.status === 1);
+        if (ready) {
+            setActiveMatch(ready);
+            setWaitingMatchId(null);
+            toast.success('AI accepted! Make your move!', { duration: 3000 });
+        }
+    }, [matches, waitingMatchId, activeMatch]);
+
+    // Clear played IDs when matches complete
+    useEffect(() => {
+        const completedIds = matches.filter(m => m.status === 2).map(m => m.id);
+        if (completedIds.length > 0) {
+            setPlayedMoveIds(prev => {
+                const next = new Set(prev);
+                completedIds.forEach(id => next.delete(id));
+                return next.size !== prev.size ? next : prev;
+            });
+        }
+    }, [matches]);
+
+    // Poll faster when waiting for AI to accept
+    useEffect(() => {
+        if (!waitingMatchId) return;
+        const fast = setInterval(() => {
+            refetchMatches().then(({ data: freshIds }) => {
+                if (freshIds) fetchMatchDetails(freshIds);
+            });
+        }, 3000); // poll every 3s while waiting
+        return () => clearInterval(fast);
+    }, [waitingMatchId, refetchMatches, fetchMatchDetails]);
+
     useArenaEvents({
         onMatchUpdate: async () => {
             const { data: freshIds } = await refetchMatches();
@@ -363,9 +399,11 @@ const ArenaGame = () => {
                 moveLabel = positions[move];
             }
 
-            toast.success(`Selected ${moveLabel}! Move confirmed on chain.`, { id: toastId });
+            toast.success(`${moveLabel} played! Waiting for result...`, { id: toastId });
+            setPlayedMoveIds(prev => new Set([...prev, activeMatch.id]));
             setActiveMatch(null);
             setSelectedMove(null);
+            setWaitingMatchId(null);
             await refetchMatches();
 
             const isAgentMatch = activeMatch.opponent?.toLowerCase() === CONTRACT_ADDRESSES.AI_AGENT?.toLowerCase() ||
@@ -395,8 +433,12 @@ const ArenaGame = () => {
                 functionName: 'transferAndCall',
                 args: [CONTRACT_ADDRESSES.ARENA_PLATFORM, parseUnits(wager, 18), encodedArgs]
             });
-            await publicClient.waitForTransactionReceipt({ hash });
-            toast.success('Duel initiated! Waiting for AI to accept...', { id: toastId });
+            const receipt = await publicClient.waitForTransactionReceipt({ hash });
+            // Try to grab the new match ID from receipt logs
+            const matchLog = receipt.logs.find(l => l.address.toLowerCase() === CONTRACT_ADDRESSES.ARENA_PLATFORM.toLowerCase() && l.topics.length >= 2);
+            const newMatchId = matchLog ? Number(BigInt(matchLog.topics[1])) : null;
+            if (newMatchId) setWaitingMatchId(newMatchId);
+            toast.success('Challenge sent! AI is responding...', { id: toastId });
             await refetchMatches();
         } catch (error) {
             console.error(error);
@@ -452,182 +494,268 @@ const ArenaGame = () => {
     };
 
     return (
-        <div className="font-mono text-gray-300">
+        <div className="font-mono text-gray-300 max-w-[560px] mx-auto" style={{ fontFamily: 'Orbitron, monospace' }}>
             <DocsModal isOpen={showDocs} onClose={() => setShowDocs(false)} />
-            <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold text-white tracking-tighter">🦞 ARENA_1v1</h1>
-                    <div className="flex items-center gap-4 mt-1">
-                        <p className="text-xs text-gray-500">PROTOCOL_ID: {CONTRACT_ADDRESSES.ARENA_PLATFORM.slice(0, 8)}...</p>
-                        <button onClick={() => setShowDocs(true)} className="flex items-center gap-1.5 text-[10px] text-purple-400 hover:text-purple-300 transition-colors uppercase font-bold border border-purple-500/30 px-2 py-0.5 rounded bg-purple-900/10 hover:bg-purple-900/30">
-                            <BookOpen size={12} /> [ SYSTEM_DOCS ]
-                        </button>
+
+            {/* ── Compact header ──────────────────────────────────── */}
+            <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                    <span className="text-2xl">🤖</span>
+                    <div>
+                        <h1 className="text-lg font-black text-white tracking-wide">MARKOV-1</h1>
+                        <div className="flex items-center gap-2 mt-0.5">
+                            <span className={`w-1.5 h-1.5 rounded-full ${agentProfile?.active ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                            <span className="text-[9px] text-gray-500">{agentProfile?.active ? 'ONLINE' : 'OFFLINE'}</span>
+                            <span className="text-[9px] text-gray-600">·</span>
+                            <span className="text-[9px] text-purple-400">{balance ? Number(formatUnits(balance.value, 18)).toFixed(2) : '0'} G$</span>
+                        </div>
                     </div>
                 </div>
-                <div className="flex gap-4">
-                    <div className="bg-[#0a0a0a] border border-white/10 px-4 py-2 rounded min-w-[140px]">
-                        <span className="text-[10px] text-gray-500 block uppercase">Balance</span>
-                        <div className="text-white font-bold text-sm font-mono">
-                            {balance ? Number(formatUnits(balance.value, 18)).toFixed(4) : '--'} <span className="text-blue-400">G$</span>
-                        </div>
-                    </div>
-                    <div className="bg-[#0a0a0a] border border-white/10 px-4 py-2 rounded flex flex-col items-end">
-                        <span className="text-[10px] text-gray-500 block uppercase flex items-center gap-1">
-                            <span className={`w-1.5 h-1.5 rounded-full ${agentProfile?.active ? 'bg-green-500' : 'bg-red-500'}`}></span> AGENT_STATUS
-                        </span>
-                        <div className={`font-bold text-sm font-mono ${agentProfile?.active ? 'text-green-400' : 'text-purple-500'}`}>
-                            {agentProfile?.active ? 'ONLINE' : 'OFFLINE'}
-                        </div>
-                    </div>
-                    <div className="flex flex-col items-center gap-2 min-w-[140px]">
-                        <div className="w-full min-h-[40px] flex items-center justify-center">
-                            {isConnected ? (
-                                <button
-                                    onClick={claimG$}
-                                    disabled={!entitlement || entitlement === 0n}
-                                    className={`h-10 w-full px-4 rounded font-bold text-xs transition-all flex flex-col items-center justify-center leading-tight ${entitlement > 0n
-                                        ? 'bg-linear-to-r from-green-500 to-emerald-600 text-white shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:scale-[1.02] active:scale-[0.98]'
-                                        : 'bg-white/5 text-gray-500 border border-white/10 cursor-not-allowed'
-                                        }`}
-                                >
-                                    <span>CLAIM_G$</span>
-                                    {entitlement > 0n && (
-                                        <span className="text-[9px] opacity-80">
-                                            +{Number(formatUnits(entitlement, 18)).toFixed(2)} AVAILABLE
-                                        </span>
-                                    )}
-                                </button>
-                            ) : (
-                                <div className="h-10 w-full bg-white/5 border border-white/10 rounded flex items-center justify-center text-[10px] text-gray-600 font-bold uppercase">WALLET_NOT_CONNECTED</div>
-                            )}
-                        </div>
-                        <a href="https://gooddollar.org" target="_blank" className="text-[10px] text-purple-400 hover:text-purple-300 transition-colors uppercase font-bold">LEARN_ABOUT_G$</a>
-                    </div>
+                <div className="flex gap-2">
+                    {isConnected && entitlement > 0n && (
+                        <button onClick={claimG$} className="px-3 py-1.5 rounded-lg text-[9px] font-bold bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500/25 transition-all" style={{ fontFamily: 'Orbitron, monospace' }}>
+                            CLAIM G$
+                        </button>
+                    )}
+                    <button onClick={() => setShowDocs(true)} className="px-3 py-1.5 rounded-lg text-[9px] font-bold bg-purple-500/10 border border-purple-500/20 text-purple-400 hover:bg-purple-500/20 transition-all" style={{ fontFamily: 'Orbitron, monospace' }}>
+                        <BookOpen size={10} className="inline mr-1" />DOCS
+                    </button>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 space-y-6">
-                    <div className="bg-[#0a0a0a] border border-white/10 rounded-lg p-6 relative overflow-hidden group hover:border-purple-500/30 transition-colors">
-                        <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-purple-500 to-blue-500 opacity-20"></div>
-                        <div className="mb-8 text-center">
-                            <div className="w-16 h-16 mx-auto bg-purple-900/20 rounded-full border border-purple-500/20 flex items-center justify-center text-3xl mb-4">🤖</div>
-                            <h2 className="text-xl font-bold text-white mb-2 uppercase">Challenge_The_AI</h2>
-                            <p className="text-xs text-gray-500 max-w-sm mx-auto leading-relaxed mb-6">{agentProfile.description || "Autonomous agent initialized. Select game type to begin."}</p>
-                            {!isVerified && isConnected && (
-                                <div className="mb-8 p-4 bg-purple-900/10 border border-purple-500/20 rounded text-center">
-                                    <div className="text-2xl mb-2">🛡️</div>
-                                    <p className="text-xs text-purple-300 mb-4 uppercase tracking-wider font-bold">Identity Verification Required</p>
-                                    <p className="text-[10px] text-gray-500 mb-6 leading-relaxed">To ensure fair gameplay and secure your G$ wagers, we require one-time Face Verification via GoodDollar.</p>
-                                    <button onClick={verifyIdentity} disabled={isVerifying} className="px-6 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded text-[10px] font-bold transition-all uppercase disabled:opacity-50">
-                                        {isVerifying ? 'INITIALIZING...' : 'START_VERIFICATION'}
-                                    </button>
+            {/* ── Waiting / Playable match banner ─────────────────── */}
+            {waitingMatchId && !activeMatch && (
+                <div style={{
+                    padding: '16px 20px', borderRadius: '14px', marginBottom: '14px',
+                    background: 'linear-gradient(135deg, rgba(245,158,11,0.1), rgba(168,85,247,0.06))',
+                    border: '1px solid rgba(245,158,11,0.25)',
+                    textAlign: 'center',
+                }}>
+                    <div style={{ fontSize: '28px', marginBottom: '8px', animation: 'pulse 1.5s ease-in-out infinite' }}>🤖</div>
+                    <div style={{ color: '#f59e0b', fontSize: '13px', fontWeight: 900, letterSpacing: '2px' }}>AI IS RESPONDING...</div>
+                    <div style={{ color: '#4b5563', fontSize: '9px', marginTop: '4px' }}>Match #{waitingMatchId} · The move selector will open automatically</div>
+                    <style>{`@keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.95); } }`}</style>
+                </div>
+            )}
+
+            {/* Playable matches — YOUR TURN or WAITING FOR RESULT */}
+            {!activeMatch && matches.filter(m => m.status === 1).length > 0 && (
+                <div style={{ marginBottom: '14px' }}>
+                    {matches.filter(m => m.status === 1).map(m => {
+                        const alreadyPlayed = playedMoveIds.has(m.id);
+                        return alreadyPlayed ? (
+                            <div key={m.id} style={{
+                                width: '100%', padding: '16px 20px', borderRadius: '14px',
+                                background: 'linear-gradient(135deg, rgba(245,158,11,0.08), rgba(6,6,14,0.95))',
+                                border: '1px solid rgba(245,158,11,0.2)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                fontFamily: 'Orbitron, monospace', marginBottom: '8px',
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <span style={{ fontSize: '20px', animation: 'pulse 1.5s ease-in-out infinite' }}>⏳</span>
+                                    <div>
+                                        <div style={{ color: '#f59e0b', fontSize: '12px', fontWeight: 900 }}>WAITING FOR RESULT</div>
+                                        <div style={{ color: '#4b5563', fontSize: '9px', marginTop: '2px' }}>Match #{m.id} · {formatUnits(m.wager, 18)} G$</div>
+                                    </div>
                                 </div>
-                            )}
-                        </div>
-                        <div className="grid grid-cols-3 gap-3 mb-6">
-                            {GAME_TYPES.map(g => (
-                                <button key={g.id} onClick={() => setSelectedGameType(g.id)} className={`p-4 rounded border transition-all ${selectedGameType === g.id ? 'bg-purple-900/20 border-purple-500 text-white' : 'bg-black border-white/5 text-gray-500 hover:border-white/20 hover:text-gray-300'}`}>
-                                    <div className="text-2xl mb-2">{g.icon}</div>
-                                    <div className="text-[10px] uppercase tracking-wider font-bold">{g.label}</div>
-                                </button>
-                            ))}
-                        </div>
-                        <div className="bg-black/50 border border-white/5 rounded p-4 mb-6">
-                            <div className="flex justify-between text-[10px] text-gray-500 uppercase mb-2">
-                                <span>Wager Amount</span>
-                                <span>Potential Win: <span className="text-green-400">{(parseFloat(wager || '0') * 2 * 0.95).toFixed(3)} G$</span></span>
+                                <span style={{ padding: '5px 12px', borderRadius: '10px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', color: '#f59e0b', fontSize: '9px', fontWeight: 700 }}>PENDING</span>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <span className="text-blue-400 font-bold">G$</span>
-                                <input type="number" value={wager} onChange={(e) => setWager(e.target.value)} className="bg-transparent border-none text-white text-xl font-bold w-full focus:ring-0 placeholder-gray-700" placeholder="0.00" />
-                            </div>
-                        </div>
-                        {!isConnected ? (
-                            <button onClick={open} className="w-full py-4 bg-white/5 border border-white/10 rounded text-sm font-bold hover:bg-white/10 transition-all uppercase">Connect Wallet</button>
-                        ) : !isVerified ? (
-                            <button onClick={verifyIdentity} className="w-full py-4 bg-purple-900/40 border border-purple-500/30 text-purple-300 rounded text-sm font-bold transition-all uppercase cursor-help" title="Verify identity to unlock wagering">VERIFICATION_LOCKED</button>
                         ) : (
-                            <button onClick={handleChallengeAgent} disabled={loading || !wager} className="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white rounded text-sm font-bold transition-all uppercase disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(147,51,234,0.3)]">{loading ? 'PROCESSING...' : 'INITIATE_CHALLENGE'}</button>
-                        )}
+                            <button key={m.id} onClick={() => setActiveMatch(m)}
+                                style={{
+                                    width: '100%', padding: '16px 20px', borderRadius: '14px', cursor: 'pointer',
+                                    background: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(139,92,246,0.06))',
+                                    border: '2px solid rgba(168,85,247,0.4)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                    fontFamily: 'Orbitron, monospace', marginBottom: '8px',
+                                    animation: 'pulse 2s ease-in-out infinite',
+                                }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <span style={{ fontSize: '24px' }}>{GAME_TYPES.find(g => g.id === m.gameType)?.icon}</span>
+                                    <div style={{ textAlign: 'left' }}>
+                                        <div style={{ color: '#fff', fontSize: '13px', fontWeight: 900 }}>YOUR TURN — MATCH #{m.id}</div>
+                                        <div style={{ color: '#6b7280', fontSize: '9px', marginTop: '2px' }}>{formatUnits(m.wager, 18)} G$ wager · {GAME_TYPES.find(g => g.id === m.gameType)?.label}</div>
+                                    </div>
+                                </div>
+                                <div style={{
+                                    padding: '8px 18px', borderRadius: '10px',
+                                    background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
+                                    color: '#fff', fontSize: '11px', fontWeight: 900, letterSpacing: '1px',
+                                }}>PLAY NOW</div>
+                            </button>
+                        );
+                    })}
+                    <style>{`@keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.85; transform: scale(0.99); } }`}</style>
+                </div>
+            )}
+
+            {/* ── Game Type Selection ─────────────────────────────── */}
+            <div className="grid grid-cols-3 gap-2 mb-4">
+                {GAME_TYPES.map(g => (
+                    <button key={g.id} onClick={() => setSelectedGameType(g.id)}
+                        className="transition-all hover:scale-[1.02]"
+                        style={{
+                            padding: '14px 8px', borderRadius: '14px', cursor: 'pointer',
+                            background: selectedGameType === g.id ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.03)',
+                            border: `1.5px solid ${selectedGameType === g.id ? '#a855f7' : 'rgba(255,255,255,0.06)'}`,
+                            textAlign: 'center', fontFamily: 'Orbitron, monospace',
+                        }}>
+                        <div className="text-2xl mb-1">{g.icon}</div>
+                        <div style={{ fontSize: '9px', fontWeight: 900, letterSpacing: '1px', color: selectedGameType === g.id ? '#c084fc' : '#4b5563' }}>{g.label}</div>
+                    </button>
+                ))}
+            </div>
+
+            {/* ── Wager + Action ──────────────────────────────────── */}
+            <div style={{
+                padding: '18px', borderRadius: '16px', marginBottom: '14px',
+                background: 'linear-gradient(160deg, rgba(168,85,247,0.08), rgba(6,6,14,0.95))',
+                border: '1px solid rgba(168,85,247,0.15)',
+            }}>
+                {!isVerified && isConnected && (
+                    <div className="mb-4 p-3 rounded-xl text-center" style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.15)' }}>
+                        <span className="text-[10px] text-yellow-400 font-bold">VERIFY IDENTITY TO WAGER </span>
+                        <button onClick={verifyIdentity} disabled={isVerifying} className="ml-2 px-3 py-1 rounded-lg text-[9px] font-bold bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/25 transition-all" style={{ fontFamily: 'Orbitron, monospace' }}>
+                            {isVerifying ? '...' : 'VERIFY'}
+                        </button>
+                    </div>
+                )}
+
+                <div className="flex items-center gap-3 mb-4">
+                    <span style={{ color: '#a855f7', fontSize: '13px', fontWeight: 900 }}>G$</span>
+                    <input type="number" value={wager} onChange={(e) => setWager(e.target.value)}
+                        className="bg-transparent border-none text-white text-2xl font-black w-full focus:ring-0 focus:outline-none placeholder-gray-700"
+                        style={{ fontFamily: 'Orbitron, monospace' }}
+                        placeholder="0.00" />
+                    <div className="text-right flex-shrink-0">
+                        <div style={{ color: '#374151', fontSize: '8px', letterSpacing: '1px' }}>POTENTIAL WIN</div>
+                        <div style={{ color: '#10b981', fontSize: '14px', fontWeight: 900 }}>{(parseFloat(wager || '0') * 2 * 0.95).toFixed(2)} G$</div>
                     </div>
                 </div>
 
-                <div className="space-y-4">
-                    <div className="bg-[#0a0a0a] border border-white/10 rounded-lg p-4 h-[200px] overflow-y-auto">
-                        <h3 className="text-xs font-bold text-gray-400 uppercase mb-3 flex items-center justify-between">
-                            <span>Your_Matches</span> {matches.length > 0 && <span className="text-green-500 text-[10px]">{matches.length} ACTIVE</span>}
-                        </h3>
-                        {matches.length === 0 ? <div className="h-full flex items-center justify-center text-[10px] text-gray-600 italic">NO_ACTIVE_MATCHES</div> : (
-                            <div className="space-y-2">
-                                {matches.map(m => {
-                                    const isWinner = m.status === 2 && m.winner?.toLowerCase() === address?.toLowerCase();
-                                    const isLoser = m.status === 2 && m.winner?.toLowerCase() !== address?.toLowerCase() && m.winner !== '0x0000000000000000000000000000000000000000';
-                                    const isTie = m.status === 2 && m.winner === '0x0000000000000000000000000000000000000000';
-                                    const isChallenger = m.challenger?.toLowerCase() === address?.toLowerCase();
-                                    const myMoveId = isChallenger ? m.challengerMove : m.opponentMove;
-                                    const oppMoveId = isChallenger ? m.opponentMove : m.challengerMove;
-                                    const myMove = getMoveDisplay(m.gameType, myMoveId);
-                                    const oppMove = getMoveDisplay(m.gameType, oppMoveId);
+                {/* Quick amount buttons */}
+                <div className="flex gap-2 mb-4">
+                    {['0.1', '1', '5', '10', '25'].map(amt => (
+                        <button key={amt} onClick={() => setWager(amt)}
+                            className="transition-all hover:scale-105"
+                            style={{
+                                flex: 1, padding: '6px', borderRadius: '8px', cursor: 'pointer',
+                                background: wager === amt ? 'rgba(168,85,247,0.2)' : 'rgba(255,255,255,0.03)',
+                                border: `1px solid ${wager === amt ? '#a855f7' : 'rgba(255,255,255,0.05)'}`,
+                                color: wager === amt ? '#c084fc' : '#4b5563',
+                                fontSize: '11px', fontWeight: 700, fontFamily: 'Orbitron, monospace',
+                            }}>{amt}</button>
+                    ))}
+                </div>
 
-                                    return (
-                                        <div key={m.id} className="bg-white/5 border border-white/5 rounded p-2 text-xs flex justify-between items-center group hover:border-white/20 transition-colors">
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex flex-col items-center gap-1 min-w-[20px]">
-                                                    <span className="text-base">{GAME_TYPES.find(g => g.id === m.gameType)?.icon || '❓'}</span>
-                                                </div>
-                                                <div>
-                                                    <div className="font-bold text-gray-300 flex items-center gap-2">
-                                                        <span>#{m.id}</span> {m.status === 2 && <span className="text-gray-500 font-mono text-[10px] bg-black/30 px-1 rounded border border-white/5">{myMove.icon} vs {oppMove.icon}</span>}
-                                                    </div>
-                                                    <div className="text-[10px] text-gray-500">{MATCH_STATUS[m.status]}</div>
-                                                </div>
-                                            </div>
-                                            <div className="text-right flex flex-col items-end">
-                                                <div className="text-blue-400 font-bold">{formatUnits(m.wager, 18)} G$</div>
-                                                {m.status === 1 && <button onClick={() => setActiveMatch(m)} className="text-[9px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded mt-0.5 hover:bg-purple-500/40 border border-purple-500/30 font-bold">PLAY_MOVE</button>}
-                                                {m.status === 2 && <span className={`text-[9px] px-1.5 py-0.5 rounded mt-0.5 font-bold border ${isWinner ? 'bg-green-500/20 text-green-400 border-green-500/30' : isLoser ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'}`}>{isWinner ? 'YOU WON' : isLoser ? 'YOU LOST' : 'TIE GAME'}</span>}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
+                {!isConnected ? (
+                    <button onClick={open} className="w-full py-3.5 rounded-xl text-sm font-black uppercase tracking-wider transition-all hover:scale-[1.01]"
+                        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#9ca3af', fontFamily: 'Orbitron, monospace' }}>
+                        CONNECT WALLET
+                    </button>
+                ) : !isVerified ? (
+                    <button onClick={verifyIdentity} className="w-full py-3.5 rounded-xl text-sm font-black uppercase tracking-wider transition-all"
+                        style={{ background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.25)', color: '#a855f7', fontFamily: 'Orbitron, monospace', cursor: 'pointer' }}>
+                        VERIFY TO PLAY
+                    </button>
+                ) : (
+                    <button onClick={handleChallengeAgent} disabled={loading || !wager}
+                        className="w-full py-3.5 rounded-xl text-sm font-black uppercase tracking-wider transition-all hover:scale-[1.01] hover:brightness-110 disabled:opacity-50"
+                        style={{
+                            background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
+                            border: 'none', color: '#fff', fontFamily: 'Orbitron, monospace',
+                            boxShadow: '0 4px 20px rgba(168,85,247,0.3)',
+                        }}>
+                        {loading ? 'PROCESSING...' : `CHALLENGE — ${wager} G$`}
+                    </button>
+                )}
+
+                <div className="text-center mt-3" style={{ color: '#2a2a3a', fontSize: '8px', letterSpacing: '0.5px' }}>
+                    2% fee → GoodDollar UBI Pool · Winner takes 95%
+                </div>
+            </div>
+
+            {/* ── Your Matches ────────────────────────────────────── */}
+            {matches.length > 0 && (
+                <div style={{
+                    padding: '14px', borderRadius: '14px', marginBottom: '14px',
+                    background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.04)',
+                }}>
+                    <div className="flex items-center justify-between mb-3">
+                        <span style={{ color: '#6b7280', fontSize: '10px', fontWeight: 700, letterSpacing: '2px' }}>YOUR MATCHES</span>
+                        <span style={{ color: '#10b981', fontSize: '9px', fontWeight: 700 }}>{matches.length} ACTIVE</span>
                     </div>
+                    <div className="space-y-2 max-h-[180px] overflow-y-auto">
+                        {matches.map(m => {
+                            const isWinner = m.status === 2 && m.winner?.toLowerCase() === address?.toLowerCase();
+                            const isLoser = m.status === 2 && m.winner?.toLowerCase() !== address?.toLowerCase() && m.winner !== '0x0000000000000000000000000000000000000000';
+                            const isChallenger = m.challenger?.toLowerCase() === address?.toLowerCase();
+                            const myMove = getMoveDisplay(m.gameType, isChallenger ? m.challengerMove : m.opponentMove);
+                            const oppMove = getMoveDisplay(m.gameType, isChallenger ? m.opponentMove : m.challengerMove);
 
-                    <div className="bg-[#0a0a0a] border border-white/10 rounded-lg h-[450px] overflow-hidden flex flex-col">
-                        <div className="flex border-b border-white/5">
-                            <button onClick={() => setActiveTab('chain')} className={`flex-1 py-3 text-[10px] uppercase font-bold tracking-widest transition-all ${activeTab === 'chain' ? 'text-purple-400 bg-purple-900/10 border-b-2 border-purple-500' : 'text-gray-500 hover:text-gray-300'}`}>On_Chain_Events</button>
-                            <button onClick={() => setActiveTab('social')} className={`flex-1 py-3 text-[10px] uppercase font-bold tracking-widest transition-all ${activeTab === 'social' ? 'text-purple-400 bg-purple-900/10 border-b-2 border-purple-500' : 'text-gray-500 hover:text-gray-300'}`}>Social_Hub</button>
-                            <button onClick={() => setActiveTab('fame')} className={`flex-1 py-3 text-[10px] uppercase font-bold tracking-widest transition-all ${activeTab === 'fame' ? 'text-purple-400 bg-purple-900/10 border-b-2 border-purple-500' : 'text-gray-500 hover:text-gray-300'}`}>Hall_of_Fame</button>
-                        </div>
-                        <div className="flex-1 overflow-hidden p-4">
-                            {activeTab === 'chain' ? (
-                                <div className="h-full overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-                                    <h3 className="text-xs font-bold text-gray-400 uppercase mb-3 flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span> Live_History</h3>
-                                    {globalMatches.map(m => (
-                                        <div key={m.id} className="text-[10px] font-mono border-l-2 border-white/10 pl-2 py-2 hover:border-purple-500 transition-colors bg-white/[0.02] rounded-r">
-                                            <div className="flex justify-between"><span className="text-gray-500">#{m.id}</span> <span>{GAME_TYPES.find(g => g.id === m.gameType)?.label}</span></div>
-                                            <div className="text-gray-300 truncate font-bold text-xs my-0.5">{m.challenger.slice(0, 6)}... vs {m.opponent.slice(0, 6)}...</div>
-                                            <div className="flex justify-between mt-1 items-center"><span className="text-gray-500 font-bold">{formatUnits(m.wager, 18)} G$</span> <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${m.status === 2 ? 'bg-green-500/10 text-green-400' : 'bg-white/5 text-gray-500'}`}>{m.status === 2 ? 'COMPLETED' : 'WAITING...'}</span></div>
+                            return (
+                                <div key={m.id} className="flex items-center justify-between p-2.5 rounded-xl transition-all hover:bg-white/[0.03]"
+                                    style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-lg">{GAME_TYPES.find(g => g.id === m.gameType)?.icon || '❓'}</span>
+                                        <div>
+                                            <div className="text-xs font-bold text-gray-300 flex items-center gap-2">
+                                                #{m.id}
+                                                {m.status === 2 && <span style={{ color: '#4b5563', fontSize: '9px' }}>{myMove.icon} vs {oppMove.icon}</span>}
+                                            </div>
+                                            <div style={{ fontSize: '9px', color: '#374151' }}>{MATCH_STATUS[m.status]}</div>
                                         </div>
-                                    ))}
+                                    </div>
+                                    <div className="text-right">
+                                        <div style={{ color: '#a855f7', fontSize: '11px', fontWeight: 900 }}>{formatUnits(m.wager, 18)} G$</div>
+                                        {m.status === 1 && !playedMoveIds.has(m.id) && (
+                                            <button onClick={() => setActiveMatch(m)}
+                                                style={{
+                                                    marginTop: '2px', padding: '2px 10px', borderRadius: '8px',
+                                                    background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.3)',
+                                                    color: '#c084fc', fontSize: '9px', fontWeight: 700, cursor: 'pointer',
+                                                    fontFamily: 'Orbitron, monospace',
+                                                }}>PLAY</button>
+                                        )}
+                                        {m.status === 1 && playedMoveIds.has(m.id) && (
+                                            <span style={{
+                                                display: 'inline-block', marginTop: '2px', padding: '2px 8px', borderRadius: '8px',
+                                                fontSize: '8px', fontWeight: 900,
+                                                background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)',
+                                                color: '#f59e0b',
+                                            }}>PENDING</span>
+                                        )}
+                                        {m.status === 2 && (
+                                            <span style={{
+                                                display: 'inline-block', marginTop: '2px', padding: '2px 8px', borderRadius: '8px',
+                                                fontSize: '8px', fontWeight: 900,
+                                                background: isWinner ? 'rgba(16,185,129,0.12)' : isLoser ? 'rgba(239,68,68,0.12)' : 'rgba(234,179,8,0.12)',
+                                                border: `1px solid ${isWinner ? 'rgba(16,185,129,0.3)' : isLoser ? 'rgba(239,68,68,0.3)' : 'rgba(234,179,8,0.3)'}`,
+                                                color: isWinner ? '#10b981' : isLoser ? '#ef4444' : '#eab308',
+                                            }}>{isWinner ? 'WON' : isLoser ? 'LOST' : 'TIE'}</span>
+                                        )}
+                                    </div>
                                 </div>
-                            ) : activeTab === 'social' ? (
-                                <div className="h-full overflow-y-auto px-1 custom-scrollbar"><MoltbookFeed agentAddress={CONTRACT_ADDRESSES.AI_AGENT} /></div>
-                            ) : activeTab === 'fame' ? (
-                                <div className="h-full overflow-y-auto space-y-3 pr-1 custom-scrollbar">
-                                    {leaderboard.map((champ, i) => (
-                                        <div key={champ.address} className={`flex items-center justify-between p-3 rounded border ${i === 0 ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-white/5 border-white/5'}`}>
-                                            <div className="flex items-center gap-3"><div className="w-6 h-6 rounded-full bg-gray-800 flex items-center justify-center font-bold text-xs">{i + 1}</div><div className="text-[10px] font-bold text-white">{champ.address.slice(0, 8)}...</div></div>
-                                            <div className="text-right"><div className="text-sm font-bold text-white">{champ.count}</div><div className="text-[8px] text-gray-600 uppercase">Wins</div></div>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : null}
-                        </div>
+                            );
+                        })}
                     </div>
                 </div>
+            )}
+
+            {/* ── Quick links ──────────────────────────────────────── */}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={() => navigate('/leaderboard')} className="gb" style={{
+                flex: 1, padding: '12px', borderRadius: '12px', cursor: 'pointer',
+                background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.12)',
+                color: '#f59e0b', fontSize: '10px', fontWeight: 700, letterSpacing: '1px',
+                fontFamily: 'Orbitron, monospace',
+              }}>LEADERBOARD</button>
+              <button onClick={() => navigate('/')} className="gb" style={{
+                flex: 1, padding: '12px', borderRadius: '12px', cursor: 'pointer',
+                background: 'rgba(168,85,247,0.05)', border: '1px solid rgba(168,85,247,0.12)',
+                color: '#a855f7', fontSize: '10px', fontWeight: 700, letterSpacing: '1px',
+                fontFamily: 'Orbitron, monospace',
+              }}>SOLO GAMES</button>
             </div>
 
             {isVerifying ? (
@@ -641,24 +769,67 @@ const ArenaGame = () => {
                     </div>
                 </div>
             ) : activeMatch && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-[#0a0a0a] border border-purple-500/50 rounded w-full max-w-lg shadow-[0_0_50px_rgba(139,92,246,0.1)]">
-                        <div className="bg-purple-900/10 border-b border-purple-500/20 p-4 flex justify-between items-center">
-                            <h3 className="text-purple-400 font-bold tracking-wider">{">> "} EXECUTE_MOVE</h3>
-                            <button onClick={() => setActiveMatch(null)} className="text-gray-500 hover:text-white">✕</button>
-                        </div>
-                        <div className="p-8">
-                            <div className="text-center mb-8">
-                                <div className="text-sm text-gray-500 mb-1">MATCH_ID: #{activeMatch.id}</div>
-                                <div className="text-2xl font-bold text-white mb-2">{GAME_TYPES.find(g => g.id === activeMatch.gameType)?.label}</div>
-                                <div className="inline-block bg-blue-500/10 text-blue-300 px-3 py-1 rounded text-xs border border-blue-500/20">STAKE: {formatUnits(activeMatch.wager, 18)} G$</div>
+                <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+                    <div style={{
+                        width: '100%', maxWidth: '420px', borderRadius: '20px', overflow: 'hidden',
+                        background: 'linear-gradient(160deg, rgba(168,85,247,0.1), rgba(6,6,14,0.98))',
+                        border: '1px solid rgba(168,85,247,0.25)',
+                        boxShadow: '0 0 60px rgba(168,85,247,0.15)',
+                    }}>
+                        {/* Header */}
+                        <div style={{ padding: '20px 24px 16px', textAlign: 'center' }}>
+                            <button onClick={() => setActiveMatch(null)} style={{
+                                position: 'absolute', top: '16px', right: '20px', background: 'none', border: 'none',
+                                color: '#4b5563', fontSize: '18px', cursor: 'pointer',
+                            }}>✕</button>
+                            <div style={{ color: '#a855f7', fontSize: '10px', fontWeight: 700, letterSpacing: '2px', marginBottom: '4px' }}>
+                                MATCH #{activeMatch.id}
                             </div>
+                            <div style={{ color: '#fff', fontSize: '22px', fontWeight: 900, letterSpacing: '2px', fontFamily: 'Orbitron, monospace' }}>
+                                MAKE YOUR MOVE
+                            </div>
+                            <div style={{
+                                display: 'inline-block', marginTop: '10px', padding: '5px 16px', borderRadius: '20px',
+                                background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.25)',
+                                color: '#c084fc', fontSize: '12px', fontWeight: 900, fontFamily: 'Orbitron, monospace',
+                            }}>
+                                {formatUnits(activeMatch.wager, 18)} G$ AT STAKE
+                            </div>
+                        </div>
+
+                        {/* Move selection */}
+                        <div style={{ padding: '16px 24px 28px' }}>
                             {activeMatch.gameType === 1 ? (
-                                <button onClick={() => handlePlayMove(activeMatch.id, Math.floor(Math.random() * 6) + 1)} className="w-full py-6 bg-white/5 border border-white/10 hover:bg-white/10 hover:border-purple-500/50 rounded flex flex-col items-center gap-2 transition-all"><span className="text-4xl">🎲</span> ROLL_DICE_RNG</button>
+                                <button onClick={() => handlePlayMove(activeMatch.id, Math.floor(Math.random() * 6) + 1)}
+                                    className="hover:scale-[1.02] transition-all"
+                                    style={{
+                                        width: '100%', padding: '28px', borderRadius: '16px', cursor: 'pointer',
+                                        background: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(168,85,247,0.05))',
+                                        border: '1px solid rgba(168,85,247,0.3)',
+                                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
+                                        fontFamily: 'Orbitron, monospace',
+                                    }}>
+                                    <span style={{ fontSize: '48px' }}>🎲</span>
+                                    <span style={{ color: '#c084fc', fontSize: '14px', fontWeight: 900, letterSpacing: '2px' }}>ROLL DICE</span>
+                                </button>
                             ) : (
-                                <div className="grid grid-cols-3 gap-3">
+                                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${(activeMatch.gameType === 0 ? MOVES.RPS : MOVES.COIN).length}, 1fr)`, gap: '10px' }}>
                                     {(activeMatch.gameType === 0 ? MOVES.RPS : MOVES.COIN).map((m) => (
-                                        <button key={m.id} onClick={() => handlePlayMove(activeMatch.id, m.id)} className="p-4 bg-white/5 border border-white/10 hover:bg-white/10 hover:border-purple-500/50 rounded flex flex-col items-center gap-2 transition-all"><span className="text-2xl">{m.icon}</span> <span className="text-[10px] font-bold uppercase">{m.label}</span></button>
+                                        <button key={m.id} onClick={() => handlePlayMove(activeMatch.id, m.id)}
+                                            className="hover:scale-[1.05] transition-all"
+                                            style={{
+                                                padding: '20px 12px', borderRadius: '14px', cursor: 'pointer',
+                                                background: 'rgba(255,255,255,0.04)',
+                                                border: '1.5px solid rgba(255,255,255,0.08)',
+                                                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
+                                                fontFamily: 'Orbitron, monospace',
+                                            }}
+                                            onMouseEnter={e => { e.currentTarget.style.borderColor = '#a855f7'; e.currentTarget.style.background = 'rgba(168,85,247,0.1)'; }}
+                                            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+                                        >
+                                            <span style={{ fontSize: '36px' }}>{m.icon}</span>
+                                            <span style={{ color: '#9ca3af', fontSize: '10px', fontWeight: 900, letterSpacing: '1px' }}>{m.label}</span>
+                                        </button>
                                     ))}
                                 </div>
                             )}

@@ -1,12 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { useAccount } from 'wagmi';
+import { useAccount, usePublicClient } from 'wagmi';
+import { formatUnits } from 'viem';
+import { CONTRACT_ADDRESSES, ARENA_PLATFORM_ABI } from '../config/contracts';
+import { GAME_TYPES } from '../utils/gameLogic';
+import MoltbookFeed from '../components/MoltbookFeed';
 
 const BACKEND_URL = import.meta.env.VITE_GAMES_BACKEND_URL || 'http://localhost:3005';
 
 const TABS = [
-  { id: 'live',    label: 'LIVE RANKINGS' },
-  { id: 'history', label: 'SEASON HISTORY' },
+  { id: 'live',    label: 'RANKINGS' },
+  { id: 'history', label: 'SEASONS' },
+  { id: 'pvp',     label: 'PVP ARENA' },
 ];
 const GAME_TABS = [
   { id: 'rhythm', label: 'RHYTHM_RUSH', accent: '#a855f7' },
@@ -153,8 +158,12 @@ export default function Leaderboard() {
   const [countdown,   setCountdown]   = useState(15);
   const [seasons,     setSeasons]     = useState(null);
   const [badges,      setBadges]      = useState(null);
+  const [pvpMatches,  setPvpMatches]  = useState([]);
+  const [pvpLeaders,  setPvpLeaders]  = useState([]);
+  const [showAll,     setShowAll]     = useState(false);
   const prevPlayers = useRef(new Set());
   const countRef    = useRef(null);
+  const publicClient = usePublicClient();
 
   const tab = GAME_TABS.find(t => t.id === gameTab);
 
@@ -201,6 +210,50 @@ export default function Leaderboard() {
 
   useEffect(() => { fetchScores(gameTab); }, [gameTab, fetchScores]);
   useEffect(() => { fetchMeta(); }, [fetchMeta]);
+
+  // Fetch PvP arena data when tab is active
+  useEffect(() => {
+    if (activeTab !== 'pvp' || !publicClient) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const count = await publicClient.readContract({
+          address: CONTRACT_ADDRESSES.ARENA_PLATFORM,
+          abi: ARENA_PLATFORM_ABI,
+          functionName: 'matchCounter',
+        });
+        const total = Number(count);
+        if (total === 0) return;
+        const start = Math.max(0, total - 50);
+        const ids = Array.from({ length: total - start }, (_, i) => BigInt(total - 1 - i));
+        const results = await publicClient.multicall({
+          contracts: ids.map(id => ({
+            address: CONTRACT_ADDRESSES.ARENA_PLATFORM,
+            abi: ARENA_PLATFORM_ABI,
+            functionName: 'matches',
+            args: [id],
+          })),
+        });
+        const matches = results.map((r, i) => {
+          if (r.status === 'failure' || !r.result) return null;
+          const m = r.result;
+          return { id: Number(ids[i]), challenger: m[1], opponent: m[2], wager: m[3], gameType: Number(m[4]), status: Number(m[5]), winner: m[6] };
+        }).filter(Boolean);
+        if (cancelled) return;
+        setPvpMatches(matches);
+        // Build leaderboard from wins
+        const wins = {};
+        matches.forEach(m => {
+          if (m.status === 2 && m.winner && m.winner !== '0x0000000000000000000000000000000000000000') {
+            const w = m.winner.toLowerCase();
+            wins[w] = (wins[w] || 0) + 1;
+          }
+        });
+        setPvpLeaders(Object.entries(wins).map(([a, c]) => ({ address: a, count: c })).sort((a, b) => b.count - a.count).slice(0, 20));
+      } catch (_) {}
+    })();
+    return () => { cancelled = true; };
+  }, [activeTab, publicClient]);
 
   // Auto-refresh live tab every 15 s
   useEffect(() => {
@@ -304,19 +357,21 @@ export default function Leaderboard() {
           ))}
         </div>
 
-        {/* ── Game sub-tabs ────────────────────────────────────────── */}
-        <div style={{ display: 'flex', gap: '6px', marginBottom: '16px' }}>
-          {GAME_TABS.map(t => (
-            <button key={t.id} onClick={() => setGameTab(t.id)} style={{
-              flex: 1, padding: '9px',
-              background:   gameTab === t.id ? `${t.accent}18` : 'rgba(255,255,255,0.02)',
-              border:       `1px solid ${gameTab === t.id ? t.accent : 'rgba(255,255,255,0.06)'}`,
-              borderRadius: '8px', color: gameTab === t.id ? t.accent : '#6b7280',
-              fontSize: '10px', fontWeight: 700, letterSpacing: '1px',
-              cursor: 'pointer', fontFamily: 'Orbitron, monospace', transition: 'all 0.2s',
-            }}>{t.label}</button>
-          ))}
-        </div>
+        {/* ── Game sub-tabs (only for solo game tabs) ───────────────── */}
+        {activeTab !== 'pvp' && (
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '16px' }}>
+            {GAME_TABS.map(t => (
+              <button key={t.id} onClick={() => { setGameTab(t.id); setShowAll(false); }} style={{
+                flex: 1, padding: '9px',
+                background:   gameTab === t.id ? `${t.accent}18` : 'rgba(255,255,255,0.02)',
+                border:       `1px solid ${gameTab === t.id ? t.accent : 'rgba(255,255,255,0.06)'}`,
+                borderRadius: '8px', color: gameTab === t.id ? t.accent : '#6b7280',
+                fontSize: '10px', fontWeight: 700, letterSpacing: '1px',
+                cursor: 'pointer', fontFamily: 'Orbitron, monospace', transition: 'all 0.2s',
+              }}>{t.label}</button>
+            ))}
+          </div>
+        )}
 
         {/* ══ LIVE RANKINGS tab ═══════════════════════════════════════ */}
         {activeTab === 'live' && (
@@ -400,7 +455,7 @@ export default function Leaderboard() {
                   <div style={{ color: '#374151', fontSize: '11px', marginTop: '6px' }}>Be the first to play</div>
                 </div>
               ) : (
-                entries.map((e, i) => {
+                (showAll ? entries : entries.slice(0, 10)).map((e, i) => {
                   const isMe  = address && e.player.toLowerCase() === address.toLowerCase();
                   const isNew = newEntries.has(e.player);
                   // Show this player's badges inline
@@ -442,6 +497,16 @@ export default function Leaderboard() {
                 })
               )}
             </div>
+            {!loading && entries.length > 10 && (
+              <button onClick={() => setShowAll(p => !p)} style={{
+                width: '100%', padding: '10px', marginTop: '8px', borderRadius: '10px',
+                background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+                color: '#6b7280', fontSize: '10px', fontWeight: 700, letterSpacing: '1px',
+                cursor: 'pointer', fontFamily: 'Orbitron, monospace',
+              }}>
+                {showAll ? 'SHOW LESS' : `SHOW ALL ${entries.length} PLAYERS`}
+              </button>
+            )}
           </>
         )}
 
@@ -494,6 +559,120 @@ export default function Leaderboard() {
             )}
           </div>
         )}
+
+        {/* ══ PVP ARENA tab ══════════════════════════════════════════ */}
+        {activeTab === 'pvp' && (() => {
+          const myWins  = pvpMatches.filter(m => m.status === 2 && m.winner?.toLowerCase() === address?.toLowerCase()).length;
+          const myTotal = pvpMatches.filter(m => m.status === 2 && address && (m.challenger.toLowerCase() === address.toLowerCase() || m.opponent.toLowerCase() === address.toLowerCase())).length;
+          const myLosses = myTotal - myWins;
+          return (
+          <div>
+            {/* My stats strip */}
+            {address && myTotal > 0 && (
+              <div style={{
+                display: 'flex', gap: '0', marginBottom: '14px', borderRadius: '12px',
+                overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)',
+              }}>
+                {[
+                  { v: myWins, l: 'WINS', c: '#10b981' },
+                  { v: myLosses, l: 'LOSSES', c: '#ef4444' },
+                  { v: myTotal > 0 ? `${Math.round(myWins / myTotal * 100)}%` : '—', l: 'RATE', c: '#a855f7' },
+                ].map((s, i) => (
+                  <div key={s.l} style={{
+                    flex: 1, textAlign: 'center', padding: '10px 4px',
+                    background: 'rgba(0,0,0,0.25)',
+                    borderRight: i < 2 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                  }}>
+                    <div style={{ color: s.c, fontSize: '16px', fontWeight: 900 }}>{s.v}</div>
+                    <div style={{ color: '#2a2a3a', fontSize: '7px', marginTop: '2px' }}>{s.l}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Top 3 podium */}
+            {pvpLeaders.length > 0 && (
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
+                {pvpLeaders.slice(0, 3).map((p, i) => {
+                  const isMe = address && p.address === address.toLowerCase();
+                  return (
+                    <div key={p.address} style={{
+                      flex: 1, textAlign: 'center', padding: '14px 6px', borderRadius: '12px',
+                      background: i === 0 ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.02)',
+                      border: `1px solid ${isMe ? 'rgba(168,85,247,0.3)' : i === 0 ? 'rgba(245,158,11,0.2)' : 'rgba(255,255,255,0.05)'}`,
+                    }}>
+                      <div style={{ fontSize: '18px', marginBottom: '4px' }}>{MEDALS[i]}</div>
+                      <div style={{ color: isMe ? '#a855f7' : '#9ca3af', fontSize: '10px', fontWeight: 900 }}>
+                        {isMe ? 'YOU' : `${p.address.slice(0, 4)}...`}
+                      </div>
+                      <div style={{ color: '#fff', fontSize: '16px', fontWeight: 900, marginTop: '2px' }}>{p.count}</div>
+                      <div style={{ color: '#374151', fontSize: '7px' }}>WINS</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Recent 5 matches */}
+            <div style={{
+              padding: '12px', borderRadius: '12px', marginBottom: '14px',
+              background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.04)',
+            }}>
+              <div style={{ color: '#6b7280', fontSize: '9px', fontWeight: 700, letterSpacing: '2px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }} />
+                RECENT
+              </div>
+              {pvpMatches.length === 0 ? (
+                <div style={{ padding: '16px', textAlign: 'center', color: '#374151', fontSize: '10px' }}>No matches yet</div>
+              ) : pvpMatches.slice(0, 5).map(m => {
+                const isMe = address && (m.challenger.toLowerCase() === address.toLowerCase() || m.opponent.toLowerCase() === address.toLowerCase());
+                const iWon = m.status === 2 && m.winner?.toLowerCase() === address?.toLowerCase();
+                const iLost = m.status === 2 && isMe && !iWon && m.winner !== '0x0000000000000000000000000000000000000000';
+                return (
+                  <div key={m.id} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.03)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '12px' }}>{GAME_TYPES?.find(g => g.id === m.gameType)?.icon || '⚔️'}</span>
+                      <span style={{ fontSize: '9px', color: '#6b7280' }}>
+                        {m.challenger.slice(0, 5)}.. vs {m.opponent.slice(0, 5)}..
+                        <span style={{ color: '#374151' }}> · {formatUnits(m.wager, 18)} G$</span>
+                      </span>
+                    </div>
+                    <span style={{
+                      padding: '2px 8px', borderRadius: '6px', fontSize: '8px', fontWeight: 900,
+                      color: m.status === 2 ? (iWon ? '#10b981' : iLost ? '#ef4444' : '#6b7280') : '#f59e0b',
+                      background: m.status === 2 ? (iWon ? 'rgba(16,185,129,0.1)' : iLost ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.03)') : 'rgba(245,158,11,0.08)',
+                    }}>
+                      {m.status === 2 ? (iWon ? 'WON' : iLost ? 'LOST' : 'DONE') : 'LIVE'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Social Feed */}
+            <div style={{
+              padding: '12px', borderRadius: '12px', marginBottom: '14px',
+              background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.04)',
+            }}>
+              <div style={{ color: '#6b7280', fontSize: '9px', fontWeight: 700, letterSpacing: '2px', marginBottom: '8px' }}>SOCIAL</div>
+              <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                <MoltbookFeed agentAddress={CONTRACT_ADDRESSES.AI_AGENT} />
+              </div>
+            </div>
+
+            <Link to="/arena" style={{
+              display: 'block', padding: '14px', textAlign: 'center',
+              background: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(168,85,247,0.05))',
+              border: '1px solid rgba(168,85,247,0.25)', borderRadius: '12px',
+              color: '#a855f7', fontSize: '12px', fontWeight: 900, letterSpacing: '2px',
+              textDecoration: 'none', fontFamily: 'Orbitron, monospace',
+            }}>CHALLENGE AI</Link>
+          </div>
+          );
+        })()}
 
         {/* ── Play buttons ────────────────────────────────────────── */}
         <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>

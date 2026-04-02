@@ -282,142 +282,95 @@ export default function GamesHub() {
   return (
     <>
       <style>{`
-        @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
-        @keyframes pulseGlow { 0%,100% { opacity: 0.6; } 50% { opacity: 1; } }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes breathe { 0%,100% { box-shadow: 0 0 20px rgba(168,85,247,0.1); } 50% { box-shadow: 0 0 40px rgba(168,85,247,0.2); } }
-        @keyframes gradientShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
-        .game-card { transition: all 0.25s ease; }
-        .game-card:hover { transform: translateY(-3px); }
-        .play-btn { transition: all 0.2s ease; }
-        .play-btn:hover { filter: brightness(1.2); transform: scale(1.02); }
-        .chip:hover { filter: brightness(1.3); }
+        @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+        @keyframes pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .gc:hover { transform: translateY(-3px) !important; box-shadow: 0 8px 30px rgba(0,0,0,0.3) !important; }
+        .gb:hover { filter: brightness(1.15); transform: scale(1.01); }
+        .gc, .gb { transition: all 0.25s ease; }
       `}</style>
 
-      <div style={{ fontFamily: 'Orbitron, monospace', maxWidth: '580px', margin: '0 auto' }}>
+      <div style={{ fontFamily: 'Orbitron, monospace', maxWidth: '520px', margin: '0 auto' }}>
 
-        {/* ── Hero Section ──────────────────────────────────────────── */}
-        <div style={{
-          position: 'relative', padding: '30px 24px 24px', marginBottom: '20px',
-          background: 'linear-gradient(160deg, rgba(168,85,247,0.12) 0%, rgba(6,182,212,0.06) 50%, rgba(16,185,129,0.04) 100%)',
-          border: '1px solid rgba(168,85,247,0.15)', borderRadius: '20px',
-          overflow: 'hidden', animation: 'breathe 5s ease-in-out infinite',
-        }}>
-          {/* Grid overlay */}
+        {/* ── Player Bar (compact) ──────────────────────────────────── */}
+        {isConnected && username ? (
           <div style={{
-            position: 'absolute', inset: 0, opacity: 0.04,
-            backgroundImage: 'linear-gradient(rgba(168,85,247,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(168,85,247,0.3) 1px, transparent 1px)',
-            backgroundSize: '32px 32px', pointerEvents: 'none',
-          }} />
-          {/* Gradient orb */}
-          <div style={{
-            position: 'absolute', top: '-40px', right: '-40px', width: '160px', height: '160px',
-            borderRadius: '50%', background: 'radial-gradient(circle, rgba(168,85,247,0.15) 0%, transparent 70%)',
-            pointerEvents: 'none',
-          }} />
-
-          <div style={{ position: 'relative', zIndex: 1 }}>
-            {/* Top row — player or connect */}
-            {isConnected && username ? (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{
-                    width: '42px', height: '42px', borderRadius: '12px',
-                    background: 'linear-gradient(135deg, #a855f7, #06b6d4)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '20px', fontWeight: 900, color: '#fff',
-                    boxShadow: '0 4px 15px rgba(168,85,247,0.3)',
-                  }}>
-                    {username[0].toUpperCase()}
-                  </div>
-                  <div>
-                    <div style={{ color: '#fff', fontSize: '15px', fontWeight: 900, letterSpacing: '1px' }}>{username}</div>
-                    <div style={{ color: '#6b7280', fontSize: '9px', marginTop: '2px' }}>
-                      {gBal} G$ · Player #{totalUsers ? Number(totalUsers) : '?'}
-                    </div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                  {isVerified ? (
-                    <span className="chip" style={{
-                      padding: '5px 12px', borderRadius: '20px', fontSize: '9px', fontWeight: 700,
-                      background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.35)', color: '#10b981',
-                    }}>VERIFIED</span>
-                  ) : (
-                    <button onClick={verifyIdentity} disabled={isVerifying} className="chip" style={{
-                      padding: '5px 12px', borderRadius: '20px', fontSize: '9px', fontWeight: 700, cursor: 'pointer',
-                      background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', color: '#fbbf24',
-                      fontFamily: 'Orbitron, monospace',
-                    }}>{isVerifying ? '...' : 'VERIFY'}</button>
-                  )}
-                  {canClaim && (
-                    <button onClick={claimG$} className="chip" style={{
-                      padding: '5px 12px', borderRadius: '20px', fontSize: '9px', fontWeight: 700, cursor: 'pointer',
-                      background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.4)', color: '#c084fc',
-                      fontFamily: 'Orbitron, monospace',
-                    }}>CLAIM G$</button>
-                  )}
-                </div>
-              </div>
-            ) : isConnected && !hasPass ? null : !isConnected ? (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-                <span style={{ color: '#6b7280', fontSize: '9px', letterSpacing: '3px' }}>WELCOME TO</span>
-                <button onClick={() => connect({ connector: injected() })} className="play-btn" style={{
-                  padding: '10px 22px', borderRadius: '12px', cursor: 'pointer',
-                  background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
-                  border: 'none', color: '#fff', fontSize: '11px', fontWeight: 700,
-                  fontFamily: 'Orbitron, monospace', letterSpacing: '1px',
-                  boxShadow: '0 4px 20px rgba(168,85,247,0.3)',
-                }}>CONNECT WALLET</button>
-              </div>
-            ) : null}
-
-            {/* Title */}
-            <h1 style={{ color: '#fff', fontSize: '32px', fontWeight: 900, margin: 0, letterSpacing: '4px', lineHeight: 1 }}>
-              GAME<span style={{ color: '#a855f7' }}>_</span>ARENA
-            </h1>
-            <p style={{ color: '#4b5563', fontSize: '11px', marginTop: '8px', lineHeight: 1.4 }}>
-              Play games · Earn G$ · Compete weekly · Fund global UBI
-            </p>
-
-            {/* Stats row */}
-            {stats && (
-              <div style={{
-                display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px',
-                marginTop: '20px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.06)',
-              }}>
-                {[
-                  { val: totalUsers ? Number(totalUsers) : (stats.totalUsers ?? 0), lab: 'PLAYERS', col: '#10b981' },
-                  { val: stats.totalGames ?? 0, lab: 'GAMES', col: '#a855f7' },
-                  { val: `${stats.estimatedPrizePot}`, lab: 'PRIZE POT', col: '#f59e0b' },
-                  { val: countdown || '—', lab: `WEEK ${stats.currentSeason}`, col: '#06b6d4' },
-                ].map(s => (
-                  <div key={s.lab} style={{
-                    textAlign: 'center', padding: '8px 4px',
-                    background: 'rgba(0,0,0,0.2)', borderRadius: '10px',
-                  }}>
-                    <div style={{ color: s.col, fontSize: '17px', fontWeight: 900 }}>{s.val}</div>
-                    <div style={{ color: '#374151', fontSize: '7px', letterSpacing: '0.5px', marginTop: '4px' }}>{s.lab}</div>
-                  </div>
-                ))}
-              </div>
+            display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px',
+            padding: '10px 14px', borderRadius: '14px',
+            background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+          }}>
+            <div style={{
+              width: '34px', height: '34px', borderRadius: '10px',
+              background: 'linear-gradient(135deg, #a855f7, #06b6d4)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '16px', fontWeight: 900, color: '#fff', flexShrink: 0,
+            }}>{username[0].toUpperCase()}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ color: '#fff', fontSize: '13px', fontWeight: 900 }}>{username}</div>
+              <div style={{ color: '#4b5563', fontSize: '8px', marginTop: '1px' }}>{gBal} G$</div>
+            </div>
+            {isVerified ? (
+              <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '8px', fontWeight: 700, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981' }}>VERIFIED</span>
+            ) : (
+              <button onClick={verifyIdentity} disabled={isVerifying} className="gb" style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '8px', fontWeight: 700, cursor: 'pointer', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', color: '#fbbf24', fontFamily: 'Orbitron, monospace' }}>{isVerifying ? '...' : 'VERIFY'}</button>
             )}
-
-            {/* Badges */}
-            {badges && badges.badges.length > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', marginTop: '12px' }}>
-                {badges.summary.streakLabel && (
-                  <span style={{
-                    padding: '3px 10px', borderRadius: '10px', fontSize: '8px', fontWeight: 900,
-                    background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)', color: '#f59e0b',
-                  }}>{badges.summary.streakLabel}</span>
-                )}
-                {badges.badges.slice(0, 5).map((b, i) => <MiniChip key={i} badge={b} />)}
-                {badges.badges.length > 5 && <span style={{ color: '#374151', fontSize: '9px' }}>+{badges.badges.length - 5}</span>}
-              </div>
+            {canClaim && (
+              <button onClick={claimG$} className="gb" style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '8px', fontWeight: 700, cursor: 'pointer', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.35)', color: '#c084fc', fontFamily: 'Orbitron, monospace' }}>CLAIM</button>
             )}
           </div>
-        </div>
+        ) : !isConnected ? (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            marginBottom: '14px', padding: '12px 16px', borderRadius: '14px',
+            background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.15)',
+          }}>
+            <div>
+              <div style={{ color: '#fff', fontSize: '13px', fontWeight: 900, letterSpacing: '2px' }}>GAME<span style={{ color: '#a855f7' }}>_</span>ARENA</div>
+              <div style={{ color: '#4b5563', fontSize: '9px', marginTop: '2px' }}>Play · Earn G$ · Fund UBI</div>
+            </div>
+            <button onClick={() => connect({ connector: injected() })} className="gb" style={{
+              padding: '10px 20px', borderRadius: '12px', cursor: 'pointer',
+              background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
+              border: 'none', color: '#fff', fontSize: '10px', fontWeight: 700,
+              fontFamily: 'Orbitron, monospace', letterSpacing: '1px',
+            }}>CONNECT</button>
+          </div>
+        ) : null}
+
+        {/* ── Season Strip ──────────────────────────────────────────── */}
+        {stats && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '0', marginBottom: '16px',
+            borderRadius: '12px', overflow: 'hidden',
+            border: '1px solid rgba(255,255,255,0.05)',
+          }}>
+            {[
+              { val: totalUsers ? Number(totalUsers) : (stats.totalUsers ?? 0), lab: 'PLAYERS', col: '#10b981' },
+              { val: stats.totalGames ?? 0, lab: 'GAMES', col: '#a855f7' },
+              { val: stats.estimatedPrizePot, lab: 'POT G$', col: '#f59e0b' },
+              { val: countdown || '—', lab: `WK ${stats.currentSeason}`, col: '#06b6d4' },
+            ].map((s, i) => (
+              <div key={s.lab} style={{
+                flex: 1, textAlign: 'center', padding: '10px 4px',
+                background: 'rgba(0,0,0,0.2)',
+                borderRight: i < 3 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+              }}>
+                <div style={{ color: s.col, fontSize: '15px', fontWeight: 900 }}>{s.val}</div>
+                <div style={{ color: '#2a2a3a', fontSize: '7px', letterSpacing: '0.5px', marginTop: '2px' }}>{s.lab}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Badges inline */}
+        {badges && badges.badges.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', marginBottom: '14px' }}>
+            {badges.summary.streakLabel && (
+              <span style={{ padding: '3px 8px', borderRadius: '8px', fontSize: '8px', fontWeight: 900, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.25)', color: '#f59e0b' }}>{badges.summary.streakLabel}</span>
+            )}
+            {badges.badges.slice(0, 5).map((b, i) => <MiniChip key={i} badge={b} />)}
+          </div>
+        )}
 
         {/* ── Game Pass Gate ─────────────────────────────────────────── */}
         {isConnected && !hasPass && (
@@ -494,187 +447,128 @@ export default function GamesHub() {
         )}
 
         {/* ── Game Cards ─────────────────────────────────────────────── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '14px' }}>
           {GAMES.map((game, gi) => {
-            const isWager  = wagerMode[game.id];
-            const amount   = wagerAmount[game.id] || '5';
             const loading  = pending === game.id;
-            const canWager = isConnected && isVerified;
+            const canWager = isConnected && isVerified && !game.noWager;
             const myBest = address
               ? activity.filter(a => a.game === game.id && a.player === address.toLowerCase())
                   .sort((a, b) => b.score - a.score)[0]?.score
               : null;
 
             return (
-              <div key={game.id} className="game-card" style={{
-                background: `linear-gradient(160deg, ${game.faint} 0%, rgba(8,8,16,0.95) 100%)`,
-                border: `1px solid ${isWager ? game.accent : game.border}`,
-                borderRadius: '16px', padding: '22px',
-                animation: `slideUp 0.4s ease-out ${gi * 0.12}s both`,
+              <div key={game.id} className="gc" style={{
+                position: 'relative', overflow: 'hidden',
+                borderRadius: '16px', padding: '22px 20px 18px',
+                background: `linear-gradient(145deg, ${game.accent}14 0%, rgba(6,6,14,0.97) 60%)`,
+                border: `1px solid ${game.border}`,
+                animation: `slideUp 0.35s ease-out ${gi * 0.1}s both`,
               }}>
-                {/* Header row */}
-                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                  <div style={{
-                    width: '60px', height: '60px', borderRadius: '16px',
-                    background: `linear-gradient(135deg, ${game.accent}25, ${game.accent}08)`,
-                    border: `1px solid ${game.accent}30`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '30px', flexShrink: 0,
-                    animation: `float 4s ease-in-out infinite ${gi * 0.5}s`,
-                  }}>{game.emoji}</div>
+                {/* Accent glow top-left */}
+                <div style={{
+                  position: 'absolute', top: '-30px', left: '-30px', width: '120px', height: '120px',
+                  borderRadius: '50%', background: `radial-gradient(circle, ${game.accent}12 0%, transparent 70%)`,
+                  pointerEvents: 'none',
+                }} />
 
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <span style={{ color: game.accent, fontSize: '16px', fontWeight: 900, letterSpacing: '2px' }}>
-                        {game.title}
-                      </span>
-                      {myBest != null && (
-                        <span style={{
-                          padding: '3px 10px', borderRadius: '12px', fontSize: '9px', fontWeight: 900,
-                          background: `${game.accent}15`, border: `1px solid ${game.accent}30`, color: game.accent,
-                        }}>PB: {myBest}</span>
-                      )}
-                    </div>
-                    <div style={{ color: '#6b7280', fontSize: '10px', marginTop: '5px', lineHeight: 1.4 }}>{game.desc}</div>
-                    {!game.noWager && (
-                      <div style={{ display: 'flex', gap: '14px', marginTop: '6px' }}>
-                        <span style={{ color: '#374151', fontSize: '8px' }}>
-                          WIN: <span style={{ color: '#9ca3af' }}>{game.winAt}</span>
+                <div style={{ position: 'relative', zIndex: 1 }}>
+                  {/* Top row: icon + info */}
+                  <div style={{ display: 'flex', gap: '14px', alignItems: 'center', marginBottom: '16px' }}>
+                    <div style={{
+                      width: '52px', height: '52px', borderRadius: '14px',
+                      background: `${game.accent}15`, border: `1px solid ${game.accent}25`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '26px', flexShrink: 0,
+                      animation: `float 3.5s ease-in-out infinite ${gi * 0.6}s`,
+                    }}>{game.emoji}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ color: '#fff', fontSize: '15px', fontWeight: 900, letterSpacing: '1.5px' }}>
+                          {game.title}
                         </span>
-                        <span style={{ color: '#374151', fontSize: '8px' }}>
-                          PAYOUT: <span style={{ color: '#10b981' }}>{game.payout}</span>
-                        </span>
+                        {myBest != null && (
+                          <span style={{
+                            padding: '2px 8px', borderRadius: '10px', fontSize: '8px', fontWeight: 900,
+                            background: `${game.accent}15`, color: game.accent,
+                          }}>PB {myBest}</span>
+                        )}
                       </div>
+                      <div style={{ color: '#4b5563', fontSize: '10px', marginTop: '3px' }}>{game.desc}</div>
+                    </div>
+                  </div>
+
+                  {/* Action buttons — PLAY (always) + WAGER (if eligible) */}
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      onClick={() => { setWagerMode(p => ({ ...p, [game.id]: false })); navigate(game.path); }}
+                      disabled={loading}
+                      className="gb"
+                      style={{
+                        flex: 2, padding: '14px',
+                        background: `linear-gradient(135deg, ${game.accent}30, ${game.accent}12)`,
+                        border: `1px solid ${game.accent}40`,
+                        borderRadius: '12px', color: game.accent,
+                        fontSize: '12px', fontWeight: 900, letterSpacing: '2px',
+                        cursor: 'pointer', fontFamily: 'Orbitron, monospace',
+                      }}
+                    >
+                      {game.id === 'rhythm' ? 'TAP TO PLAY' : 'START GAME'}
+                    </button>
+                    {canWager && (
+                      <button
+                        onClick={() => {
+                          setWagerMode(p => ({ ...p, [game.id]: true }));
+                          handlePlay({ ...game });
+                        }}
+                        disabled={loading}
+                        className="gb"
+                        style={{
+                          flex: 1, padding: '14px',
+                          background: `linear-gradient(135deg, ${game.accent}, ${game.accent}aa)`,
+                          border: 'none', borderRadius: '12px', color: '#fff',
+                          fontSize: '10px', fontWeight: 900, letterSpacing: '1px',
+                          cursor: 'pointer', fontFamily: 'Orbitron, monospace',
+                          boxShadow: `0 4px 15px ${game.accent}25`,
+                        }}
+                      >
+                        {loading ? '...' : 'WAGER G$'}
+                      </button>
                     )}
                   </div>
+
+                  {/* Wager info hint */}
+                  {!game.noWager && (
+                    <div style={{ display: 'flex', gap: '12px', marginTop: '10px', justifyContent: 'center' }}>
+                      <span style={{ color: '#2a2a3a', fontSize: '8px' }}>WIN: <span style={{ color: '#4b5563' }}>{game.winAt}</span></span>
+                      <span style={{ color: '#2a2a3a', fontSize: '8px' }}>PAYOUT: <span style={{ color: '#10b981' }}>{game.payout}</span></span>
+                      <span style={{ color: '#2a2a3a', fontSize: '8px' }}>2% → UBI</span>
+                    </div>
+                  )}
                 </div>
-
-                {/* Wager section */}
-                {!game.noWager && (
-                  <div style={{ marginTop: '16px' }}>
-                    <div style={{ display: 'flex', gap: '6px', marginBottom: isWager ? '12px' : 0 }}>
-                      <button onClick={() => setWagerMode(p => ({ ...p, [game.id]: false }))} style={{
-                        flex: 1, padding: '9px',
-                        background: !isWager ? 'rgba(255,255,255,0.08)' : 'transparent',
-                        border: `1px solid ${!isWager ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)'}`,
-                        borderRadius: '10px', color: !isWager ? '#e5e7eb' : '#4b5563',
-                        fontSize: '10px', fontWeight: 700, letterSpacing: '1px',
-                        cursor: 'pointer', fontFamily: 'Orbitron, monospace',
-                      }}>FREE PLAY</button>
-                      <button onClick={() => {
-                        if (!canWager && isConnected) { toast('Verify identity first', { icon: '👤' }); return; }
-                        setWagerMode(p => ({ ...p, [game.id]: true }));
-                      }} style={{
-                        flex: 1, padding: '9px',
-                        background: isWager ? `${game.accent}18` : 'transparent',
-                        border: `1px solid ${isWager ? game.accent : 'rgba(255,255,255,0.05)'}`,
-                        borderRadius: '10px', color: isWager ? game.accent : canWager ? '#6b7280' : '#374151',
-                        fontSize: '10px', fontWeight: 700, letterSpacing: '1px',
-                        cursor: 'pointer', fontFamily: 'Orbitron, monospace',
-                        opacity: !canWager ? 0.5 : 1,
-                      }}>{!canWager && isConnected ? '🔒 WAGER' : 'WAGER G$'}</button>
-                    </div>
-
-                    {isWager && (
-                      <div style={{
-                        padding: '14px', background: 'rgba(0,0,0,0.3)', borderRadius: '12px',
-                        border: `1px solid ${game.accent}15`, marginBottom: '12px',
-                      }}>
-                        <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', justifyContent: 'center' }}>
-                          {WAGER_AMOUNTS.map(amt => (
-                            <button key={amt} onClick={() => setWagerAmount(p => ({ ...p, [game.id]: amt }))} className="chip" style={{
-                              padding: '7px 14px',
-                              background: amount === amt ? `${game.accent}28` : 'rgba(255,255,255,0.03)',
-                              border: `1px solid ${amount === amt ? game.accent : 'rgba(255,255,255,0.06)'}`,
-                              borderRadius: '8px', color: amount === amt ? game.accent : '#6b7280',
-                              fontSize: '12px', fontWeight: 700, cursor: 'pointer',
-                              fontFamily: 'Orbitron, monospace', transition: 'all 0.15s',
-                            }}>{amt}</button>
-                          ))}
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', padding: '0 6px' }}>
-                          <span style={{ color: '#6b7280' }}>Win: <span style={{ color: '#fff' }}>{game.winAt}</span></span>
-                          <span style={{ color: '#10b981', fontWeight: 700 }}>{(parseFloat(amount) * 1.3).toFixed(1)} G$</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Play button */}
-                <button
-                  onClick={() => handlePlay(game)}
-                  disabled={loading}
-                  className="play-btn"
-                  style={{
-                    width: '100%', padding: '14px', marginTop: game.noWager ? '16px' : isWager ? 0 : '16px',
-                    background: isWager
-                      ? `linear-gradient(135deg, ${game.accent}, ${game.accent}99)`
-                      : `linear-gradient(135deg, ${game.accent}20, ${game.accent}08)`,
-                    border: `1px solid ${game.accent}${isWager ? '' : '35'}`,
-                    borderRadius: '12px',
-                    color: isWager ? '#fff' : game.accent,
-                    fontSize: '13px', fontWeight: 900, letterSpacing: '3px',
-                    cursor: loading ? 'not-allowed' : 'pointer',
-                    fontFamily: 'Orbitron, monospace',
-                    opacity: loading ? 0.6 : 1,
-                    boxShadow: isWager ? `0 4px 20px ${game.accent}30` : 'none',
-                  }}
-                >
-                  {loading ? 'PROCESSING...' : isWager ? `WAGER ${amount} G$` : 'PLAY NOW'}
-                </button>
               </div>
             );
           })}
         </div>
 
-        {/* ── AI Challenge Card ──────────────────────────────────────── */}
-        <div
-          onClick={() => navigate('/arena')}
-          className="game-card"
-          style={{
-            marginBottom: '16px', padding: '20px',
-            background: 'linear-gradient(160deg, rgba(168,85,247,0.08), rgba(139,92,246,0.03))',
-            border: '1px solid rgba(168,85,247,0.2)', borderRadius: '16px',
-            display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer',
-          }}
-        >
-          <div style={{
-            width: '52px', height: '52px', borderRadius: '14px',
-            background: 'linear-gradient(135deg, rgba(168,85,247,0.2), rgba(139,92,246,0.08))',
-            border: '1px solid rgba(168,85,247,0.3)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px',
-            animation: 'float 3s ease-in-out infinite',
-          }}>🤖</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ color: '#a855f7', fontSize: '14px', fontWeight: 900, letterSpacing: '2px' }}>
-              CHALLENGE AI
-            </div>
-            <div style={{ color: '#6b7280', fontSize: '10px', marginTop: '3px' }}>
-              PvP wager matches vs Markov-1 — RPS, Dice & more
+        {/* ── AI + Nav row ─────────────────────────────────────────── */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
+          <div onClick={() => navigate('/arena')} className="gc" style={{
+            flex: 2, padding: '14px 16px', cursor: 'pointer',
+            background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.15)',
+            borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '10px',
+          }}>
+            <span style={{ fontSize: '22px' }}>🤖</span>
+            <div>
+              <div style={{ color: '#a855f7', fontSize: '11px', fontWeight: 900, letterSpacing: '1px' }}>CHALLENGE AI</div>
+              <div style={{ color: '#374151', fontSize: '8px', marginTop: '2px' }}>PvP vs Markov-1</div>
             </div>
           </div>
-          <div style={{
-            padding: '8px 16px', borderRadius: '10px', fontSize: '10px', fontWeight: 700,
-            background: 'linear-gradient(135deg, rgba(168,85,247,0.2), rgba(168,85,247,0.1))',
-            border: '1px solid rgba(168,85,247,0.3)', color: '#c084fc',
-          }}>ENTER</div>
-        </div>
-
-        {/* ── Bottom Navigation ──────────────────────────────────────── */}
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-          <button onClick={() => navigate('/leaderboard')} className="play-btn" style={{
+          <button onClick={() => navigate('/leaderboard')} className="gb" style={{
             flex: 1, padding: '14px',
-            background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)',
-            borderRadius: '12px', color: '#f59e0b', fontSize: '11px', fontWeight: 700,
-            letterSpacing: '2px', cursor: 'pointer', fontFamily: 'Orbitron, monospace',
-          }}>LEADERBOARD</button>
-          <a href="https://www.gooddollar.org" target="_blank" rel="noopener noreferrer" className="play-btn" style={{
-            flex: 1, padding: '14px', textAlign: 'center', textDecoration: 'none',
-            background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)',
-            borderRadius: '12px', color: '#10b981', fontSize: '11px', fontWeight: 700,
-            letterSpacing: '2px', fontFamily: 'Orbitron, monospace',
-          }}>WHAT IS G$</a>
+            background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.12)',
+            borderRadius: '14px', color: '#f59e0b', fontSize: '10px', fontWeight: 700,
+            letterSpacing: '1px', cursor: 'pointer', fontFamily: 'Orbitron, monospace',
+          }}>SCORES</button>
         </div>
 
         {/* ── Live Activity ──────────────────────────────────────────── */}

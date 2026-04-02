@@ -630,6 +630,46 @@ app.get('/api/streak/:address', async (req, res) => {
   res.json({ streak, playedToday });
 });
 
+// ─── POST /api/faucet — send 0.01 CELO to new users (once per wallet) ────────
+app.post('/api/faucet', async (req, res) => {
+  const { address } = req.body;
+  if (!address) return res.status(400).json({ error: 'Missing address' });
+
+  const lower = address.toLowerCase();
+
+  // Check if already received
+  const { data: existing } = await supabase
+    .from('faucet')
+    .select('wallet_address')
+    .eq('wallet_address', lower)
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    return res.json({ success: false, reason: 'Already received gas' });
+  }
+
+  if (!validator) {
+    return res.status(500).json({ error: 'Faucet not configured' });
+  }
+
+  try {
+    const tx = await validator.sendTransaction({
+      to: address,
+      value: ethers.parseEther('0.01'),
+    });
+    await tx.wait();
+
+    // Mark as sent
+    await supabase.from('faucet').insert({ wallet_address: lower });
+
+    console.log(`⛽ Faucet: sent 0.01 CELO to ${lower} (tx: ${tx.hash.slice(0, 10)}...)`);
+    res.json({ success: true, txHash: tx.hash });
+  } catch (e) {
+    console.error(`⛽ Faucet failed for ${lower}:`, e.message);
+    res.status(500).json({ error: 'Faucet transfer failed' });
+  }
+});
+
 // ─── GET /health ────────────────────────────────────────────────────────────
 app.get('/health', async (_, res) => {
   const { count: rhythmCount } = await supabase

@@ -512,7 +512,7 @@ export default function GamesHub() {
                   {/* Action buttons — PLAY (always) + WAGER (if eligible) */}
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button
-                      onClick={() => { setWagerMode(p => ({ ...p, [game.id]: false })); navigate(game.path); }}
+                      onClick={() => navigate(game.path)}
                       disabled={loading}
                       className="gb"
                       style={{
@@ -528,15 +528,16 @@ export default function GamesHub() {
                     </button>
                     {canWager && (
                       <button
-                        onClick={() => {
-                          handlePlay({ ...game }, true);
-                        }}
+                        onClick={() => setWagerMode(p => ({ ...p, [game.id]: !p[game.id] }))}
                         disabled={loading}
                         className="gb"
                         style={{
                           flex: 1, padding: '14px',
-                          background: `linear-gradient(135deg, ${game.accent}, ${game.accent}aa)`,
-                          border: 'none', borderRadius: '12px', color: '#fff',
+                          background: wagerMode[game.id]
+                            ? `${game.accent}30`
+                            : `linear-gradient(135deg, ${game.accent}, ${game.accent}aa)`,
+                          border: wagerMode[game.id] ? `1px solid ${game.accent}` : 'none',
+                          borderRadius: '12px', color: '#fff',
                           fontSize: '10px', fontWeight: 900, letterSpacing: '1px',
                           cursor: 'pointer', fontFamily: 'Orbitron, monospace',
                           boxShadow: `0 4px 15px ${game.accent}25`,
@@ -546,6 +547,51 @@ export default function GamesHub() {
                       </button>
                     )}
                   </div>
+
+                  {/* Wager amount picker — shown when WAGER G$ is toggled */}
+                  {wagerMode[game.id] && (
+                    <div style={{
+                      marginTop: '10px', padding: '12px',
+                      background: 'rgba(0,0,0,0.3)', border: `1px solid ${game.accent}30`,
+                      borderRadius: '12px',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <span style={{ color: '#6b7280', fontSize: '9px', letterSpacing: '1px' }}>WAGER AMOUNT</span>
+                        <span style={{ color: '#10b981', fontSize: '10px', fontWeight: 700 }}>
+                          WIN: {(parseFloat(wagerAmount[game.id] || '5') * 1.3).toFixed(1)} G$
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+                        {['1', '5', '10', '25', '50'].map(amt => (
+                          <button key={amt}
+                            onClick={() => setWagerAmount(p => ({ ...p, [game.id]: amt }))}
+                            style={{
+                              flex: 1, padding: '8px 4px', borderRadius: '8px', cursor: 'pointer',
+                              background: (wagerAmount[game.id] || '5') === amt ? `${game.accent}25` : 'rgba(255,255,255,0.03)',
+                              border: `1px solid ${(wagerAmount[game.id] || '5') === amt ? game.accent : 'rgba(255,255,255,0.06)'}`,
+                              color: (wagerAmount[game.id] || '5') === amt ? game.accent : '#4b5563',
+                              fontSize: '11px', fontWeight: 700, fontFamily: 'Orbitron, monospace',
+                            }}
+                          >{amt}</button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => handlePlay({ ...game }, true)}
+                        disabled={loading}
+                        className="gb"
+                        style={{
+                          width: '100%', padding: '12px', borderRadius: '10px', cursor: 'pointer',
+                          background: `linear-gradient(135deg, ${game.accent}, ${game.accent}cc)`,
+                          border: 'none', color: '#fff',
+                          fontSize: '11px', fontWeight: 900, letterSpacing: '1px',
+                          fontFamily: 'Orbitron, monospace',
+                          boxShadow: `0 4px 15px ${game.accent}30`,
+                        }}
+                      >
+                        {loading ? 'LOCKING...' : `LOCK ${wagerAmount[game.id] || '5'} G$ & PLAY`}
+                      </button>
+                    </div>
+                  )}
 
                   {/* Wager info hint */}
                   {!game.noWager && (

@@ -1,132 +1,80 @@
-# TournamentChain Smart Contracts
+# GameArena Smart Contracts
 
-Smart contracts for TournamentChain. Deploy to Sepolia. Test locally. Verify on Etherscan.
+Solidity contracts for GameArena on Celo Mainnet. Built with Foundry and OpenZeppelin v4.
 
-## What These Contracts Do
+## Contracts
 
-TournamentPlatform: Manages tournaments. Collects entry fees. Distributes prizes. Tracks winners.
+| Contract | Purpose | Address |
+|---|---|---|
+| `ArenaPlatform.sol` | PvP match escrow — players wager G$ against Markov-1 AI | [`0x5C0eafE7834...`](https://celoscan.io/address/0x5C0eafE7834Bd317D998A058A71092eEBc2DedeE) |
+| `SoloWager.sol` | Solo game wager escrow — 1.3x payout, 3% dev fee, 2% UBI | [`0xc78A8A027e0...`](https://celoscan.io/address/0xc78A8A027e07Ae5d52981f627bbac973a8d77eFb) |
+| `GamePass.sol` | Soulbound NFT — username, on-chain score recording | [`0xd184E5CBE...`](https://celoscan.io/address/0xd184E5CBEbf957624d14fAa0bfe20d6443411453) |
 
-GameAssets: ERC-1155 NFT contract. Players own Weapons and Skins. Batch minting supported.
+## How They Work
 
-GoldToken & DiamondToken: ERC-20 tokens. Gold for entry fees. Diamonds for premium rewards.
+**SoloWager.sol** — Players lock G$ before playing Rhythm Rush or Simon Memory. Backend validator calls `resolveWager()` with the final score. If score meets threshold (350 pts rhythm, 7 sequences simon), player gets 1.3x back. 3% dev fee taken upfront, 2% routed to GoodCollective UBI pool on resolution.
 
-ArcadePlatform: Free-to-play leaderboard. Stores high scores on-chain. Immutable reputation.
+**ArenaPlatform.sol** — Player creates a match by locking G$. AI agent auto-accepts and locks matching amount. After both play their moves, winner takes 95% of the pot. 5% platform fee to contract owner.
 
-WinnerBadge: Soulbound Token (SBT). Non-transferable badge for tournament champions.
+**GamePass.sol** — Soulbound (non-transferable) ERC-721. Players mint once with a username. Backend calls `recordScore()` after every game — creates on-chain proof. `totalSupply()` = total registered users. `bestScore()` = verifiable high score per player.
 
 ## Prerequisites
 
-Install Foundry. Get Sepolia ETH for gas fees. Have a wallet ready.
+- [Foundry](https://book.getfoundry.sh/getting-started/installation)
+- Celo wallet with CELO for gas
 
-Foundry installation: https://book.getfoundry.sh/getting-started/installation
-
-## Installation
-
-Navigate to contracts folder. Install dependencies.
-
-```bash
-cd TournamentChain/contracts
-forge install
-```
-
-Build contracts:
+## Build & Deploy
 
 ```bash
 forge build
+
+# Deploy SoloWager
+forge script script/DeploySoloWager.s.sol \
+  --rpc-url https://forno.celo.org \
+  --broadcast --account deployer
 ```
-
-Run tests:
-
-```bash
-forge test
-```
-
-All tests must pass before deployment.
 
 ## Configuration
 
-Create a `.env` file in the contracts directory:
-
+Create `.env`:
+```bash
+PRIVATE_KEY=<your deployer key>
+CELO_RPC_URL=https://forno.celo.org
 ```
-PRIVATE_KEY=0xyour_private_key_with_0x_prefix
-ETHERSCAN_API_KEY=your_etherscan_api_key
-```
 
-Important notes:
-- Private key must include 0x prefix
-- Etherscan API key is for verification
-
-## Deployment
-
-### Deploy All Contracts
-
-Deploy everything to Sepolia Testnet:
+## Owner Functions
 
 ```bash
-forge script script/Deploy.s.sol:Deploy --rpc-url https://sepolia.drpc.org --broadcast --legacy
+# Set payout multiplier (130 = 1.3x)
+cast send <SoloWager> "setPayoutMultiplier(uint256)" 130
+
+# Set GoodCollective UBI pool
+cast send <SoloWager> "setGoodCollective(address)" 0x43d72Ff17701B2DA814620735C39C620Ce0ea4A1
+
+# Withdraw treasury profits
+cast send <SoloWager> "withdrawTreasury(uint256)" <amount>
+
+# Fund treasury
+cast send <SoloWager> "fundTreasury(uint256)" <amount>
 ```
 
-This deploys Tokens, Assets, Tournament Platform, and Lottery. Sets up permissions.
+## Security
 
-### Deploy Arcade Platform
-
-Deploy the Arcade leaderboard:
-
-```bash
-forge script script/DeployArcade.s.sol:DeployArcade --rpc-url https://sepolia.drpc.org --broadcast --legacy
-```
-
-## Deployed Contracts
-
-Sepolia Testnet:
-
-- **TournamentPlatform**: `0x14b2303f4eb388e2842e61f1e3b88bcadee3cc73`
-- **GameAssets**: `0xa1dbb68470cce59218e8495f5350ffc8c8e36110`
-- **GoldToken**: `0x0bd3180bd740e8fb560329ea42f46f65aa5b242d`
-- **DiamondToken**: `0xc6d677f0fcb8343ee09063b6849aa40e1fc99bc5`
-- **ArcadePlatform**: `0x214124ae23b415b3AEA3bb9e260A56dc022bAf04`
-- **WinnerBadge**: `0xb3e19d1215423abadb0a9105c61618aec6b02be6`
-
-## Usage
-
-### Mint Test Tokens
-
-Call `mint` on GoldToken or DiamondToken. Public minting enabled for hackathon testing.
-
-### Create Tournament
-
-Call `createTournament` on TournamentPlatform. Set entry fee, duration, and prize pool.
-
-### Join Tournament
-
-Approve GoldToken spending. Call `joinTournament`. Pay entry fee.
-
-### Submit Score
-
-Call `submitScore` on TournamentPlatform (for paid) or ArcadePlatform (for free).
+- **ReentrancyGuard** on all state-changing functions
+- **Ownable** for admin operations
+- **SafeERC20** for token transfers
+- Backend validator pattern — only authorized wallet can resolve wagers
 
 ## Project Structure
 
 ```
 contracts/
 ├── src/
-│   ├── TournamentPlatform.sol
-│   ├── GameAssets.sol
-│   ├── GameCurrency.sol
-│   ├── ArcadePlatform.sol
-│   └── WinnerBadge.sol
+│   ├── ArenaPlatform.sol      PvP match escrow
+│   ├── SoloWager.sol          Solo wager (3% dev + 2% UBI)
+│   └── GamePass.sol           Soulbound NFT + scores
 ├── script/
-│   ├── Deploy.s.sol
-│   └── DeployArcade.s.sol
-├── test/
-│   └── TournamentPlatform.t.sol
-└── README.md
+│   └── DeploySoloWager.s.sol  Deployment script
+└── lib/
+    └── openzeppelin-contracts  OpenZeppelin v4.9
 ```
-
-## Security
-
-Contracts include security features:
-- **ReentrancyGuard**: Prevents reentrancy attacks.
-- **Ownable**: Protects administrative functions.
-- **Pausable**: Emergency stop mechanism.
-- **ERC-1155**: Standard secure asset management.

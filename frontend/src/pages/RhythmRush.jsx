@@ -348,6 +348,21 @@ export default function RhythmRush() {
     return () => window.removeEventListener('keydown', onKey);
   }, [gameActive, handleButtonClick]);
 
+  // Prevent scroll during gameplay on mobile
+  useEffect(() => {
+    if (gameActive) {
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+    } else {
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    };
+  }, [gameActive]);
+
   useEffect(() => {
     return () => {
       if (beatIntervalRef.current) clearTimeout(beatIntervalRef.current);
@@ -531,14 +546,16 @@ export default function RhythmRush() {
           </div>
         )}
 
-        {/* Buttons */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
+        {/* Buttons — responsive: bigger on mobile */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '16px' }}>
           {buttons.map((beat) => {
             const isTarget = gameActive && beat === currentTarget;
             const color = BUTTON_COLORS[beat];
             const pulseScale = isTarget ? (1.1 + intensity * 0.05) : 1;
             return (
-              <button key={beat} onClick={() => handleButtonClick(beat)}
+              <button key={beat}
+                onClick={() => handleButtonClick(beat)}
+                onTouchStart={(e) => { e.preventDefault(); handleButtonClick(beat); }}
                 style={{
                   aspectRatio: '1', borderRadius: '50%',
                   border: `3px solid ${isTarget ? color.active : 'rgba(255,255,255,0.1)'}`,
@@ -550,6 +567,10 @@ export default function RhythmRush() {
                   transform: `scale(${pulseScale})`,
                   transition: 'all 0.08s ease',
                   fontFamily: 'Orbitron, monospace',
+                  WebkitTapHighlightColor: 'transparent',
+                  touchAction: 'manipulation',
+                  minHeight: '64px',
+                  userSelect: 'none',
                 }}
               >
                 {beat}

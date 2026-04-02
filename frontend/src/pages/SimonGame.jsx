@@ -64,6 +64,18 @@ export default function SimonGame() {
 
   useEffect(() => () => clearTimeouts(), []);
 
+  // Prevent scroll during gameplay on mobile
+  useEffect(() => {
+    if (gameActive) {
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+    } else {
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    }
+    return () => { document.body.style.overflow = ''; document.body.style.touchAction = ''; };
+  }, [gameActive]);
+
   const playTone = useCallback((freq, duration = 0.3) => {
     try {
       if (!audioCtxRef.current) {
@@ -431,7 +443,9 @@ export default function SimonGame() {
           {availableColors.map((btn) => {
             const isActive = activeBtn === btn.id;
             return (
-              <button key={btn.id} onClick={() => handleButtonClick(btn.id)}
+              <button key={btn.id}
+                onClick={() => handleButtonClick(btn.id)}
+                onTouchStart={(e) => { e.preventDefault(); handleButtonClick(btn.id); }}
                 disabled={!gameActive || isShowingSequence || gameOver}
                 style={{
                   aspectRatio: '1', borderRadius: bonusUnlocked ? '12px' : '16px',
@@ -442,6 +456,10 @@ export default function SimonGame() {
                   transform: isActive ? 'scale(1.08)' : 'scale(1)',
                   transition: 'all 0.12s ease',
                   opacity: !gameActive && !isActive ? 0.4 : 1,
+                  WebkitTapHighlightColor: 'transparent',
+                  touchAction: 'manipulation',
+                  minHeight: '80px',
+                  userSelect: 'none',
                 }}
               />
             );

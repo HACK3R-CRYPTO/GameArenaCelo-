@@ -21,17 +21,12 @@ const ARENA_ABI = [
 ] as const;
 
 
-const REGISTRY_ABI = parseAbi([
-    "function registerAgent(string calldata _name, string calldata _model, string calldata _description, string calldata _metadataUri) external",
-    "function agents(address) view returns (string name, string model, string description, string metadataUri, address owner, uint256 registeredAt, bool active)"
-]);
-
 const ARENA_ADDRESS = (process.env.VITE_ARENA_PLATFORM_ADDRESS || '0x5C0eafE7834Bd317D998A058A71092eEBc2DedeE') as `0x${string}`;
 const USER_ADDRESS = '0xa479b8c6030cBB01f8E9F6AcB2Ad2C757C81894d';
 const G_TOKEN_ADDRESS = '0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A' as `0x${string}`;
+const REGISTRY_ADDRESS = '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432' as `0x${string}`; // ERC-8004 on Celo Mainnet
 
 const ERC20_ABI = parseAbi(["function transferAndCall(address to, uint256 value, bytes data) external returns (bool)", "function balanceOf(address account) external view returns (uint256)"]);
-const REGISTRY_ADDRESS = '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432'; // ERC-8004 on Celo Mainnet
 
 if (!process.env.PRIVATE_KEY) {
     console.error(chalk.red("FATAL: PRIVATE_KEY environment variable is not set."));
@@ -283,8 +278,7 @@ async function startAgent() {
     }
     console.log(chalk.blue.bold('🤖 Arena AI Agent V3 (EIP-8004) Started'));
 
-    const REGISTRY_ADDRESS = '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432'; // ERC-8004
-    const REGISTRY_ABI = [
+    const ERC8004_ABI = [
         { inputs: [{ internalType: "string", name: "agentURI", type: "string" }], name: "register", outputs: [{ internalType: "uint256", name: "", type: "uint256" }], stateMutability: "nonpayable", type: "function" },
         { inputs: [{ internalType: "address", name: "owner", type: "address" }], name: "balanceOf", outputs: [{ internalType: "uint256", name: "", type: "uint256" }], stateMutability: "view", type: "function" }
     ] as const;
@@ -293,7 +287,7 @@ async function startAgent() {
     try {
         const balance = await publicClient.readContract({
             address: REGISTRY_ADDRESS,
-            abi: REGISTRY_ABI,
+            abi: ERC8004_ABI,
             functionName: 'balanceOf',
             args: [account.address]
         }) as bigint;
@@ -308,7 +302,7 @@ async function startAgent() {
 
             const txHash = await walletClient.writeContract({
                 address: REGISTRY_ADDRESS,
-                abi: REGISTRY_ABI,
+                abi: ERC8004_ABI,
                 functionName: 'register',
                 args: [ipfsUri],
                 chain: CELO_MAINNET,

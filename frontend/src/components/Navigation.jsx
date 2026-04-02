@@ -45,7 +45,8 @@ function Navigation() {
     { path: '/', label: 'Games' },
     { path: '/arena', label: 'Arena' },
     { path: '/leaderboard', label: 'Scores' },
-    { path: 'https://celoscan.io/token/0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A', label: 'G$', external: true }
+    { path: 'https://celoscan.io/token/0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A', label: 'G$', external: true },
+    { path: 'https://t.me/+oY4inbBoglViNmE0', label: 'TG', external: true }
   ];
 
   return (

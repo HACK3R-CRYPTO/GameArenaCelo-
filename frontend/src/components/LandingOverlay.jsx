@@ -96,7 +96,7 @@ const LandingOverlay = ({ onEnter }) => {
                         <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginTop: '8px' }}>
                             {[
                                 { label: 'GET G$', href: 'https://gooddollar.org' },
-                                { label: 'CELO', href: 'https://celo.org' },
+                                { label: 'TELEGRAM', href: 'https://t.me/+oY4inbBoglViNmE0' },
                                 { label: 'LEADERBOARD', href: '/leaderboard', internal: true },
                             ].map((link, i) => (
                                 <a key={i}

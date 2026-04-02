@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAccount, useReadContract, useWriteContract, usePublicClient, useWatchContractEvent, useBalance, useConnect } from 'wagmi';
 import { injected } from 'wagmi/connectors';
 import { BookOpen } from 'lucide-react';
@@ -12,6 +13,7 @@ import MoltbookFeed from '../components/MoltbookFeed';
 import { useSelfVerification } from '../contexts/SelfVerificationContext';
 
 const ArenaGame = () => {
+    const navigate = useNavigate();
     const { address, isConnected, chainId } = useAccount();
     const { data: balance, isError, isLoading } = useBalance({
         address,

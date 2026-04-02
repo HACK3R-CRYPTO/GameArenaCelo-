@@ -20,7 +20,6 @@ export default function GamePassGate({ children }) {
     query: { enabled: !!address },
   });
 
-  // If connected and has pass — render the game
   if (isConnected && hasPass) return children;
 
   const mintPass = async () => {
@@ -55,9 +54,10 @@ export default function GamePassGate({ children }) {
       maxWidth: '440px',
       margin: '60px auto',
       textAlign: 'center',
+      padding: '0 20px',
     }}>
-      <div style={{ fontSize: '64px', marginBottom: '16px' }}>🎮</div>
-      <h2 style={{ color: '#fff', fontSize: '20px', fontWeight: 900, letterSpacing: '3px', margin: '0 0 8px' }}>
+      <img src="/logo.png" alt="GameArena" style={{ width: '72px', height: '72px', borderRadius: '16px', marginBottom: '16px' }} />
+      <h2 style={{ color: '#fff', fontSize: '18px', fontWeight: 900, letterSpacing: '3px', margin: '0 0 8px' }}>
         GAME PASS REQUIRED
       </h2>
       <p style={{ color: '#6b7280', fontSize: '11px', lineHeight: '1.6', marginBottom: '24px' }}>
@@ -65,23 +65,35 @@ export default function GamePassGate({ children }) {
       </p>
 
       {!isConnected ? (
-        <button
-          onClick={() => connect({ connector: injected() })}
-          style={{
-            padding: '14px 32px', borderRadius: '10px', cursor: 'pointer',
-            background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
-            border: 'none', color: '#fff', fontSize: '13px', fontWeight: 700,
-            fontFamily: 'Orbitron, monospace', letterSpacing: '2px',
-          }}
-        >
-          CONNECT WALLET
-        </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
+          <button
+            onClick={() => connect({ connector: injected() })}
+            style={{
+              width: '100%', padding: '14px 32px', borderRadius: '12px', cursor: 'pointer',
+              background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
+              border: 'none', color: '#fff', fontSize: '13px', fontWeight: 700,
+              fontFamily: 'Orbitron, monospace', letterSpacing: '2px',
+              boxShadow: '0 4px 20px rgba(168,85,247,0.3)',
+            }}
+          >
+            CONNECT WALLET
+          </button>
+          <Link to="/" style={{
+            padding: '10px 24px', borderRadius: '10px',
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            color: '#6b7280', fontSize: '10px', textDecoration: 'none',
+            fontFamily: 'Orbitron, monospace', letterSpacing: '1px',
+          }}>
+            ← BACK TO GAMES
+          </Link>
+        </div>
       ) : (
         <div style={{
           padding: '20px',
           background: 'rgba(16,185,129,0.06)',
           border: '1px solid rgba(16,185,129,0.25)',
-          borderRadius: '12px',
+          borderRadius: '14px',
         }}>
           <div style={{ color: '#10b981', fontSize: '10px', letterSpacing: '2px', fontWeight: 700, marginBottom: '12px' }}>
             CHOOSE YOUR USERNAME
@@ -95,7 +107,7 @@ export default function GamePassGate({ children }) {
             style={{
               width: '100%', padding: '12px 16px', marginBottom: '12px',
               background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(16,185,129,0.3)',
-              borderRadius: '8px', color: '#fff', fontSize: '14px',
+              borderRadius: '10px', color: '#fff', fontSize: '14px',
               fontFamily: 'Orbitron, monospace', outline: 'none',
               textAlign: 'center', letterSpacing: '1px',
               boxSizing: 'border-box',
@@ -105,13 +117,14 @@ export default function GamePassGate({ children }) {
             onClick={mintPass}
             disabled={minting || usernameInput.length < 3}
             style={{
-              width: '100%', padding: '12px', borderRadius: '8px', cursor: 'pointer',
+              width: '100%', padding: '12px', borderRadius: '10px', cursor: 'pointer',
               background: usernameInput.length >= 3
                 ? 'linear-gradient(135deg, #10b981, #059669)'
                 : 'rgba(255,255,255,0.05)',
               border: 'none', color: '#fff', fontSize: '12px', fontWeight: 700,
               fontFamily: 'Orbitron, monospace', letterSpacing: '2px',
               opacity: minting || usernameInput.length < 3 ? 0.5 : 1,
+              boxShadow: usernameInput.length >= 3 ? '0 4px 15px rgba(16,185,129,0.3)' : 'none',
             }}
           >
             {minting ? 'MINTING...' : 'MINT GAME PASS (FREE)'}
@@ -119,16 +132,17 @@ export default function GamePassGate({ children }) {
           <div style={{ color: '#374151', fontSize: '9px', marginTop: '10px' }}>
             3-16 chars · letters, numbers, underscore · soulbound NFT
           </div>
+          <Link to="/" style={{
+            display: 'inline-block', marginTop: '16px', padding: '8px 20px',
+            borderRadius: '8px', background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            color: '#6b7280', fontSize: '10px', textDecoration: 'none',
+            fontFamily: 'Orbitron, monospace', letterSpacing: '1px',
+          }}>
+            ← BACK TO GAMES
+          </Link>
         </div>
       )}
-
-      <Link to="/" style={{
-        display: 'inline-block', marginTop: '20px',
-        color: '#6b7280', fontSize: '10px', textDecoration: 'none',
-        fontFamily: 'Orbitron, monospace', letterSpacing: '1px',
-      }}>
-        ← BACK TO GAMES
-      </Link>
     </div>
   );
 }

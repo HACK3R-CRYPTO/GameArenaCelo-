@@ -1,9 +1,8 @@
 require('dotenv').config();
 const express  = require('express');
 const cors     = require('cors');
-const fs       = require('fs');
-const path     = require('path');
 const { ethers } = require('ethers');
+const { createClient } = require('@supabase/supabase-js');
 
 const app  = express();
 const PORT = process.env.PORT || 3005;
@@ -11,6 +10,12 @@ const PORT = process.env.PORT || 3005;
 app.use(cors());
 app.use(express.json());
 
+// ─── Supabase ────────────────────────────────────────────────────────────────
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
+console.log('📦 Supabase connected');
 
 // ─── On-chain config ────────────────────────────────────────────────────────
 const CELO_RPC          = process.env.CELO_RPC_URL  || 'https://forno.celo.org';
@@ -51,7 +56,6 @@ if (SOLO_WAGER_ADDR && VALIDATOR_KEY) {
     console.warn('⚠️  On-chain resolver not configured:', e.message);
   }
 } else {
-  // Still init passContract for username lookups even without wager config
   try {
     const p = new ethers.JsonRpcProvider(CELO_RPC);
     passContract = new ethers.Contract(GAME_PASS_ADDR, GAME_PASS_ABI, p);
@@ -59,7 +63,7 @@ if (SOLO_WAGER_ADDR && VALIDATOR_KEY) {
   console.log('ℹ️  SOLO_WAGER_ADDRESS or VALIDATOR_PRIVATE_KEY not set — wager resolution disabled');
 }
 
-// ── Username cache (avoid repeated RPC calls) ───────────────────────────────
+// ── Username cache ──────────────────────────────────────────────────────────
 const usernameCache = new Map();
 async function resolveUsername(addr) {
   const lower = addr.toLowerCase();
@@ -85,7 +89,6 @@ async function resolveOnChain(wagerId, score) {
   }
 }
 
-// Returns treasury balance in G$ (18 decimals → formatted as string)
 async function getTreasuryBalance() {
   if (!wagerContract) return '0';
   try {
@@ -94,71 +97,8 @@ async function getTreasuryBalance() {
   } catch (_) { return '0'; }
 }
 
-// Distribute 10% of treasury to top 3 of each game for a sealed season
-async function distributeSeasonPrizesOnChain(season, rhythmTop3, simonTop3) {
-  if (!wagerContract) return null;
-  const pad  = (arr) => [...arr.slice(0, 3), ...Array(3).fill(ethers.ZeroAddress)].slice(0, 3);
-  const rWin = pad(rhythmTop3.map(e => e.player));
-  const sWin = pad(simonTop3.map(e => e.player));
-  try {
-    const tx      = await wagerContract.distributeSeasonPrizes(BigInt(season), rWin, sWin);
-    const receipt = await tx.wait();
-    console.log(`🏆 Season ${season} prizes distributed — tx: ${receipt.hash}`);
-    return receipt.hash;
-  } catch (e) {
-    console.error(`❌ Season ${season} prize distribution failed:`, e.message);
-    return null;
-  }
-}
-
-// ─── Persistence ────────────────────────────────────────────────────────────
-const DB_FILE    = path.join(__dirname, 'scores.json');
-const USERS_FILE = path.join(__dirname, 'users.json');
-
-// ─── Persistent user registry (only grows, never shrinks) ────────────────────
-function loadUsers() {
-  try {
-    if (fs.existsSync(USERS_FILE)) return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
-  } catch (_) {}
-  return { addresses: [], count: 0 };
-}
-function saveUsers(u) {
-  try { fs.writeFileSync(USERS_FILE, JSON.stringify(u, null, 2)); } catch (_) {}
-}
-function registerUser(addr) {
-  const lower = addr.toLowerCase();
-  const users = loadUsers();
-  if (users.addresses.includes(lower)) return users.count; // already known
-  users.addresses.push(lower);
-  users.count = users.addresses.length;
-  saveUsers(users);
-  console.log(`👤 New user #${users.count}: ${lower}`);
-  return users.count;
-}
-
-function loadDB() {
-  try {
-    if (fs.existsSync(DB_FILE)) {
-      const raw = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-      // Migrate old schema
-      if (!raw.activity) raw.activity = [];
-      if (!raw.seasons)  raw.seasons  = [];
-      if (!raw.badges)   raw.badges   = {};
-      return raw;
-    }
-  } catch (_) {}
-  return { rhythm: [], simon: [], activity: [], seasons: [], badges: {} };
-}
-
-function saveDB(db) {
-  try { fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2)); } catch (_) {}
-}
-
-let db = loadDB();
-
-// ─── Season helpers ──────────────────────────────────────────────────────────
-// Season = 7-day window. Week 1 = first 7 days from a fixed epoch.
-const SEASON_EPOCH = 1770249600; // Feb 5 2026 00:00 UTC (GoodBuilders S3 launch)
+// ─── Season helpers ─────────────────────────────────────────────────────────
+const SEASON_EPOCH = 1770249600;
 const SEASON_DAYS  = 7;
 
 function currentSeasonNumber() {
@@ -172,114 +112,192 @@ function seasonBounds(n) {
   return { start, end };
 }
 
-// Run at startup and every hour — seal any completed seasons
+// ─── Supabase helpers ───────────────────────────────────────────────────────
+
+async function registerUser(addr) {
+  const lower = addr.toLowerCase();
+  const { data } = await supabase
+    .from('users')
+    .select('wallet_address')
+    .eq('wallet_address', lower)
+    .single();
+
+  if (!data) {
+    await supabase.from('users').insert({ wallet_address: lower });
+    console.log(`👤 New user: ${lower}`);
+  }
+}
+
+async function getUserCount() {
+  const { count } = await supabase
+    .from('users')
+    .select('*', { count: 'exact', head: true });
+  return count || 0;
+}
+
+async function saveScore(entry) {
+  // Upsert: keep best score per wallet per game
+  const { data: existing } = await supabase
+    .from('scores')
+    .select('id, score')
+    .eq('wallet_address', entry.wallet_address)
+    .eq('game', entry.game)
+    .order('score', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (existing && existing.score >= entry.score) {
+    // Existing score is better, still log activity
+    await supabase.from('activity').insert({
+      wallet_address: entry.wallet_address,
+      game: entry.game,
+      score: entry.score,
+      tx_hash: entry.tx_hash || null,
+    });
+    return;
+  }
+
+  if (existing) {
+    // Update existing with better score
+    await supabase
+      .from('scores')
+      .update({
+        score: entry.score,
+        game_time: entry.game_time,
+        wagered: entry.wagered,
+        wager_id: entry.wager_id,
+        tx_hash: entry.tx_hash,
+        season_number: entry.season_number,
+      })
+      .eq('id', existing.id);
+  } else {
+    // Insert new
+    await supabase.from('scores').insert(entry);
+  }
+
+  // Log activity
+  await supabase.from('activity').insert({
+    wallet_address: entry.wallet_address,
+    game: entry.game,
+    score: entry.score,
+    tx_hash: entry.tx_hash || null,
+  });
+}
+
+async function getLeaderboard(game, limit = 50) {
+  const { data } = await supabase
+    .from('scores')
+    .select('*')
+    .eq('game', game)
+    .order('score', { ascending: false })
+    .limit(limit);
+  return data || [];
+}
+
+async function getActivity(limit = 20) {
+  const { data } = await supabase
+    .from('activity')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  return data || [];
+}
+
+async function getBadges(addr) {
+  const { data } = await supabase
+    .from('badges')
+    .select('*')
+    .eq('wallet_address', addr.toLowerCase())
+    .order('season_number', { ascending: false });
+  return data || [];
+}
+
+// ─── Seal seasons ───────────────────────────────────────────────────────────
 async function sealCompletedSeasons() {
   const current = currentSeasonNumber();
-  const sealed  = new Set(db.seasons.map(s => s.season));
+
+  // Get already sealed seasons
+  const { data: sealed } = await supabase
+    .from('seasons')
+    .select('season_number')
+    .eq('sealed', true);
+  const sealedSet = new Set((sealed || []).map(s => s.season_number));
 
   for (let n = 1; n < current; n++) {
-    if (sealed.has(n)) continue;
+    if (sealedSet.has(n)) continue;
 
     const { start, end } = seasonBounds(n);
 
-    const rhythmEntries = db.rhythm.filter(e => e.timestamp >= start && e.timestamp < end);
-    const simonEntries  = db.simon.filter(e => e.timestamp >= start && e.timestamp < end);
+    // Get scores for this season
+    const startDate = new Date(start * 1000).toISOString();
+    const endDate   = new Date(end * 1000).toISOString();
 
-    // Read treasury balance before distributing (so we can record G$ won)
-    const treasuryBefore = await getTreasuryBalance();
-    const pot  = parseFloat(treasuryBefore) * 0.10; // 10% of treasury
-    const half = pot / 2; // 5% per game
+    const { data: rhythmScores } = await supabase
+      .from('scores')
+      .select('*')
+      .eq('game', 'rhythm')
+      .gte('created_at', startDate)
+      .lt('created_at', endDate)
+      .order('score', { ascending: false })
+      .limit(10);
 
-    // Compute G$ amounts for each rank slot (60/30/10 of half)
-    function prizeAmounts(gamePot, count) {
-      if (count === 0) return [0, 0, 0];
-      const f = count >= 1 ? (gamePot * 0.60) : 0;
-      const s = count >= 2 ? (gamePot * 0.30) : 0;
-      const t = count >= 3 ? (gamePot * 0.10) : 0;
-      return [f, s, t];
-    }
-    const rPrizes = prizeAmounts(half, rhythmEntries.length);
-    const sPrizes = prizeAmounts(half, simonEntries.length);
+    const { data: simonScores } = await supabase
+      .from('scores')
+      .select('*')
+      .eq('game', 'simon')
+      .gte('created_at', startDate)
+      .lt('created_at', endDate)
+      .order('score', { ascending: false })
+      .limit(10);
 
-    const seasonRecord = {
-      season:   n,
-      startTs:  start,
-      endTs:    end,
-      rhythm:   rhythmEntries.slice(0, 10).map((e, i) => ({
-        ...e, gWon: i < 3 ? parseFloat(rPrizes[i].toFixed(4)) : 0,
-      })),
-      simon:    simonEntries.slice(0, 10).map((e, i) => ({
-        ...e, gWon: i < 3 ? parseFloat(sPrizes[i].toFixed(4)) : 0,
-      })),
-      sealedAt: Math.floor(Date.now() / 1000),
-      prizePot: parseFloat(pot.toFixed(4)),
-    };
+    const rEntries = rhythmScores || [];
+    const sEntries = simonScores || [];
 
-    db.seasons.push(seasonRecord);
-    awardSeasonBadges(seasonRecord);
-    saveDB(db);
+    // Upsert season record
+    await supabase.from('seasons').upsert({
+      season_number: n,
+      start_ts: start,
+      end_ts: end,
+      prize_pot: 50,
+      sealed: true,
+    }, { onConflict: 'season_number' });
 
-    console.log(`🏆 Season ${n} sealed — ${rhythmEntries.length} rhythm, ${simonEntries.length} simon players — pot: ${pot.toFixed(2)} G$`);
-
-    // Distribute prizes on-chain (non-blocking)
-    distributeSeasonPrizesOnChain(n, rhythmEntries.slice(0, 3), simonEntries.slice(0, 3))
-      .catch(() => {});
-  }
-
-  saveDB(db);
-}
-
-function awardSeasonBadges(seasonRecord) {
-  // Award badges to top 3 of each game
-  [
-    { entries: seasonRecord.rhythm, game: 'rhythm' },
-    { entries: seasonRecord.simon,  game: 'simon'  },
-  ].forEach(({ entries, game }) => {
-    entries.slice(0, 3).forEach((entry, i) => {
-      const addr = entry.player;
-      if (!db.badges[addr]) db.badges[addr] = [];
-
-      const rank = i + 1;
-      const badgeType = rank === 1 ? 'gold' : rank === 2 ? 'silver' : 'bronze';
-
-      db.badges[addr].push({
-        season:   seasonRecord.season,
-        game,
-        rank,
-        type:     badgeType,
-        score:    entry.score,
-        awardedAt: Math.floor(Date.now() / 1000),
-      });
-    });
-  });
-}
-
-// Check for consecutive #1 finishes and add streak badges
-function computeStreakBadges(address) {
-  const addr    = address.toLowerCase();
-  const myBadges = (db.badges[addr] || []).filter(b => b.rank === 1);
-
-  const streaks = {};
-  ['rhythm', 'simon'].forEach(game => {
-    const goldSeasons = myBadges
-      .filter(b => b.game === game)
-      .map(b => b.season)
-      .sort((a, b) => a - b);
-
-    let maxStreak = 0, curStreak = 1;
-    for (let i = 1; i < goldSeasons.length; i++) {
-      if (goldSeasons[i] === goldSeasons[i - 1] + 1) {
-        curStreak++;
-        maxStreak = Math.max(maxStreak, curStreak);
-      } else {
-        curStreak = 1;
+    // Award badges to top 3
+    const badgeTypes = ['gold', 'silver', 'bronze'];
+    for (const { entries, game } of [
+      { entries: rEntries, game: 'rhythm' },
+      { entries: sEntries, game: 'simon' },
+    ]) {
+      for (let i = 0; i < Math.min(3, entries.length); i++) {
+        await supabase.from('badges').upsert({
+          wallet_address: entries[i].wallet_address,
+          game,
+          season_number: n,
+          badge: badgeTypes[i],
+        }, { onConflict: 'wallet_address,game,season_number' });
       }
     }
-    if (goldSeasons.length === 1) maxStreak = 1;
-    streaks[game] = maxStreak;
-  });
 
-  return streaks;
+    console.log(`🏆 Season ${n} sealed — ${rEntries.length} rhythm, ${sEntries.length} simon`);
+  }
+
+  // Ensure current season exists
+  const { data: currentSeason } = await supabase
+    .from('seasons')
+    .select('season_number')
+    .eq('season_number', current)
+    .single();
+
+  if (!currentSeason) {
+    const { start, end } = seasonBounds(current);
+    await supabase.from('seasons').insert({
+      season_number: current,
+      start_ts: start,
+      end_ts: end,
+      prize_pot: 50,
+      sealed: false,
+    });
+  }
 }
 
 // ─── Validation ─────────────────────────────────────────────────────────────
@@ -290,7 +308,7 @@ function validateScore({ score, gameTime, game }) {
   return { valid: true };
 }
 
-// ─── POST /api/submit-score ──────────────────────────────────────────────────
+// ─── POST /api/submit-score ─────────────────────────────────────────────────
 app.post('/api/submit-score', async (req, res) => {
   const { playerAddress, scoreData } = req.body;
 
@@ -304,103 +322,129 @@ app.post('/api/submit-score', async (req, res) => {
   }
 
   const { game, score, gameTime, wagered, wagerId } = scoreData;
+  const season = currentSeasonNumber();
 
   // Track unique user
-  registerUser(playerAddress);
+  await registerUser(playerAddress);
 
-  const entry = {
-    player:    playerAddress.toLowerCase(),
-    score,
-    gameTime,
-    wagered:   wagered || null,
-    timestamp: Math.floor(Date.now() / 1000),
-  };
-
-  // Push to leaderboard
-  db[game].push(entry);
-
-  // Keep only best score per wallet
-  const map = new Map();
-  db[game].forEach(e => {
-    const existing = map.get(e.player);
-    if (!existing || e.score > existing.score) map.set(e.player, e);
-  });
-  db[game] = Array.from(map.values()).sort((a, b) => b.score - a.score);
-
-  // Push to activity feed (all plays, not just personal best)
-  db.activity.unshift({ ...entry, game });
-  if (db.activity.length > 20) db.activity = db.activity.slice(0, 20);
-
-  saveDB(db);
-
-  const rank = db[game].findIndex(e => e.player === playerAddress.toLowerCase()) + 1;
-  console.log(`✅ [${game}] ${playerAddress.slice(0, 8)}... → ${score} pts (rank #${rank})`);
-
-  // Resolve wager on-chain (non-blocking)
+  // Resolve wager on-chain if applicable
+  let wagerTxHash = null;
   if (wagerId) {
-    resolveOnChain(wagerId, score).catch(() => {});
+    wagerTxHash = await resolveOnChain(wagerId, score);
   }
 
-  // Record score on-chain via GamePass (non-blocking, backend pays gas)
+  // Record score on-chain via GamePass (get tx hash)
+  let scoreTxHash = null;
   if (passContract && passContract.recordScore) {
     const gameType = game === 'rhythm' ? 0 : 1;
-    passContract.recordScore(playerAddress, gameType, BigInt(score))
-      .then(tx => tx.wait())
-      .then(r => console.log(`⛓️  Score recorded on-chain: ${playerAddress.slice(0, 8)}... → ${score} pts (tx: ${r.hash.slice(0, 10)}...)`))
-      .catch(e => console.warn(`⚠️  On-chain score recording failed: ${e.message}`));
+    try {
+      const tx = await passContract.recordScore(playerAddress, gameType, BigInt(score));
+      const receipt = await tx.wait();
+      scoreTxHash = receipt.hash;
+      console.log(`⛓️  Score on-chain: ${playerAddress.slice(0, 8)}... → ${score} pts (tx: ${receipt.hash.slice(0, 10)}...)`);
+    } catch (e) {
+      console.warn(`⚠️  On-chain score failed: ${e.message}`);
+    }
   }
 
-  res.json({ success: true, score, rank });
+  const txHash = wagerTxHash || scoreTxHash;
+
+  // Save to Supabase
+  await saveScore({
+    wallet_address: playerAddress.toLowerCase(),
+    game,
+    score,
+    game_time: gameTime,
+    season_number: season,
+    wagered: wagered || null,
+    wager_id: wagerId || null,
+    tx_hash: txHash,
+  });
+
+  // Get rank
+  const leaderboard = await getLeaderboard(game);
+  const rank = leaderboard.findIndex(e => e.wallet_address === playerAddress.toLowerCase()) + 1;
+
+  console.log(`✅ [${game}] ${playerAddress.slice(0, 8)}... → ${score} pts (rank #${rank}) ${txHash ? `tx: ${txHash.slice(0, 10)}...` : ''}`);
+
+  res.json({ success: true, score, rank, txHash });
 });
 
-// ─── GET /api/leaderboard?game=rhythm|simon ──────────────────────────────────
+// ─── GET /api/leaderboard?game=rhythm|simon ─────────────────────────────────
 app.get('/api/leaderboard', async (req, res) => {
   const game = req.query.game;
   if (!['rhythm', 'simon'].includes(game)) {
     return res.status(400).json({ error: 'game must be rhythm or simon' });
   }
-  const entries = db[game].slice(0, 10);
-  // Resolve usernames for each entry
+  const entries = await getLeaderboard(game);
   const enriched = await Promise.all(entries.map(async (e) => ({
-    ...e,
-    username: await resolveUsername(e.player) || null,
+    player: e.wallet_address,
+    score: e.score,
+    gameTime: e.game_time,
+    wagered: e.wagered,
+    timestamp: Math.floor(new Date(e.created_at).getTime() / 1000),
+    tx_hash: e.tx_hash,
+    username: await resolveUsername(e.wallet_address) || null,
   })));
   res.json({ leaderboard: enriched });
 });
 
-// ─── GET /api/activity ───────────────────────────────────────────────────────
+// ─── GET /api/activity ──────────────────────────────────────────────────────
 app.get('/api/activity', async (_, res) => {
-  const entries = db.activity.slice(0, 10);
+  const entries = await getActivity(10);
   const enriched = await Promise.all(entries.map(async (e) => ({
-    ...e,
-    username: await resolveUsername(e.player) || null,
+    player: e.wallet_address,
+    game: e.game,
+    score: e.score,
+    tx_hash: e.tx_hash,
+    timestamp: Math.floor(new Date(e.created_at).getTime() / 1000),
+    username: await resolveUsername(e.wallet_address) || null,
   })));
   res.json({ activity: enriched });
 });
 
-// ─── GET /api/stats ──────────────────────────────────────────────────────────
+// ─── GET /api/stats ─────────────────────────────────────────────────────────
 app.get('/api/stats', async (_, res) => {
-  const totalWagered = db.activity
-    .filter(e => e.wagered)
-    .reduce((sum, e) => sum + Number(e.wagered), 0);
-
-  const season     = currentSeasonNumber();
+  const season = currentSeasonNumber();
   const { start, end } = seasonBounds(season);
-  const seasonPlayers = new Set(
-    db.activity.filter(e => e.timestamp >= start).map(e => e.player.toLowerCase())
-  );
+  const startDate = new Date(start * 1000).toISOString();
 
-  // User count: on-chain (wagerers) + local file (all players including free)
-  const localUsers = loadUsers();
-  let onChainUsers = 0;
-  try {
-    if (wagerContract) {
-      onChainUsers = Number(await wagerContract.totalUsers());
-    }
-  } catch (_) {}
-  const totalUsers = Math.max(localUsers.count, onChainUsers);
+  const totalUsers = await getUserCount();
 
-  // Estimate current prize pot: 10% of on-chain treasury (or estimate from wagered G$)
+  // Season-specific users
+  const { data: seasonScores } = await supabase
+    .from('scores')
+    .select('wallet_address')
+    .gte('created_at', startDate);
+  const seasonUsers = new Set((seasonScores || []).map(s => s.wallet_address)).size;
+
+  // Total games from activity
+  const { count: totalGames } = await supabase
+    .from('activity')
+    .select('*', { count: 'exact', head: true });
+
+  // Game counts
+  const { count: rhythmPlayers } = await supabase
+    .from('scores')
+    .select('*', { count: 'exact', head: true })
+    .eq('game', 'rhythm');
+  const { count: simonPlayers } = await supabase
+    .from('scores')
+    .select('*', { count: 'exact', head: true })
+    .eq('game', 'simon');
+
+  // Top scores
+  const leaderboardR = await getLeaderboard('rhythm', 1);
+  const leaderboardS = await getLeaderboard('simon', 1);
+
+  // Total wagered
+  const { data: wageredData } = await supabase
+    .from('scores')
+    .select('wagered')
+    .not('wagered', 'is', null);
+  const totalWagered = (wageredData || []).reduce((sum, e) => sum + Number(e.wagered || 0), 0);
+
+  // Prize pot
   let estimatedPrizePot = '0.00';
   try {
     const bal = await getTreasuryBalance();
@@ -408,79 +452,231 @@ app.get('/api/stats', async (_, res) => {
   } catch (_) {}
 
   res.json({
-    totalUsers:       totalUsers,
-    seasonUsers:      seasonPlayers.size,
-    totalGames:       db.activity.length,
-    rhythmPlayers:    db.rhythm.length,
-    simonPlayers:     db.simon.length,
-    topRhythm:        db.rhythm[0]?.score  ?? 0,
-    topSimon:         db.simon[0]?.score   ?? 0,
-    totalWagered:     totalWagered.toFixed(2),
-    currentSeason:    season,
-    seasonEndsAt:     end,
+    totalUsers,
+    seasonUsers,
+    totalGames: totalGames || 0,
+    rhythmPlayers: rhythmPlayers || 0,
+    simonPlayers: simonPlayers || 0,
+    topRhythm: leaderboardR[0]?.score ?? 0,
+    topSimon: leaderboardS[0]?.score ?? 0,
+    totalWagered: totalWagered.toFixed(2),
+    currentSeason: season,
+    seasonEndsAt: end,
     estimatedPrizePot,
   });
 });
 
-// ─── GET /api/seasons ────────────────────────────────────────────────────────
-app.get('/api/seasons', (_, res) => {
+// ─── GET /api/seasons ───────────────────────────────────────────────────────
+app.get('/api/seasons', async (_, res) => {
   const current = currentSeasonNumber();
   const { start, end } = seasonBounds(current);
+  const startDate = new Date(start * 1000).toISOString();
 
   // Live current season standings
-  const liveRhythm = db.rhythm
-    .filter(e => e.timestamp >= start)
-    .slice(0, 10);
-  const liveSimon = db.simon
-    .filter(e => e.timestamp >= start)
-    .slice(0, 10);
+  const { data: liveRhythm } = await supabase
+    .from('scores')
+    .select('*')
+    .eq('game', 'rhythm')
+    .gte('created_at', startDate)
+    .order('score', { ascending: false })
+    .limit(10);
+
+  const { data: liveSimon } = await supabase
+    .from('scores')
+    .select('*')
+    .eq('game', 'simon')
+    .gte('created_at', startDate)
+    .order('score', { ascending: false })
+    .limit(10);
+
+  // Past sealed seasons
+  const { data: pastSeasons } = await supabase
+    .from('seasons')
+    .select('*')
+    .eq('sealed', true)
+    .order('season_number', { ascending: false });
+
+  // Format for frontend compatibility
+  const formatEntry = (e) => ({
+    player: e.wallet_address,
+    score: e.score,
+    gameTime: e.game_time,
+    wagered: e.wagered,
+    timestamp: Math.floor(new Date(e.created_at).getTime() / 1000),
+    tx_hash: e.tx_hash,
+  });
 
   res.json({
     currentSeason: current,
     currentEndsAt: end,
-    live: { rhythm: liveRhythm, simon: liveSimon },
-    past: [...db.seasons].reverse(), // most recent first
+    live: {
+      rhythm: (liveRhythm || []).map(formatEntry),
+      simon: (liveSimon || []).map(formatEntry),
+    },
+    past: (pastSeasons || []).map(s => ({
+      season: s.season_number,
+      startTs: s.start_ts,
+      endTs: s.end_ts,
+      prizePot: s.prize_pot,
+      sealedAt: Math.floor(new Date(s.created_at).getTime() / 1000),
+      rhythm: [],
+      simon: [],
+    })),
   });
 });
 
-// ─── GET /api/badges/:address ─────────────────────────────────────────────────
-app.get('/api/badges/:address', (req, res) => {
-  const addr    = req.params.address.toLowerCase();
-  const badges  = db.badges[addr] || [];
-  const streaks = computeStreakBadges(addr);
+// ─── GET /api/badges/:address ───────────────────────────────────────────────
+app.get('/api/badges/:address', async (req, res) => {
+  const addr = req.params.address.toLowerCase();
+  const badges = await getBadges(addr);
 
-  // Compute summary labels
-  const goldCount = badges.filter(b => b.rank === 1).length;
+  const goldCount   = badges.filter(b => b.badge === 'gold').length;
+  const silverCount = badges.filter(b => b.badge === 'silver').length;
+  const bronzeCount = badges.filter(b => b.badge === 'bronze').length;
 
-  let streakLabel = null;
+  // Compute streaks
+  const streaks = {};
+  ['rhythm', 'simon'].forEach(game => {
+    const goldSeasons = badges
+      .filter(b => b.badge === 'gold' && b.game === game)
+      .map(b => b.season_number)
+      .sort((a, b) => a - b);
+
+    let maxStreak = goldSeasons.length >= 1 ? 1 : 0;
+    let curStreak = 1;
+    for (let i = 1; i < goldSeasons.length; i++) {
+      if (goldSeasons[i] === goldSeasons[i - 1] + 1) {
+        curStreak++;
+        maxStreak = Math.max(maxStreak, curStreak);
+      } else {
+        curStreak = 1;
+      }
+    }
+    streaks[game] = maxStreak;
+  });
+
   const maxStreak = Math.max(streaks.rhythm || 0, streaks.simon || 0);
+  let streakLabel = null;
   if (maxStreak >= 3) streakLabel = `${maxStreak}-WEEK CHAMPION`;
   else if (maxStreak === 2) streakLabel = '2-WEEK CHAMPION';
 
   res.json({
     address: addr,
-    badges,
+    badges: badges.map(b => ({
+      season: b.season_number,
+      game: b.game,
+      rank: b.badge === 'gold' ? 1 : b.badge === 'silver' ? 2 : 3,
+      type: b.badge,
+      awardedAt: Math.floor(new Date(b.created_at).getTime() / 1000),
+    })),
     streaks,
     summary: {
-      totalGold:   goldCount,
-      totalSilver: badges.filter(b => b.rank === 2).length,
-      totalBronze: badges.filter(b => b.rank === 3).length,
+      totalGold: goldCount,
+      totalSilver: silverCount,
+      totalBronze: bronzeCount,
       streakLabel,
     },
   });
 });
 
-// ─── GET /health ──────────────────────────────────────────────────────────────
-app.get('/health', (_, res) => res.json({
-  status:        'ok',
-  season:        currentSeasonNumber(),
-  scores:        { rhythm: db.rhythm.length, simon: db.simon.length },
-  onChainReady:  !!wagerContract,
-}));
+// ─── GET /health ────────────────────────────────────────────────────────────
+app.get('/health', async (_, res) => {
+  const { count: rhythmCount } = await supabase
+    .from('scores')
+    .select('*', { count: 'exact', head: true })
+    .eq('game', 'rhythm');
+  const { count: simonCount } = await supabase
+    .from('scores')
+    .select('*', { count: 'exact', head: true })
+    .eq('game', 'simon');
+
+  res.json({
+    status: 'ok',
+    season: currentSeasonNumber(),
+    scores: { rhythm: rhythmCount || 0, simon: simonCount || 0 },
+    onChainReady: !!wagerContract,
+    database: 'supabase',
+  });
+});
+
+// ── Index on-chain scores on startup ────────────────────────────────────────
+async function indexOnChainScores() {
+  if (!passContract) return;
+  try {
+    const iface = new ethers.Interface([
+      'event ScoreRecorded(address indexed player, uint8 indexed gameType, uint256 score, uint256 totalGames)',
+    ]);
+    const rpc = new ethers.JsonRpcProvider(CELO_RPC);
+    const currentBlock = await rpc.getBlockNumber();
+    const fromBlock = Math.max(0, currentBlock - 200000);
+    const logs = await rpc.getLogs({
+      address: GAME_PASS_ADDR,
+      topics: [ethers.id('ScoreRecorded(address,uint8,uint256,uint256)')],
+      fromBlock,
+      toBlock: currentBlock,
+    });
+    if (logs.length === 0) { console.log('⛓️  No on-chain scores found'); return; }
+
+    let added = 0;
+    for (const log of logs) {
+      const parsed = iface.parseLog({ topics: log.topics, data: log.data });
+      const player   = parsed.args[0].toLowerCase();
+      const gameType = Number(parsed.args[1]);
+      const score    = Number(parsed.args[2]);
+      const game     = gameType === 0 ? 'rhythm' : 'simon';
+
+      let timestamp = new Date().toISOString();
+      try {
+        const block = await rpc.getBlock(log.blockNumber);
+        if (block) timestamp = new Date(Number(block.timestamp) * 1000).toISOString();
+      } catch (_) {}
+
+      // Check if already in Supabase with better score
+      const { data: existing } = await supabase
+        .from('scores')
+        .select('id, score')
+        .eq('wallet_address', player)
+        .eq('game', game)
+        .order('score', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (existing && existing.score >= score) continue;
+
+      if (existing) {
+        await supabase
+          .from('scores')
+          .update({ score, tx_hash: log.transactionHash })
+          .eq('id', existing.id);
+      } else {
+        await supabase.from('scores').insert({
+          wallet_address: player,
+          game,
+          score,
+          game_time: 0,
+          season_number: currentSeasonNumber(),
+          tx_hash: log.transactionHash,
+        });
+      }
+
+      // Register user
+      await registerUser(player);
+      added++;
+    }
+
+    console.log(`⛓️  Indexed ${added} scores from ${logs.length} on-chain events`);
+  } catch (e) {
+    console.warn('⚠️  On-chain score indexing failed:', e.message);
+  }
+}
 
 // Seal seasons on startup and every hour
 sealCompletedSeasons();
 setInterval(sealCompletedSeasons, 60 * 60 * 1000);
+
+// Index chain scores on startup then every 5 min
+indexOnChainScores();
+setInterval(indexOnChainScores, 5 * 60 * 1000);
 
 app.listen(PORT, () => {
   console.log(`🎮 Games backend on http://localhost:${PORT} — Season ${currentSeasonNumber()}`);

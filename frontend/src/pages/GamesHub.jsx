@@ -76,8 +76,10 @@ function timeAgo(ts) {
 // ── Main Component ───────────────────────────────────────────────────────────
 export default function GamesHub() {
   const navigate    = useNavigate();
-  const { address, isConnected } = useAccount();
-  const { login } = usePrivy();
+  const { address, isConnected: wagmiConnected } = useAccount();
+  const { login, authenticated, user } = usePrivy();
+  const privyAddr = user?.wallet?.address;
+  const isConnected = wagmiConnected || authenticated;
   const publicClient = usePublicClient();
   const { isVerified, isVerifying, verifyIdentity, claimG$, entitlement } = useSelfVerification();
 

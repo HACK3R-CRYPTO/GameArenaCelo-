@@ -31,7 +31,9 @@ function Navigation() {
     return location.pathname === path || location.pathname.startsWith(path);
   };
 
-  const displayName = user?.email?.address || (address ? formatAddress(address) : '');
+  const privyWallet = user?.wallet?.address;
+  const displayAddr = address || privyWallet;
+  const displayName = user?.email?.address || (displayAddr ? formatAddress(displayAddr) : '');
 
   const navLinks = [
     { path: '/', label: 'Games' },

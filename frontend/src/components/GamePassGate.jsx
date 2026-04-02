@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useAccount, useReadContract, useWriteContract, useConnect } from 'wagmi';
-import { injected } from 'wagmi/connectors';
+import { useAccount, useReadContract, useWriteContract } from 'wagmi';
+import { usePrivy } from '@privy-io/react-auth';
 import { CONTRACT_ADDRESSES, GAME_PASS_ABI } from '../config/contracts';
 import { toast } from 'react-hot-toast';
 
 export default function GamePassGate({ children }) {
   const { address, isConnected } = useAccount();
-  const { connect } = useConnect();
+  const { login } = usePrivy();
   const { writeContractAsync } = useWriteContract();
   const [usernameInput, setUsernameInput] = useState('');
   const [minting, setMinting] = useState(false);
@@ -67,7 +67,7 @@ export default function GamePassGate({ children }) {
       {!isConnected ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
           <button
-            onClick={() => connect({ connector: injected() })}
+            onClick={() => login()}
             style={{
               width: '100%', padding: '14px 32px', borderRadius: '12px', cursor: 'pointer',
               background: 'linear-gradient(135deg, #a855f7, #7c3aed)',

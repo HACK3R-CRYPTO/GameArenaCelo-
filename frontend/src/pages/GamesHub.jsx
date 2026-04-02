@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAccount, useReadContract, useWriteContract, usePublicClient, useConnect } from 'wagmi';
-import { injected } from 'wagmi/connectors';
+import { useAccount, useReadContract, useWriteContract, usePublicClient } from 'wagmi';
+import { usePrivy } from '@privy-io/react-auth';
 import { parseUnits, formatUnits } from 'viem';
 import { CONTRACT_ADDRESSES, ERC20_ABI, SOLO_WAGER_ABI, SOLO_WAGER_ADDRESS, GAME_PASS_ABI } from '../config/contracts';
 import { useSelfVerification } from '../contexts/SelfVerificationContext';
@@ -77,7 +77,7 @@ function timeAgo(ts) {
 export default function GamesHub() {
   const navigate    = useNavigate();
   const { address, isConnected } = useAccount();
-  const { connect } = useConnect();
+  const { login } = usePrivy();
   const publicClient = usePublicClient();
   const { isVerified, isVerifying, verifyIdentity, claimG$, entitlement } = useSelfVerification();
 
@@ -316,12 +316,15 @@ export default function GamesHub() {
             padding: '10px 14px', borderRadius: '14px',
             background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
           }}>
-            <div style={{
-              width: '34px', height: '34px', borderRadius: '10px',
-              background: 'linear-gradient(135deg, #a855f7, #06b6d4)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '16px', fontWeight: 900, color: '#fff', flexShrink: 0,
-            }}>{username[0].toUpperCase()}</div>
+            <img
+              src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${address}`}
+              alt="avatar"
+              style={{
+                width: '34px', height: '34px', borderRadius: '10px',
+                background: 'linear-gradient(135deg, #a855f7, #06b6d4)',
+                flexShrink: 0,
+              }}
+            />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{ color: '#fff', fontSize: '13px', fontWeight: 900 }}>{username}</span>
@@ -356,7 +359,7 @@ export default function GamesHub() {
               <div style={{ color: '#fff', fontSize: '13px', fontWeight: 900, letterSpacing: '2px' }}>GAME<span style={{ color: '#a855f7' }}>_</span>ARENA</div>
               <div style={{ color: '#4b5563', fontSize: '9px', marginTop: '2px' }}>Play · Earn G$ · Fund UBI</div>
             </div>
-            <button onClick={() => connect({ connector: injected() })} className="gb" style={{
+            <button onClick={() => login()} className="gb" style={{
               padding: '10px 20px', borderRadius: '12px', cursor: 'pointer',
               background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
               border: 'none', color: '#fff', fontSize: '10px', fontWeight: 700,

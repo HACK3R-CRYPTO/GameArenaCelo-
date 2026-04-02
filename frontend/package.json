@@ -12,6 +12,8 @@
   "dependencies": {
     "@goodsdks/citizen-sdk": "^1.2.3",
     "@metamask/sdk": "^0.33.1",
+    "@privy-io/react-auth": "^3.18.0",
+    "@privy-io/wagmi": "^4.0.3",
     "@reown/appkit": "^1.8.16",
     "@reown/appkit-adapter-wagmi": "^1.8.16",
     "@selfxyz/qrcode": "^1.0.11",

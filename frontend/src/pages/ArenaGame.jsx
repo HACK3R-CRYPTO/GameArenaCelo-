@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAccount, useReadContract, useWriteContract, usePublicClient, useWatchContractEvent, useBalance, useConnect } from 'wagmi';
-import { injected } from 'wagmi/connectors';
+import { useAccount, useReadContract, useWriteContract, usePublicClient, useWatchContractEvent, useBalance } from 'wagmi';
+import { usePrivy } from '@privy-io/react-auth';
 import { BookOpen } from 'lucide-react';
 import { parseUnits, formatUnits, parseAbiItem, encodeAbiParameters } from 'viem';
 import { CONTRACT_ADDRESSES, ARENA_PLATFORM_ABI, ERC8004_REGISTRY_ABI, ERC20_ABI } from '../config/contracts';
@@ -23,8 +23,8 @@ const ArenaGame = () => {
             staleTime: 30000 // Cache for 30s to prevent spam
         }
     });
-    const { connect } = useConnect();
-    const open = () => connect({ connector: injected() });
+    const { login } = usePrivy();
+    const open = () => login();
     const publicClient = usePublicClient();
 
     const { isVerified, isVerifying, verifyIdentity, cancelVerification, SelfVerificationComponent, claimG$, entitlement } = useSelfVerification();

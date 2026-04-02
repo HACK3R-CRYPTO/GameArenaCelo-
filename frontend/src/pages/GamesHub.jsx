@@ -236,8 +236,8 @@ export default function GamesHub() {
   const claimable = entitlement ? Number(formatUnits(entitlement, 18)).toFixed(4) : '0';
   const canClaim  = Number(claimable) > 0;
 
-  const handlePlay = async (game) => {
-    const isWager = wagerMode[game.id];
+  const handlePlay = async (game, forceWager = false) => {
+    const isWager = forceWager || wagerMode[game.id];
     if (!isWager) { navigate(game.path); return; }
 
     if (!isConnected)  { toast.error('Connect your wallet first'); return; }
@@ -529,8 +529,7 @@ export default function GamesHub() {
                     {canWager && (
                       <button
                         onClick={() => {
-                          setWagerMode(p => ({ ...p, [game.id]: true }));
-                          handlePlay({ ...game });
+                          handlePlay({ ...game }, true);
                         }}
                         disabled={loading}
                         className="gb"

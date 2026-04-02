@@ -43,7 +43,7 @@ function Navigation() {
   ];
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 px-6 py-4 bg-[#050505]/90 backdrop-blur-md border-b border-white/5">
+    <nav className="fixed top-0 left-0 right-0 z-50 px-6 py-4 bg-[#050505] backdrop-blur-md border-b border-white/5">
       <div className="max-w-[1000px] mx-auto flex items-center justify-between">
 
         {/* Logo Area */}
@@ -140,7 +140,7 @@ function Navigation() {
           : 'transform scale-y-95 opacity-0 invisible'
           }`}
       >
-        <div className="glass-panel p-4 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] border border-cyan-500/20">
+        <div className="p-4 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] border border-purple-500/20 bg-[#0a0a14]">
           <div className="flex flex-col gap-2">
             {navLinks.map((link) => (
               link.external ? (

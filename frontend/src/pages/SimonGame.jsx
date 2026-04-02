@@ -444,8 +444,7 @@ export default function SimonGame() {
             const isActive = activeBtn === btn.id;
             return (
               <button key={btn.id}
-                onClick={() => handleButtonClick(btn.id)}
-                onTouchStart={(e) => { e.preventDefault(); handleButtonClick(btn.id); }}
+                onPointerDown={(e) => { e.preventDefault(); handleButtonClick(btn.id); }}
                 disabled={!gameActive || isShowingSequence || gameOver}
                 style={{
                   aspectRatio: '1', borderRadius: bonusUnlocked ? '12px' : '16px',

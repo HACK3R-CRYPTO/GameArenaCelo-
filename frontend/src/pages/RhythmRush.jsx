@@ -554,8 +554,7 @@ export default function RhythmRush() {
             const pulseScale = isTarget ? (1.1 + intensity * 0.05) : 1;
             return (
               <button key={beat}
-                onClick={() => handleButtonClick(beat)}
-                onTouchStart={(e) => { e.preventDefault(); handleButtonClick(beat); }}
+                onPointerDown={(e) => { e.preventDefault(); handleButtonClick(beat); }}
                 style={{
                   aspectRatio: '1', borderRadius: '50%',
                   border: `3px solid ${isTarget ? color.active : 'rgba(255,255,255,0.1)'}`,

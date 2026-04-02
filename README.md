@@ -207,6 +207,13 @@ SUPABASE_ANON_KEY=<your supabase anon key>
 
 ## Project Structure
 
+| Directory | Description | Docs |
+|---|---|---|
+| [`frontend/`](frontend/) | React + Vite — game UI, wallet, wager flow | [Frontend README](frontend/README.md) |
+| [`games-backend/`](games-backend/) | Express.js + Supabase — scores, seasons, on-chain resolver | [Backend .env.example](games-backend/.env.example) |
+| [`contracts/`](contracts/) | Foundry / Solidity — ArenaPlatform, SoloWager, GamePass | [Contracts README](contracts/README.md) |
+| [`agent/`](agent/) | TypeScript AI agent — Markov-chain opponent | — |
+
 ```
 GameArenaCelo-/
 ├── frontend/                    React + Vite

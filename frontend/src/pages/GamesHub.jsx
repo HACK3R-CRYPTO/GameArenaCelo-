@@ -583,38 +583,7 @@ export default function GamesHub() {
           }}>SCORES</button>
         </div>
 
-        {/* ── Live Activity ──────────────────────────────────────────── */}
-        {activity.length > 0 && (
-          <div style={{
-            padding: '14px 16px', marginBottom: '12px',
-            background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.04)',
-            borderRadius: '14px',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <span style={{
-                width: '8px', height: '8px', borderRadius: '50%',
-                background: '#10b981', boxShadow: '0 0 8px #10b981',
-                animation: 'pulseGlow 2s ease-in-out infinite',
-              }} />
-              <span style={{ color: '#374151', fontSize: '9px', letterSpacing: '2px', fontWeight: 700 }}>LIVE</span>
-            </div>
-            {activity.slice(0, 4).map((item, i) => (
-              <div key={`${item.player}-${item.timestamp}-${i}`} style={{
-                display: 'flex', alignItems: 'center', gap: '8px',
-                padding: '6px 8px', borderRadius: '8px', marginBottom: '4px',
-                background: i === newIdx ? 'rgba(16,185,129,0.06)' : 'transparent',
-              }}>
-                <span style={{ fontSize: '14px' }}>{item.game === 'rhythm' ? '🎵' : '🧠'}</span>
-                <span style={{ color: '#6b7280', fontSize: '10px', flex: 1 }}>
-                  <span style={{ color: '#9ca3af' }}>{item.username || fmt(item.player)}</span>
-                  <span style={{ color: '#374151' }}> · </span>
-                  <span style={{ color: GAME_ACCENT[item.game], fontWeight: 700 }}>{item.score} pts</span>
-                </span>
-                <span style={{ color: '#1f2937', fontSize: '8px' }}>{timeAgo(item.timestamp)}</span>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Live Activity — removed to reduce clutter */}
       </div>
     </>
   );

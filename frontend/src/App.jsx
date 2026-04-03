@@ -49,6 +49,7 @@ function App() {
             createOnLogin: 'users-without-wallets',
           },
         },
+        walletChainType: 'ethereum-only',
       }}
     >
       <QueryClientProvider client={queryClient}>

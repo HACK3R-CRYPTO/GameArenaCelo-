@@ -1,7 +1,8 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
-import { useAccount, useDisconnect } from 'wagmi';
+import { useAccount, useDisconnect, useSwitchChain } from 'wagmi';
+import { celo } from 'wagmi/chains';
 import AccountModal from './AccountModal';
 
 function Navigation() {
@@ -9,8 +10,11 @@ function Navigation() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
   const { login, logout, authenticated, user, exportWallet } = usePrivy();
-  const { address } = useAccount();
+  const { address, chainId } = useAccount();
   const { disconnect } = useDisconnect();
+  const { switchChain } = useSwitchChain();
+
+  const isWrongNetwork = authenticated && address && chainId && chainId !== celo.id;
 
   const handleLogout = () => {
     logout();
@@ -94,7 +98,7 @@ function Navigation() {
               onClick={() => setShowAccount(true)}
               className="flex items-center gap-2 px-3 py-1.5 rounded bg-white/5 border border-white/10 hover:border-purple-500/30 transition-colors cursor-pointer"
             >
-              <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+              <div className={`w-1.5 h-1.5 rounded-full ${isWrongNetwork ? 'bg-yellow-400' : 'bg-green-500'}`}></div>
               <span className="font-mono text-xs text-gray-300 truncate max-w-[120px]">
                 {displayName}
               </span>
@@ -170,7 +174,7 @@ function Navigation() {
                   className="flex items-center justify-between px-3 py-2 bg-black/40 rounded-lg border border-white/5 hover:border-purple-500/30 transition-colors"
                 >
                   <span className="font-mono text-sm text-purple-300">{displayName}</span>
-                  <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                  <div className={`w-2 h-2 rounded-full ${isWrongNetwork ? 'bg-yellow-400' : 'bg-green-500'}`}></div>
                 </button>
                 <button
                   className="w-full py-2.5 rounded-lg border border-red-500/30 text-red-400 font-mono text-xs uppercase tracking-wider hover:bg-red-500/10 transition-colors"
@@ -191,6 +195,25 @@ function Navigation() {
         </div>
       </div>
     </nav>
+
+    {isWrongNetwork && (
+      <div className="fixed inset-0 z-999 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+        <div className="flex flex-col items-center gap-5 p-8 rounded-2xl border border-yellow-500/30 bg-[#0a0a14] max-w-sm w-[90%] text-center shadow-[0_0_60px_rgba(234,179,8,0.1)]">
+          <div className="text-4xl">⛓️</div>
+          <div>
+            <p className="font-orbitron text-yellow-400 font-bold text-base mb-1">WRONG NETWORK</p>
+            <p className="text-gray-400 text-sm font-mono">GameArena runs on <span className="text-white font-bold">Celo Mainnet</span>. Please switch to continue.</p>
+          </div>
+          <button
+            onClick={() => switchChain({ chainId: celo.id })}
+            className="w-full py-3 rounded-lg font-bold font-mono text-sm bg-yellow-500/20 border border-yellow-500/40 text-yellow-300 hover:bg-yellow-500/30 active:scale-95 transition-all"
+          >
+            SWITCH TO CELO
+          </button>
+        </div>
+      </div>
+    )}
+
     {showAccount && <AccountModal isOpen={showAccount} onClose={() => setShowAccount(false)} />}
     </>
   );

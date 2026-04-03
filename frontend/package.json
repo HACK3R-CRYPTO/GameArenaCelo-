@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@goodsdks/citizen-sdk": "^1.2.3",
+    "@goodsdks/identity-sdk": "^1.0.5",
     "@metamask/sdk": "^0.33.1",
     "@privy-io/react-auth": "^3.18.0",
     "@privy-io/wagmi": "^4.0.3",

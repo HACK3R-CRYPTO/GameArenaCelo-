@@ -278,14 +278,28 @@ Result: every on-chain tx comes from the actual player's wallet. Players pay the
 - Hide CELO gas faucet for MiniPay users (they pay gas in USDm natively)
 
 ### Phase 4: On-Chain Weekly Seasons
-Currently weekly leaderboard and season data is stored in Supabase (off-chain). The upgrade moves this fully on-chain:
+Currently `GamePass.sol` only stores a player's **all-time best score** — it never resets. When a new week starts the contract still shows last week's best, so Supabase is used to track weekly competition separately.
 
-- **New contract** (`SeasonScores.sol` or extend `GamePass.sol`) stores scores per week/season per player
-- Weekly season ID derived from `block.timestamp / 7 days` — no admin needed to reset
-- Top scores, badges, and season history all readable directly from the chain
-- Eliminates reliance on backend database for competitive integrity — anyone can verify rankings on-chain
+The upgrade changes the contract to store scores **per season**:
 
-> This makes GameArena fully trustless: scores, seasons, and payouts all verifiable without the backend.
+```solidity
+// Current (all-time best only)
+mapping(address => uint256) public bestScore;
+
+// Phase 4 (score per week per player)
+mapping(uint256 season => mapping(address => uint256)) public weeklyScores;
+
+function currentSeason() public view returns (uint256) {
+    return block.timestamp / 7 days; // auto-resets every week, no admin needed
+}
+```
+
+- Week 1 scores at `weeklyScores[1][player]`, week 2 at `weeklyScores[2][player]`, etc.
+- Any past season queryable directly from the chain
+- Supabase becomes optional (cache for speed) — not the source of truth
+- Badges and season history fully verifiable on-chain
+
+> This makes GameArena fully trustless — competitive integrity enforced by the contract, not the backend.
 
 ---
 

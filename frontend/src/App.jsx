@@ -37,7 +37,7 @@ function MiniPayConnector() {
 
   useEffect(() => {
     if (window.ethereum?.isMiniPay && !isConnected) {
-      connect({ connector: injected({ target: 'metaMask' }) });
+      connect({ connector: injected() });
     }
   }, []);
 

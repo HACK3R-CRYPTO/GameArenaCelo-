@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { PrivyProvider } from '@privy-io/react-auth';
-import { WagmiProvider } from '@privy-io/wagmi';
+import { PrivyProvider, usePrivy, useWallets } from '@privy-io/react-auth';
+import { WagmiProvider, useSetActiveWallet } from '@privy-io/wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useDisconnect } from 'wagmi';
 import { config, supportedChains } from './config/wagmi';
 import { Toaster } from 'react-hot-toast';
 import { SelfVerificationProvider } from './contexts/SelfVerificationContext';
@@ -27,6 +28,28 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Ensures the embedded wallet is always the active wagmi wallet for email/social logins,
+// and clears wagmi connector state on logout so Rabby doesn't auto-reconnect.
+function WalletManager() {
+  const { authenticated, user } = usePrivy();
+  const { wallets } = useWallets();
+  const { setActiveWallet } = useSetActiveWallet();
+  const { disconnect } = useDisconnect();
+
+  useEffect(() => {
+    if (!authenticated) {
+      // Clear wagmi connector state so injected wallet doesn't auto-reconnect on next login
+      disconnect();
+      return;
+    }
+    // If logged in via email/social, prefer the Privy embedded wallet over injected
+    const embedded = wallets.find(w => w.walletClientType === 'privy');
+    if (embedded) setActiveWallet(embedded);
+  }, [authenticated, wallets]);
+
+  return null;
+}
 
 function App() {
   const [showSplash, setShowSplash] = useState(() => !sessionStorage.getItem('splashSeen'));
@@ -54,6 +77,7 @@ function App() {
     >
       <QueryClientProvider client={queryClient}>
         <WagmiProvider config={config}>
+          <WalletManager />
           <SelfVerificationProvider>
             <Toaster position="top-right" toastOptions={{
               style: {

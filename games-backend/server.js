@@ -520,7 +520,7 @@ app.get('/api/seasons', async (_, res) => {
     .eq('game', 'rhythm')
     .gte('created_at', startDate)
     .order('score', { ascending: false })
-    .limit(10);
+    .limit(200);
 
   const { data: liveSimon } = await supabase
     .from('scores')
@@ -528,7 +528,18 @@ app.get('/api/seasons', async (_, res) => {
     .eq('game', 'simon')
     .gte('created_at', startDate)
     .order('score', { ascending: false })
-    .limit(10);
+    .limit(200);
+
+  // Dedup by wallet — keep best score per user
+  const dedupScores = (rows) => {
+    const seen = new Map();
+    for (const row of (rows || [])) {
+      const key = row.wallet_address?.toLowerCase();
+      if (!key) continue;
+      if (!seen.has(key) || row.score > seen.get(key).score) seen.set(key, row);
+    }
+    return Array.from(seen.values()).sort((a, b) => b.score - a.score).slice(0, 10);
+  };
 
   // Past sealed seasons
   const { data: pastSeasons } = await supabase
@@ -537,9 +548,10 @@ app.get('/api/seasons', async (_, res) => {
     .eq('sealed', true)
     .order('season_number', { ascending: false });
 
-  // Format for frontend compatibility
-  const formatEntry = (e) => ({
+  // Format for frontend — same shape as /api/leaderboard so fmt() works correctly
+  const formatEntry = async (e) => ({
     player: e.wallet_address,
+    username: await resolveUsername(e.wallet_address) || null,
     score: e.score,
     gameTime: e.game_time,
     wagered: e.wagered,
@@ -551,8 +563,8 @@ app.get('/api/seasons', async (_, res) => {
     currentSeason: current,
     currentEndsAt: end,
     live: {
-      rhythm: (liveRhythm || []).map(formatEntry),
-      simon: (liveSimon || []).map(formatEntry),
+      rhythm: await Promise.all(dedupScores(liveRhythm).map(formatEntry)),
+      simon:  await Promise.all(dedupScores(liveSimon).map(formatEntry)),
     },
     past: (pastSeasons || []).map(s => ({
       season: s.season_number,

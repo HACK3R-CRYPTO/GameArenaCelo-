@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAccount, useReadContract, useWriteContract, usePublicClient, useDisconnect } from 'wagmi';
+import { useAccount, useReadContract, useWriteContract, usePublicClient } from 'wagmi';
 import { usePrivy } from '@privy-io/react-auth';
 import { parseUnits, formatUnits } from 'viem';
 import { CONTRACT_ADDRESSES, ERC20_ABI, SOLO_WAGER_ABI, SOLO_WAGER_ADDRESS, GAME_PASS_ABI } from '../config/contracts';
@@ -76,18 +76,13 @@ function timeAgo(ts) {
 // ── Main Component ───────────────────────────────────────────────────────────
 export default function GamesHub() {
   const navigate    = useNavigate();
-  const { address: wagmiAddress, isConnected: wagmiConnected, isConnecting, isReconnecting } = useAccount();
-  const { disconnect } = useDisconnect();
-  const { login, authenticated, user } = usePrivy();
-  
-  // Directly follow the working pattern from Focus_pet:
-  // Wagmi's isConnected determines if the connector is ready for transactions.
-  const walletReady    = wagmiConnected;
+  const { address: wagmiAddress } = useAccount();
+  const { login, authenticated, ready, user } = usePrivy();
 
-  const privyAddr = user?.wallet?.address;
-  // Address: prefer wagmi (live connector), fall back to Privy wallet object (for UI display while wagmi loads)
-  const address   = wagmiAddress || privyAddr;
-  const isConnected = authenticated;
+  // Focus Pet pattern: authenticated+ready from Privy is the ONLY source of truth
+  const isConnected = ready && authenticated;
+  const privyAddr   = user?.wallet?.address;
+  const address     = wagmiAddress || privyAddr;
 
   const { isVerified, isVerifying, verifyIdentity, claimG$, entitlement } = useSelfVerification();
 
@@ -381,7 +376,7 @@ export default function GamesHub() {
               fontFamily: 'Orbitron, monospace', letterSpacing: '1px',
             }}>CONNECT</button>
           </div>
-        ) : isConnected && !walletReady ? (
+        ) : isConnected && !!!wagmiAddress ? (
           /* Privy authenticated but wallet connector not ready yet — per Privy docs, wait for wallet.isConnected */
           <div style={{
             display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px',
@@ -433,7 +428,7 @@ export default function GamesHub() {
         )}
 
         {/* ── Gas Faucet ──────────────────────────────────────────────── */}
-        {isConnected && walletReady && !gasReceived && (
+        {isConnected && !!wagmiAddress && !gasReceived && (
           <div style={{
             marginBottom: '14px', padding: '12px 16px',
             background: 'rgba(6,182,212,0.06)', border: '1px solid rgba(6,182,212,0.15)',
@@ -486,8 +481,8 @@ export default function GamesHub() {
         )}
 
         {/* ── Game Pass Gate ─────────────────────────────────────────── */}
-        {/* walletReady = wallet.isConnected per Privy docs — the official ready signal */}
-        {isConnected && walletReady && !hasPass && (
+        {/* !!wagmiAddress = wallet.isConnected per Privy docs — the official ready signal */}
+        {isConnected && !!wagmiAddress && !hasPass && (
           <div style={{
             marginBottom: '20px', padding: '28px 24px',
             background: 'linear-gradient(160deg, rgba(16,185,129,0.08), rgba(6,182,212,0.04))',

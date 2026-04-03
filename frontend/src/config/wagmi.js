@@ -1,6 +1,7 @@
 import { http } from 'wagmi';
 import { createConfig } from '@privy-io/wagmi';
 import { celo } from 'wagmi/chains';
+import { injected } from 'wagmi/connectors';
 
 const customCelo = {
   ...celo,
@@ -12,11 +13,9 @@ const customCelo = {
 
 export const supportedChains = [customCelo];
 
-// No injected() connector — Privy manages wallet connections exclusively.
-// This prevents browser extensions (Rabby, MetaMask) from auto-connecting
-// via wagmi when the user logs in with email/Google/Twitter.
 export const config = createConfig({
   chains: [customCelo],
+  connectors: [injected()],
   transports: {
     [customCelo.id]: http('https://forno.celo.org'),
   },

@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
-import { useAccount, useDisconnect, useSwitchChain } from 'wagmi';
+import { useAccount, useSwitchChain } from 'wagmi';
 import { celo } from 'wagmi/chains';
 import AccountModal from './AccountModal';
 
@@ -9,17 +9,12 @@ function Navigation() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
-  const { login, logout, authenticated, user, exportWallet } = usePrivy();
+  const { login, logout, authenticated, ready, user } = usePrivy();
   const { address, chainId } = useAccount();
-  const { disconnect } = useDisconnect();
   const { switchChain } = useSwitchChain();
 
-  const isWrongNetwork = authenticated && address && chainId && chainId !== celo.id;
-
-  const handleLogout = () => {
-    logout();
-    disconnect();
-  };
+  const isConnected = ready && authenticated;
+  const isWrongNetwork = isConnected && address && chainId && chainId !== celo.id;
 
   useEffect(() => {
     const handleResize = () => {
@@ -93,7 +88,7 @@ function Navigation() {
         </div>
 
         <div className="hidden md:flex items-center gap-4">
-          {authenticated ? (
+          {isConnected ? (
             <button
               onClick={() => setShowAccount(true)}
               className="flex items-center gap-2 px-3 py-1.5 rounded bg-white/5 border border-white/10 hover:border-purple-500/30 transition-colors cursor-pointer"
@@ -167,7 +162,7 @@ function Navigation() {
           </div>
 
           <div className="mt-4 pt-4 border-t border-white/10">
-            {authenticated ? (
+            {isConnected ? (
               <div className="flex flex-col gap-3">
                 <button
                   onClick={() => { setShowAccount(true); setMobileMenuOpen(false); }}
@@ -178,7 +173,7 @@ function Navigation() {
                 </button>
                 <button
                   className="w-full py-2.5 rounded-lg border border-red-500/30 text-red-400 font-mono text-xs uppercase tracking-wider hover:bg-red-500/10 transition-colors"
-                  onClick={() => { handleLogout(); setMobileMenuOpen(false); }}
+                  onClick={() => { logout(); setMobileMenuOpen(false); }}
                 >
                   Log Out
                 </button>

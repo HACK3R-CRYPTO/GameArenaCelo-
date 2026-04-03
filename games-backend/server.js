@@ -216,8 +216,23 @@ async function getLeaderboard(game, limit = 50, seasonFilter = true) {
 
   const { data } = await query
     .order('score', { ascending: false })
-    .limit(limit);
-  return data || [];
+    .limit(500); // fetch more then dedup in JS
+
+  if (!data) return [];
+
+  // Keep only best score per wallet address
+  const seen = new Map();
+  for (const row of data) {
+    const key = row.wallet_address?.toLowerCase();
+    if (!key) continue;
+    if (!seen.has(key) || row.score > seen.get(key).score) {
+      seen.set(key, row);
+    }
+  }
+
+  return Array.from(seen.values())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
 }
 
 async function getActivity(limit = 20) {

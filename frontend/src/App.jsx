@@ -46,7 +46,7 @@ function App() {
         supportedChains,
         embeddedWallets: {
           ethereum: {
-            createOnLogin: 'users-without-wallets',
+            createOnLogin: 'all-users', // always create embedded wallet, even if injected wallet exists
           },
         },
         walletChainType: 'ethereum-only',

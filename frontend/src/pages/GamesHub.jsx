@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAccount, useReadContract, useWriteContract, usePublicClient, useDisconnect } from 'wagmi';
-import { usePrivy } from '@privy-io/react-auth';
+import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { parseUnits, formatUnits } from 'viem';
 import { CONTRACT_ADDRESSES, ERC20_ABI, SOLO_WAGER_ABI, SOLO_WAGER_ADDRESS, GAME_PASS_ABI } from '../config/contracts';
 import { useSelfVerification } from '../contexts/SelfVerificationContext';
@@ -79,20 +79,21 @@ export default function GamesHub() {
   const { address: wagmiAddress, isConnected: wagmiConnected } = useAccount();
   const { disconnect } = useDisconnect();
   const { login, authenticated, user } = usePrivy();
+  const { wallets } = useWallets();
+  
+  // Per Privy docs: use useWallets() and wallet.isConnected as the ready flag.
+  // The embedded wallet (email/social login) needs time to hydrate into wagmi.
+  const embeddedWallet = wallets.find(w => w.walletClientType === 'privy');
+  const externalWallet = wallets.find(w => w.walletClientType !== 'privy');
+  const activeWallet   = embeddedWallet || externalWallet || wallets[0];
+  // walletReady = the official Privy signal that the wallet connector is live
+  const walletReady    = activeWallet?.isConnected ?? wagmiConnected;
+
   const privyAddr = user?.wallet?.address;
-  // Use wagmi address if available, fall back to Privy's wallet address.
-  // For email/embedded wallet users, Privy has the address immediately after
-  // login while wagmi may take a moment to hydrate the connector.
-  const address = wagmiAddress || privyAddr;
+  // Address: prefer wagmi (live connector), fall back to Privy wallet object
+  const address   = wagmiAddress || activeWallet?.address || privyAddr;
   const isConnected = authenticated;
 
-
-  // Note: no need to force-disconnect stale wagmi sessions here.
-  // isConnected = authenticated (Privy), so the UI already ignores any
-  // lingering wagmi state after logout. Calling disconnect() here would
-  // also fire *during* OAuth login (wagmi connects before Privy sets
-  // authenticated=true), which breaks social login flows entirely.
-  const publicClient = usePublicClient();
   const { isVerified, isVerifying, verifyIdentity, claimG$, entitlement } = useSelfVerification();
 
   const [wagerMode,   setWagerMode]   = useState({});
@@ -385,8 +386,8 @@ export default function GamesHub() {
               fontFamily: 'Orbitron, monospace', letterSpacing: '1px',
             }}>CONNECT</button>
           </div>
-        ) : isConnected && !address ? (
-          /* Privy authenticated but wagmi wallet not ready yet (common on mobile/email login) */
+        ) : isConnected && !walletReady ? (
+          /* Privy authenticated but wallet connector not ready yet — per Privy docs, wait for wallet.isConnected */
           <div style={{
             display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px',
             padding: '12px 16px', borderRadius: '14px',
@@ -437,7 +438,7 @@ export default function GamesHub() {
         )}
 
         {/* ── Gas Faucet ──────────────────────────────────────────────── */}
-        {isConnected && !!address && !gasReceived && (
+        {isConnected && walletReady && !gasReceived && (
           <div style={{
             marginBottom: '14px', padding: '12px 16px',
             background: 'rgba(6,182,212,0.06)', border: '1px solid rgba(6,182,212,0.15)',
@@ -490,8 +491,8 @@ export default function GamesHub() {
         )}
 
         {/* ── Game Pass Gate ─────────────────────────────────────────── */}
-        {/* Require !!address so wagmi is actually connected before showing mint UI */}
-        {isConnected && !!address && !hasPass && (
+        {/* walletReady = wallet.isConnected per Privy docs — the official ready signal */}
+        {isConnected && walletReady && !hasPass && (
           <div style={{
             marginBottom: '20px', padding: '28px 24px',
             background: 'linear-gradient(160deg, rgba(16,185,129,0.08), rgba(6,182,212,0.04))',

@@ -4,6 +4,7 @@ import { usePrivy } from '@privy-io/react-auth';
 import { useAccount, useSwitchChain } from 'wagmi';
 import { celo } from 'wagmi/chains';
 import AccountModal from './AccountModal';
+import { useIsMiniPay } from '../hooks/useMiniPay';
 
 function Navigation() {
   const location = useLocation();
@@ -12,9 +13,12 @@ function Navigation() {
   const { login, logout, authenticated, ready, user } = usePrivy();
   const { address, chainId } = useAccount();
   const { switchChain } = useSwitchChain();
+  const isMiniPay = useIsMiniPay();
 
-  const isConnected = ready && authenticated;
-  const isWrongNetwork = isConnected && address && chainId && chainId !== celo.id;
+  // In MiniPay, treat the injected wallet address as "connected" even without Privy auth
+  const isConnected = (ready && authenticated) || (isMiniPay && !!address);
+  // Skip wrong-network check inside MiniPay — it's always on Celo
+  const isWrongNetwork = !isMiniPay && isConnected && address && chainId && chainId !== celo.id;
 
   useEffect(() => {
     const handleResize = () => {
@@ -38,7 +42,9 @@ function Navigation() {
 
   const privyWallet = user?.wallet?.address;
   const displayAddr = address || privyWallet;
-  const displayName = user?.email?.address || (displayAddr ? formatAddress(displayAddr) : '');
+  const displayName = isMiniPay
+    ? (address ? formatAddress(address) : 'MiniPay')
+    : (user?.email?.address || (displayAddr ? formatAddress(displayAddr) : ''));
 
   const navLinks = [
     { path: '/', label: 'Games' },
@@ -93,19 +99,20 @@ function Navigation() {
               onClick={() => setShowAccount(true)}
               className="flex items-center gap-2 px-3 py-1.5 rounded bg-white/5 border border-white/10 hover:border-purple-500/30 transition-colors cursor-pointer"
             >
+              {isMiniPay && <span className="text-[10px] font-bold text-green-400 uppercase tracking-wider">MP</span>}
               <div className={`w-1.5 h-1.5 rounded-full ${isWrongNetwork ? 'bg-yellow-400' : 'bg-green-500'}`}></div>
               <span className="font-mono text-xs text-gray-300 truncate max-w-[120px]">
                 {displayName}
               </span>
             </button>
-          ) : (
+          ) : !isMiniPay ? (
             <button
               className="btn-primary px-5 py-2 rounded text-sm font-bold font-mono"
               onClick={login}
             >
               CONNECT
             </button>
-          )}
+          ) : null}
         </div>
 
         <button
@@ -178,14 +185,14 @@ function Navigation() {
                   Log Out
                 </button>
               </div>
-            ) : (
+            ) : !isMiniPay ? (
               <button
                 className="w-full btn-primary py-3 rounded-lg font-bold font-mono"
                 onClick={() => { login(); setMobileMenuOpen(false); }}
               >
                 CONNECT
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAccount, useReadContract, useWriteContract, usePublicClient } from 'wagmi';
 import { usePrivy } from '@privy-io/react-auth';
+import { useIsMiniPay } from '../hooks/useMiniPay';
 import { parseUnits, formatUnits } from 'viem';
 import { CONTRACT_ADDRESSES, ERC20_ABI, SOLO_WAGER_ABI, SOLO_WAGER_ADDRESS, GAME_PASS_ABI } from '../config/contracts';
 import { useSelfVerification } from '../contexts/SelfVerificationContext';
@@ -79,8 +80,9 @@ export default function GamesHub() {
   const { address: wagmiAddress } = useAccount();
   const { login, authenticated, ready, user } = usePrivy();
 
-  // Focus Pet pattern: authenticated+ready from Privy is the ONLY source of truth
-  const isConnected = ready && authenticated;
+  const isMiniPay = useIsMiniPay();
+  // In MiniPay, treat injected wallet as connected even without Privy auth
+  const isConnected = (ready && authenticated) || (isMiniPay && !!wagmiAddress);
   const privyAddr   = user?.wallet?.address;
   const address     = wagmiAddress || privyAddr;
 

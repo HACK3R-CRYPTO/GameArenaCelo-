@@ -3,7 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth';
 import { WagmiProvider } from '@privy-io/wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useDisconnect } from 'wagmi';
+import { useDisconnect, useConnect, useAccount } from 'wagmi';
+import { injected } from 'wagmi/connectors';
 import { config, supportedChains } from './config/wagmi';
 import { Toaster } from 'react-hot-toast';
 import { SelfVerificationProvider } from './contexts/SelfVerificationContext';
@@ -28,6 +29,20 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Auto-connects injected wallet when running inside MiniPay.
+function MiniPayConnector() {
+  const { connect } = useConnect();
+  const { isConnected } = useAccount();
+
+  useEffect(() => {
+    if (window.ethereum?.isMiniPay && !isConnected) {
+      connect({ connector: injected() });
+    }
+  }, []);
+
+  return null;
+}
 
 // Ensures the embedded wallet is always the active wagmi wallet for email/social logins,
 // and clears wagmi connector state on logout so Rabby doesn't auto-reconnect.
@@ -71,6 +86,7 @@ function App() {
     >
       <QueryClientProvider client={queryClient}>
         <WagmiProvider config={config}>
+          <MiniPayConnector />
           <WalletManager />
           <SelfVerificationProvider>
             <Toaster position="top-right" toastOptions={{

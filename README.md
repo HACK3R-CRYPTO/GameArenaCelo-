@@ -2,7 +2,7 @@
 
 > Play skill games. Wager G$. Fund global UBI. Every game matters.
 
-GameArena is a competitive gaming platform on **Celo Mainnet** powered by **GoodDollar G$**. Players compete in solo skill games and PvP matches against an adaptive AI agent — with real G$ stakes, weekly seasons, and on-chain proof of every play.
+GameArena is a competitive gaming platform on **Celo Mainnet** powered by **GoodDollar G$**. Players compete in solo skill games and Human vs AI matches against an adaptive AI agent — with real G$ stakes, weekly seasons, and on-chain proof of every play.
 
 Built as part of the **GoodBuilders Program** — expanding real G$ usage through competitive gaming.
 
@@ -12,7 +12,7 @@ Built as part of the **GoodBuilders Program** — expanding real G$ usage throug
 
 | Integration | How It Works |
 |---|---|
-| **G$ Wagering (PvP)** | Wager G$ against Markov-1 AI in RPS, Dice & Coin Flip via `ArenaPlatform.sol` |
+| **G$ Wagering (Human vs AI)** | Wager G$ against Markov-1 AI in RPS, Dice & Coin Flip via `ArenaPlatform.sol` |
 | **G$ Wagering (Solo)** | Wager G$ on score targets in Rhythm Rush (350 pts) and Simon Memory (7 sequences) via `SoloWager.sol` — win 1.3x |
 | **GoodDollar Identity** | Face verification via Identity SDK — Sybil-resistant, no bots in wager mode |
 | **UBI Pool Fees** | 2% of every wager routes to [GoodCollective UBI Pool](https://celoscan.io/address/0x43d72Ff17701B2DA814620735C39C620Ce0ea4A1) on-chain |
@@ -29,7 +29,7 @@ Built as part of the **GoodBuilders Program** — expanding real G$ usage throug
 │                                                              │
 │  ArenaPlatform.sol      SoloWager.sol        GamePass.sol    │
 │  0x5C0eafE7834...       0xc78A8A027e0...     0xd184E5CBE...  │
-│  PvP match escrow       Solo wager escrow    Soulbound NFT   │
+│  HvAI match escrow      Solo wager escrow    Soulbound NFT   │
 │                                              + on-chain scores│
 │  G$ Token               ERC-8004 Registry                    │
 │  0x62B8B11039...        0x8004A169FB4...                     │
@@ -42,10 +42,10 @@ Built as part of the **GoodBuilders Program** — expanding real G$ usage throug
 │                FRONTEND (React + Vite)                        │
 │                                                              │
 │  GamesHub.jsx    — game selection, wager, GamePass mint      │
-│  ArenaGame.jsx   — PvP vs Markov-1 AI agent                  │
+│  ArenaGame.jsx   — Human vs AI (Markov-1 agent)               │
 │  RhythmRush.jsx  — solo rhythm game with anti-cheat          │
 │  SimonGame.jsx   — solo memory game                          │
-│  Leaderboard.jsx — rankings, seasons, PvP history            │
+│  Leaderboard.jsx — rankings, seasons, match history          │
 └──────────────────────────────────────────────────────────────┘
            ↕ REST API
 ┌──────────────────────────────────────────────────────────────┐
@@ -80,11 +80,12 @@ Built as part of the **GoodBuilders Program** — expanding real G$ usage throug
 - Free play available — no wallet or G$ required
 - Every play recorded on-chain via GamePass contract (verifiable tx hash)
 
-### PvP — Challenge Markov-1
+### Human vs AI — Challenge Markov-1
 - Games: Rock-Paper-Scissors, Dice Roll, Coin Flip
 - Wager any amount of G$ — AI auto-accepts and plays
 - Winner takes 95% of the pot; 5% platform fee
 - AI uses adaptive Markov-chain prediction — it learns your patterns
+- *(Player vs Player coming in a future phase)*
 
 ### Weekly Seasons
 - 7-day competitive seasons with automatic reset
@@ -104,7 +105,7 @@ Built as part of the **GoodBuilders Program** — expanding real G$ usage throug
 
 | Contract | Address | Purpose |
 |---|---|---|
-| `ArenaPlatform.sol` | [`0x5C0eafE7834Bd317D998A058A71092eEBc2DedeE`](https://celoscan.io/address/0x5C0eafE7834Bd317D998A058A71092eEBc2DedeE) | PvP match escrow |
+| `ArenaPlatform.sol` | [`0x5C0eafE7834Bd317D998A058A71092eEBc2DedeE`](https://celoscan.io/address/0x5C0eafE7834Bd317D998A058A71092eEBc2DedeE) | Human vs AI match escrow |
 | `SoloWager.sol` | [`0xc78A8A027e07Ae5d52981f627bbac973a8d77eFb`](https://celoscan.io/address/0xc78A8A027e07Ae5d52981f627bbac973a8d77eFb) | Solo wager escrow (3% dev fee, 2% UBI) |
 | `GamePass.sol` | [`0xd184E5CBEbf957624d14fAa0bfe20d6443411453`](https://celoscan.io/address/0xd184E5CBEbf957624d14fAa0bfe20d6443411453) | Soulbound NFT + on-chain scores |
 | GoodDollar G$ | [`0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A`](https://celoscan.io/address/0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A) | Wager & payout currency |
@@ -119,8 +120,8 @@ Built as part of the **GoodBuilders Program** — expanding real G$ usage throug
 |---|---|---|---|
 | Player wins solo wager | 3% dev fee | 2% of payout | Gets 1.3x minus fees |
 | Player loses solo wager | 3% dev fee + treasury keeps wager | 2% | Loses wager |
-| Player wins PvP | 5% platform fee | — | Gets 95% of pot |
-| Player loses PvP | 5% platform fee | — | Loses wager |
+| Player wins vs AI | 5% platform fee | — | Gets 95% of pot |
+| Player loses vs AI | 5% platform fee | — | Loses wager |
 | UBI recipient plays | — | — | Can claim daily G$ in-app |
 
 Every wager contributes to both platform revenue and the GoodDollar UBI pool.
@@ -254,6 +255,63 @@ GameArena participates in **GoodBuilders** — GoodDollar's grant program for pr
 - G$ claim button for verified UBI recipients
 - AI agent registered on ERC-8004 Agent Trust Protocol
 - Open source, deployed on Celo Mainnet
+
+---
+
+---
+
+## Roadmap — Next Phase
+
+### Phase 2: Player-Signed Transactions (Score Anti-Cheat)
+Currently the backend wallet submits score transactions on-chain (players can't fake scores, but all txs appear from the dev address). The upgrade:
+
+- **Backend** signs the verified game result: `sign(playerAddress + score + gameType + nonce)`
+- **Frontend** passes the signature to `writeContractAsync` — player submits and pays their own gas
+- **Contract** verifies `ecrecover(hash, sig) == trustedSigner` before recording score
+
+Result: every on-chain tx comes from the actual player's wallet. Players pay their own gas. Scores still can't be faked without the backend signature.
+
+> ⚠️ Requires contract redeployment (new address). All on-chain Game Pass NFTs and scores will reset. Supabase leaderboard data is preserved. Schedule before public launch.
+
+### Phase 3: MiniPay Full Integration ✅ (shipped on `feat/minipay`)
+- Auto-connect injected wallet when inside MiniPay
+- Stablecoin balance display (USDm / cUSD) in account modal for MiniPay users
+- Hide CELO gas faucet for MiniPay users (they pay gas in USDm natively)
+
+### Phase 4: On-Chain Weekly Seasons
+Currently `GamePass.sol` only stores a player's **all-time best score** — it never resets. When a new week starts the contract still shows last week's best, so Supabase is used to track weekly competition separately.
+
+The upgrade changes the contract to store scores **per season**:
+
+```solidity
+// Current (all-time best only)
+mapping(address => uint256) public bestScore;
+
+// Phase 4 (score per week per player)
+mapping(uint256 season => mapping(address => uint256)) public weeklyScores;
+
+function currentSeason() public view returns (uint256) {
+    return block.timestamp / 7 days; // auto-resets every week, no admin needed
+}
+```
+
+- Week 1 scores at `weeklyScores[1][player]`, week 2 at `weeklyScores[2][player]`, etc.
+- Any past season queryable directly from the chain
+- Supabase becomes optional (cache for speed) — not the source of truth
+- Badges and season history fully verifiable on-chain
+
+> This makes GameArena fully trustless — competitive integrity enforced by the contract, not the backend.
+
+### Phase 5: Player vs Player (True PvP)
+Currently players can only challenge the Markov-1 AI. The upgrade introduces real human vs human matches:
+
+- Players create a match and stake G$ — another player accepts
+- Smart contract holds escrow, winner takes the pot
+- GoodDollar Identity required for both players — no bots on either side
+- Matchmaking lobby: open challenges, private matches, stake size filtering
+- All match results recorded on-chain
+
+> Turns GameArena into a full esports protocol — same Sybil-resistant, UBI-funding loop but between real humans.
 
 ---
 

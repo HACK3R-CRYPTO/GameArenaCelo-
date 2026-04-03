@@ -45,7 +45,9 @@ function App() {
         defaultChain: supportedChains[0],
         supportedChains,
         embeddedWallets: {
-          createOnLogin: 'users-without-wallets',
+          ethereum: {
+            createOnLogin: 'users-without-wallets',
+          },
         },
       }}
     >

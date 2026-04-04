@@ -20,6 +20,8 @@ export default function RhythmRush() {
   const [streak, setStreak] = useState({ streak: 0, playedToday: false });
   const dailySequenceRef = useRef(getDailyRhythmSequence());
   const dailyIndexRef = useRef(0);
+  const [session, setSession] = useState(null);
+
 
   // Fetch streak from backend
   useEffect(() => {
@@ -168,8 +170,24 @@ export default function RhythmRush() {
     }, 100);
   };
 
-  const startGame = () => {
+  const startGame = async () => {
     setGameOver(false);
+    
+    // Fetch silent session token from backend (no popup)
+    if (address) {
+      try {
+        const sRes = await fetch(`${BACKEND_URL}/api/start-session`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerAddress: address }),
+        });
+        const sData = await sRes.json();
+        if (sData.success) setSession(sData.session);
+      } catch (e) {
+        console.warn('Failed to start secure session', e);
+      }
+    }
+
     setCountdown(3);
     playTone('perfect');
     setTimeout(() => { setCountdown(2); playTone('perfect'); }, 1000);
@@ -197,6 +215,7 @@ export default function RhythmRush() {
             wagered: wagerInfo?.amount || null,
             wagerId: wagerInfo?.wagerId || null,
           },
+          session, // Use the token from game-start
         }),
       });
       const data = await res.json();

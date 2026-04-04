@@ -42,7 +42,10 @@ export default function SimonGame() {
   const [streak, setStreak]                       = useState({ streak: 0, playedToday: false });
   const [countdown, setCountdown]                 = useState(null);
   const [copied, setCopied]                       = useState(false);
+  const [session, setSession]                      = useState(null);
+
   const dailySeqRef = useRef([]);
+
 
   useEffect(() => {
     if (address) getPlayStreak(address).then(setStreak);
@@ -168,6 +171,7 @@ export default function SimonGame() {
             wagered: wagerInfo?.amount || null,
             wagerId: wagerInfo?.wagerId || null,
           },
+          session, // Include the silent session token
         }),
       });
       const data = await res.json();
@@ -278,8 +282,24 @@ export default function SimonGame() {
     addNext([]);
   };
 
-  const startGame = () => {
+  const startGame = async () => {
     setGameOver(false);
+    
+    // Fetch silent session token from backend (no popup)
+    if (address) {
+      try {
+        const sRes = await fetch(`${BACKEND_URL}/api/start-session`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerAddress: address }),
+        });
+        const sData = await sRes.json();
+        if (sData.success) setSession(sData.session);
+      } catch (e) {
+        console.warn('Failed to start secure session', e);
+      }
+    }
+
     setCountdown(3);
     playTone(523.25);
     setTimeout(() => { setCountdown(2); playTone(523.25); }, 1000);

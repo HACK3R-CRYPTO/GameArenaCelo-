@@ -3,12 +3,27 @@ const express  = require('express');
 const cors     = require('cors');
 const { ethers } = require('ethers');
 const { createClient } = require('@supabase/supabase-js');
+const rateLimit = require('express-rate-limit');
 
 const app  = express();
 const PORT = process.env.PORT || 3005;
 
 app.use(cors());
 app.use(express.json());
+
+// ─── Rate Limiting ──────────────────────────────────────────────────────────
+const standardLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 30, // limit each IP to 30 requests per windowMs
+  message: { error: 'Too many requests, please try again later.' }
+});
+
+const strictLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 10, // limit each IP to 10 requests per windowMs (faucet/score)
+  message: { error: 'Rate limit exceeded. Please wait a few minutes.' }
+});
+
 
 // ─── Supabase ────────────────────────────────────────────────────────────────
 const supabase = createClient(
@@ -349,12 +364,74 @@ function validateScore({ score, gameTime, game }) {
   return { valid: true };
 }
 
-// ─── POST /api/submit-score ─────────────────────────────────────────────────
-app.post('/api/submit-score', async (req, res) => {
-  const { playerAddress, scoreData } = req.body;
+// ─── POST /api/start-session ───────────────────────────────────────────────
+app.post('/api/start-session', strictLimiter, async (req, res) => {
+  const { playerAddress } = req.body;
+  if (!playerAddress) return res.status(400).json({ error: 'Missing playerAddress' });
+  if (!validator) return res.status(500).json({ error: 'Validator not ready' });
 
-  if (!playerAddress || !scoreData) {
-    return res.status(400).json({ error: 'Missing playerAddress or scoreData' });
+  try {
+    const timestamp = Date.now();
+    const nonce     = Math.floor(Math.random() * 1000000);
+    // Create a deterministic payload for signing
+    const payload   = `${playerAddress.toLowerCase()}:${timestamp}:${nonce}`;
+    const signature = await validator.signMessage(payload);
+
+    res.json({
+      success: true,
+      session: {
+        token: signature,
+        playerAddress: playerAddress.toLowerCase(),
+        timestamp,
+        nonce
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to start session' });
+  }
+});
+
+// ─── POST /api/submit-score ─────────────────────────────────────────────────
+app.post('/api/submit-score', strictLimiter, async (req, res) => {
+  const { playerAddress, scoreData, session } = req.body;
+
+  if (!playerAddress || !scoreData || !session) {
+    return res.status(400).json({ error: 'Missing playerAddress, scoreData, or session token' });
+  }
+
+  // 1. Verify "Silent" Session Integrity
+  try {
+    const { token, timestamp, nonce, playerAddress: tokenPlayer } = session;
+    
+    // Safety checks
+    if (tokenPlayer.toLowerCase() !== playerAddress.toLowerCase()) {
+      return res.status(403).json({ error: 'Session player mismatch' });
+    }
+
+    const payload = `${playerAddress.toLowerCase()}:${timestamp}:${nonce}`;
+    const recoveredAddress = ethers.verifyMessage(payload, token);
+    
+    if (recoveredAddress.toLowerCase() !== validator.address.toLowerCase()) {
+      return res.status(403).json({ error: 'Invalid session token' });
+    }
+
+    // Time elapsed check: Date.now() - session.timestamp should be >= reported scoreData.gameTime
+    const actualElapsed = Date.now() - timestamp;
+    const reportedTime  = scoreData.gameTime || 0;
+    
+    // Add 2s grace for latency, but if they report 30s game and only 5s passed => bot.
+    if (actualElapsed < (reportedTime - 2000)) {
+      console.warn(`🚨 Anti-cheat: Speed hack detected from ${playerAddress}. Reported ${reportedTime}ms, but only ${actualElapsed}ms elapsed.`);
+      return res.status(403).json({ error: 'Cheating detected: Speed hack' });
+    }
+
+    // Token expiry (e.g. 5 mins max per game)
+    if (actualElapsed > 10 * 60 * 1000) {
+      return res.status(403).json({ error: 'Session expired' });
+    }
+
+  } catch (e) {
+    return res.status(400).json({ error: 'Session verification failed' });
   }
 
   const check = validateScore(scoreData);
@@ -661,7 +738,7 @@ app.get('/api/streak/:address', async (req, res) => {
 });
 
 // ─── POST /api/faucet — send 0.01 CELO to new users (once per wallet) ────────
-app.post('/api/faucet', async (req, res) => {
+app.post('/api/faucet', strictLimiter, async (req, res) => {
   const { address } = req.body;
   if (!address) return res.status(400).json({ error: 'Missing address' });
 

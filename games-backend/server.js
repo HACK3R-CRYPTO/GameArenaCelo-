@@ -683,6 +683,21 @@ app.post('/api/faucet', async (req, res) => {
   }
 
   try {
+    // 1. Verify GoodDollar Identity on-chain to prevent bots
+    const provider = validator.provider;
+    const GOODDOLLAR_IDENTITY_ADDR = "0xC361A6E67822a0EDc17D899227dd9FC50BD62F42";
+    const ID_ABI = ["function isWhitelisted(address) view returns (bool)"];
+    
+    // We check the checksummed or non-checksummed address using ethers
+    const idContract = new ethers.Contract(GOODDOLLAR_IDENTITY_ADDR, ID_ABI, provider);
+    const isVerified = await idContract.isWhitelisted(address);
+
+    if (!isVerified) {
+      return res.status(403).json({ success: false, reason: 'unverified', error: 'Wallet must be verified via GoodDollar to claim free gas.' });
+    }
+
+    // 2. Send Gas
+
     const tx = await validator.sendTransaction({
       to: address,
       value: ethers.parseEther('0.025'),

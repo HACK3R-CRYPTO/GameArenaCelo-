@@ -65,9 +65,11 @@ export async function submitScore(
   // 3. Register / update streak
   const streak = await registerUser(lower);
 
-  // 4. Forward on-chain stuff to Express backend (wager resolve + GamePass record)
+  // 4. Forward to Express backend — handles on-chain tx + full DB save
   //    BACKEND_URL is a server env var — browser never sees it
   let txHash: string | null = null;
+  let backendHandled = false;
+  let rank = 0;
   try {
     const backendRes = await fetch(`${process.env.BACKEND_URL}/api/submit-score`, {
       method: 'POST',
@@ -75,24 +77,28 @@ export async function submitScore(
       body: JSON.stringify({ playerAddress, scoreData }),
     });
     const backendData = await backendRes.json();
-    txHash = backendData.txHash || null;
+    if (backendRes.ok && backendData.success) {
+      txHash = backendData.txHash || null;
+      rank = backendData.rank || 0;
+      backendHandled = true;
+    }
   } catch (_) {}
 
-  // 5. Save score to Supabase
-  await saveScore({
-    wallet_address: lower,
-    game,
-    score,
-    game_time: gameTime,
-    season_number: season,
-    wagered: scoreData.wagered || null,
-    wager_id: scoreData.wagerId || null,
-    tx_hash: txHash,
-  });
-
-  // 6. Get rank
-  const leaderboard = await getLeaderboard(game);
-  const rank = leaderboard.findIndex(e => e.wallet_address === lower) + 1;
+  // 5. Fallback: save directly to Supabase only if Express failed
+  if (!backendHandled) {
+    await saveScore({
+      wallet_address: lower,
+      game,
+      score,
+      game_time: gameTime,
+      season_number: season,
+      wagered: scoreData.wagered || null,
+      wager_id: scoreData.wagerId || null,
+      tx_hash: txHash,
+    });
+    const leaderboard = await getLeaderboard(game);
+    rank = leaderboard.findIndex(e => e.wallet_address === lower) + 1;
+  }
 
   return { success: true, score, rank, txHash, streak };
 }

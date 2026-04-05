@@ -411,43 +411,43 @@ app.post('/api/start-session', strictLimiter, async (req, res) => {
 app.post('/api/submit-score', requireSecret, strictLimiter, async (req, res) => {
   const { playerAddress, scoreData, session } = req.body;
 
-  if (!playerAddress || !scoreData || !session) {
-    return res.status(400).json({ error: 'Missing playerAddress, scoreData, or session token' });
+  const isInternalCall = req.headers['x-internal-secret'] === INTERNAL_SECRET && INTERNAL_SECRET;
+
+  if (!playerAddress || !scoreData) {
+    return res.status(400).json({ error: 'Missing playerAddress or scoreData' });
   }
 
-  // 1. Verify "Silent" Session Integrity
-  try {
-    const { token, timestamp, nonce, playerAddress: tokenPlayer } = session;
-    
-    // Safety checks
-    if (tokenPlayer.toLowerCase() !== playerAddress.toLowerCase()) {
-      return res.status(403).json({ error: 'Session player mismatch' });
-    }
+  // 1. Verify "Silent" Session Integrity (skipped for trusted server-action calls)
+  if (!isInternalCall) {
+    if (!session) return res.status(400).json({ error: 'Missing session token' });
+    try {
+      const { token, timestamp, nonce, playerAddress: tokenPlayer } = session;
 
-    const payload = `${playerAddress.toLowerCase()}:${timestamp}:${nonce}`;
-    const recoveredAddress = ethers.verifyMessage(payload, token);
-    
-    if (recoveredAddress.toLowerCase() !== validator.address.toLowerCase()) {
-      return res.status(403).json({ error: 'Invalid session token' });
-    }
+      if (tokenPlayer.toLowerCase() !== playerAddress.toLowerCase()) {
+        return res.status(403).json({ error: 'Session player mismatch' });
+      }
 
-    // Time elapsed check: Date.now() - session.timestamp should be >= reported scoreData.gameTime
-    const actualElapsed = Date.now() - timestamp;
-    const reportedTime  = scoreData.gameTime || 0;
-    
-    // Add 2s grace for latency, but if they report 30s game and only 5s passed => bot.
-    if (actualElapsed < (reportedTime - 2000)) {
-      console.warn(`🚨 Anti-cheat: Speed hack detected from ${playerAddress}. Reported ${reportedTime}ms, but only ${actualElapsed}ms elapsed.`);
-      return res.status(403).json({ error: 'Cheating detected: Speed hack' });
-    }
+      const payload = `${playerAddress.toLowerCase()}:${timestamp}:${nonce}`;
+      const recoveredAddress = ethers.verifyMessage(payload, token);
 
-    // Token expiry (e.g. 5 mins max per game)
-    if (actualElapsed > 10 * 60 * 1000) {
-      return res.status(403).json({ error: 'Session expired' });
-    }
+      if (recoveredAddress.toLowerCase() !== validator.address.toLowerCase()) {
+        return res.status(403).json({ error: 'Invalid session token' });
+      }
 
-  } catch (e) {
-    return res.status(400).json({ error: 'Session verification failed' });
+      const actualElapsed = Date.now() - timestamp;
+      const reportedTime  = scoreData.gameTime || 0;
+
+      if (actualElapsed < (reportedTime - 2000)) {
+        console.warn(`🚨 Anti-cheat: Speed hack detected from ${playerAddress}. Reported ${reportedTime}ms, but only ${actualElapsed}ms elapsed.`);
+        return res.status(403).json({ error: 'Cheating detected: Speed hack' });
+      }
+
+      if (actualElapsed > 10 * 60 * 1000) {
+        return res.status(403).json({ error: 'Session expired' });
+      }
+    } catch (e) {
+      return res.status(400).json({ error: 'Session verification failed' });
+    }
   }
 
   const check = validateScore(scoreData);
@@ -505,7 +505,7 @@ app.post('/api/submit-score', requireSecret, strictLimiter, async (req, res) => 
 });
 
 // ─── GET /api/leaderboard?game=rhythm|simon ─────────────────────────────────
-app.get('/api/leaderboard', requireSecret, async (req, res) => {
+app.get('/api/leaderboard', async (req, res) => {
   const game = req.query.game;
   if (!['rhythm', 'simon'].includes(game)) {
     return res.status(400).json({ error: 'game must be rhythm or simon' });
@@ -524,7 +524,7 @@ app.get('/api/leaderboard', requireSecret, async (req, res) => {
 });
 
 // ─── GET /api/activity ──────────────────────────────────────────────────────
-app.get('/api/activity', requireSecret, async (_, res) => {
+app.get('/api/activity', async (_, res) => {
   const entries = await getActivity(10);
   const enriched = await Promise.all(entries.map(async (e) => ({
     player: e.wallet_address,
@@ -538,7 +538,7 @@ app.get('/api/activity', requireSecret, async (_, res) => {
 });
 
 // ─── GET /api/stats ─────────────────────────────────────────────────────────
-app.get('/api/stats', requireSecret, async (_, res) => {
+app.get('/api/stats', async (_, res) => {
   const season = currentSeasonNumber();
   const { start, end } = seasonBounds(season);
   const startDate = new Date(start * 1000).toISOString();
@@ -601,7 +601,7 @@ app.get('/api/stats', requireSecret, async (_, res) => {
 });
 
 // ─── GET /api/seasons ───────────────────────────────────────────────────────
-app.get('/api/seasons', requireSecret, async (_, res) => {
+app.get('/api/seasons', async (_, res) => {
   const current = currentSeasonNumber();
   const { start, end } = seasonBounds(current);
   const startDate = new Date(start * 1000).toISOString();
@@ -672,7 +672,7 @@ app.get('/api/seasons', requireSecret, async (_, res) => {
 });
 
 // ─── GET /api/badges/:address ───────────────────────────────────────────────
-app.get('/api/badges/:address', requireSecret, async (req, res) => {
+app.get('/api/badges/:address', async (req, res) => {
   const addr = req.params.address.toLowerCase();
   const badges = await getBadges(addr);
 
@@ -726,7 +726,7 @@ app.get('/api/badges/:address', requireSecret, async (req, res) => {
 });
 
 // ─── GET /api/streak/:address ────────────────────────────────────────────
-app.get('/api/streak/:address', requireSecret, async (req, res) => {
+app.get('/api/streak/:address', async (req, res) => {
   const addr = req.params.address.toLowerCase();
   const today = new Date().toISOString().split('T')[0];
   const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];

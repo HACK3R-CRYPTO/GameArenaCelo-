@@ -40,6 +40,8 @@ export default function SimonGame() {
   const [bonusUnlocked, setBonusUnlocked]       = useState(false);
   const [countdown, setCountdown]               = useState<number | string | null>(null);
   const [submitting, setSubmitting]             = useState(false);
+  const [streak, setStreak]                     = useState<number | null>(null);
+  const [gameTimeMs, setGameTimeMs]             = useState(0);
 
   const audioCtxRef    = useRef<AudioContext | null>(null);
   const startTimeRef   = useRef(0);
@@ -108,6 +110,7 @@ export default function SimonGame() {
     playWrong();
     setGameOver(true); setGameActive(false);
     setIsShowingSequence(false); setActiveBtn(null);
+    setGameTimeMs(gameTime);
     clearTimeouts();
     if (!address || !authenticated) return;
     setSubmitting(true);
@@ -117,7 +120,10 @@ export default function SimonGame() {
       const result = await submitScore(token, address, {
         game: 'simon', score: finalScore, gameTime,
       });
-      if (result.success && result.rank) setMyRank(result.rank);
+      if (result.success) {
+        if (result.rank) setMyRank(result.rank);
+        if (result.streak) setStreak(result.streak);
+      }
     } catch (_) {
     } finally {
       setSubmitting(false);
@@ -176,7 +182,7 @@ export default function SimonGame() {
     setGamePattern([]); setScore(0); setSequences(0);
     setGameOver(false); setGameActive(true);
     setIsShowingSequence(false); setActiveBtn(null);
-    setMyRank(null); setRoundFlash(null);
+    setMyRank(null); setRoundFlash(null); setStreak(null); setGameTimeMs(0);
     startTimeRef.current = Date.now();
     addNext([]);
   }, [addNext]);
@@ -272,6 +278,13 @@ export default function SimonGame() {
           })}
         </div>
 
+        {/* Quit button */}
+        {gameActive && !gameOver && (
+          <button onClick={() => handleGameOver(scoreRef.current, Date.now() - startTimeRef.current)} style={{ width: '100%', padding: '10px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: '8px', color: '#ef4444', fontSize: '12px', fontWeight: 700, letterSpacing: '2px', cursor: 'pointer', marginBottom: '8px' }}>
+            END GAME
+          </button>
+        )}
+
         {/* Pattern dots */}
         {gameActive && !isShowingSequence && patternRef.current.length > 0 && (
           <div style={{ display: 'flex', justifyContent: 'center', gap: '4px', marginBottom: '16px', flexWrap: 'wrap' }}>
@@ -289,30 +302,83 @@ export default function SimonGame() {
           </button>
         )}
 
-        {/* Game over */}
-        {gameOver && (
-          <div>
-            <div style={{ background: 'rgba(6,182,212,0.08)', border: '1px solid rgba(6,182,212,0.3)', borderRadius: '8px', padding: '20px', textAlign: 'center', marginBottom: '16px' }}>
-              <div style={{ color: '#fff', fontSize: '42px', fontWeight: 900 }}>{score}</div>
-              <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '4px' }}>{sequences} rounds · {diffLabel}</div>
-              {submitting && <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '8px' }}>saving score...</div>}
-              {myRank && !submitting && (
-                <div style={{ marginTop: '10px', color: myRank <= 3 ? '#f59e0b' : '#06b6d4', fontSize: '13px', fontWeight: 700 }}>
-                  {myRank === 1 ? '🥇' : myRank === 2 ? '🥈' : myRank === 3 ? '🥉' : '🏅'} RANK #{myRank}
+        {/* Game over overlay */}
+        {gameOver && (() => {
+          const grade = sequences >= 10 ? 'S' : sequences >= 7 ? 'A' : sequences >= 5 ? 'B' : sequences >= 3 ? 'C' : 'D';
+          const gradeColor: Record<string, string> = { S: '#f59e0b', A: '#10b981', B: '#06b6d4', C: '#a855f7', D: '#6b7280' };
+          const gradeLabel: Record<string, string> = { S: 'LEGENDARY', A: 'SKILLED', B: 'SOLID', C: 'DECENT', D: 'KEEP GOING' };
+          return (
+            <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', background: 'rgba(5,5,15,0.6)', animation: 'fadeIn 0.2s ease' }}>
+              <div style={{ background: '#0a0a1a', borderTop: `2px solid ${gradeColor[grade]}40`, borderRadius: '24px 24px 0 0', padding: '32px 24px 40px', animation: 'slideUp 0.4s cubic-bezier(0.34,1.2,0.64,1)' }}>
+
+                {/* Title */}
+                <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                  <div style={{ color: '#6b7280', fontSize: '10px', letterSpacing: '3px', marginBottom: '4px' }}>SIMON_MEMORY · RESULT</div>
+                  <div style={{ width: '40px', height: '2px', background: gradeColor[grade], margin: '0 auto', borderRadius: '2px' }} />
                 </div>
-              )}
+
+                {/* Grade + Score */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', marginBottom: '28px' }}>
+                  <div style={{ width: '72px', height: '72px', borderRadius: '16px', background: `${gradeColor[grade]}15`, border: `2px solid ${gradeColor[grade]}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px', fontWeight: 900, color: gradeColor[grade], boxShadow: `0 0 24px ${gradeColor[grade]}40` }}>{grade}</div>
+                  <div>
+                    <div style={{ color: '#fff', fontSize: '52px', fontWeight: 900, lineHeight: 1 }}>{score}</div>
+                    <div style={{ color: gradeColor[grade], fontSize: '11px', letterSpacing: '2px', fontWeight: 700, marginTop: '2px' }}>{gradeLabel[grade]}</div>
+                    <div style={{ color: '#4b5563', fontSize: '10px', marginTop: '3px' }}>{sequences} rounds · {diffLabel}</div>
+                  </div>
+                </div>
+
+                {/* Stats */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '12px' }}>
+                  {[
+                    { val: sequences,                      label: 'ROUNDS',  color: '#06b6d4' },
+                    { val: bonusUnlocked ? '5' : '4',      label: 'COLORS',  color: '#a855f7' },
+                    { val: `${(gameTimeMs/1000).toFixed(1)}s`, label: 'TIME', color: '#10b981' },
+                  ].map(s => (
+                    <div key={s.label} style={{ textAlign: 'center', padding: '12px 4px', background: 'rgba(255,255,255,0.03)', borderRadius: '10px' }}>
+                      <div style={{ color: s.color, fontSize: '22px', fontWeight: 900 }}>{s.val}</div>
+                      <div style={{ color: '#4b5563', fontSize: '8px', letterSpacing: '1px', marginTop: '2px' }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Rank + bonus */}
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '24px', minHeight: '28px', flexWrap: 'wrap' }}>
+                  {submitting && <span style={{ color: '#4b5563', fontSize: '11px', letterSpacing: '1px' }}>SAVING...</span>}
+                  {myRank > 0 && !submitting && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', padding: '6px 20px', background: myRank <= 3 ? `${gradeColor[grade]}15` : 'rgba(255,255,255,0.04)', border: `1px solid ${myRank <= 3 ? gradeColor[grade] : 'rgba(255,255,255,0.08)'}`, borderRadius: '20px' }}>
+                      <span style={{ color: myRank <= 3 ? gradeColor[grade] : '#6b7280', fontSize: '13px', fontWeight: 900 }}>
+                        {myRank === 1 ? '🥇 RANK #1' : myRank === 2 ? '🥈 RANK #2' : myRank === 3 ? '🥉 RANK #3' : `RANK #${myRank}`}
+                      </span>
+                    </div>
+                  )}
+                  {bonusUnlocked && !submitting && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', padding: '6px 14px', background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.3)', borderRadius: '20px' }}>
+                      <span style={{ color: '#a855f7', fontSize: '11px', fontWeight: 700 }}>🟣 5TH COLOR</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Buttons */}
+                <button onClick={startGame} style={{ width: '100%', padding: '15px', background: 'linear-gradient(135deg,#06b6d4,#0891b2)', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '13px', fontWeight: 700, letterSpacing: '2px', cursor: 'pointer', fontFamily: 'Orbitron, monospace', marginBottom: '10px' }}>
+                  PLAY AGAIN
+                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={() => router.push('/leaderboard')} style={{ flex: 1, padding: '13px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: '#9ca3af', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'Orbitron, monospace' }}>
+                    SCORES
+                  </button>
+                  <button onClick={() => { const text = `🧠 GameArena — Simon Memory\n🎯 Score: ${score} | Grade: ${grade} | ${sequences} Rounds\n${bonusUnlocked ? '🟣 5th color unlocked!' : ''}\n\nPlay: ${window.location.origin}`; navigator.clipboard.writeText(text); }} style={{ flex: 1, padding: '13px', background: 'rgba(6,182,212,0.08)', border: '1px solid rgba(6,182,212,0.25)', borderRadius: '12px', color: '#06b6d4', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'Orbitron, monospace' }}>
+                    SHARE
+                  </button>
+                </div>
+              </div>
             </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={startGame} style={{ flex: 1, padding: '12px', background: 'linear-gradient(135deg,#06b6d4,#0891b2)', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
-                PLAY AGAIN
-              </button>
-              <button onClick={() => router.push('/leaderboard')} style={{ flex: 1, padding: '12px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#9ca3af', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
-                SCORES
-              </button>
-            </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
+      <style>{`
+        @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+        @keyframes fadeIn  { from{opacity:0} to{opacity:1} }
+      `}</style>
     </div>
   );
 }

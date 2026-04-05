@@ -56,6 +56,8 @@ export default function RhythmRush() {
   const [signingOnChain, setSigningOnChain] = useState(false);
   const [, setStreak]                       = useState<number | null>(null);
   const [gameTimeMs, setGameTimeMs]         = useState(0);
+  const [beatTick, setBeatTick]             = useState(0);
+  const beatTickRef                         = useRef(0);
 
   const gameTimerRef       = useRef<ReturnType<typeof setInterval> | null>(null);
   const beatIntervalRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -103,6 +105,8 @@ export default function RhythmRush() {
     if (beatIntervalRef.current) clearTimeout(beatIntervalRef.current);
     beatIntervalRef.current = setTimeout(() => {
       beatHitRef.current = false;
+      beatTickRef.current += 1;
+      setBeatTick(beatTickRef.current);
       setCurrentTarget(prev => {
         let next: number;
         do { next = Math.floor(Math.random() * 4) + 1; } while (next === prev);
@@ -261,7 +265,9 @@ export default function RhythmRush() {
       missRef.current++; setMissHits(missRef.current);
       comboRef.current = 0; setCombo(0); setComboMultiplier(1);
       bpmRef.current = Math.max(BASE_BPM, bpmRef.current - 10); setBpm(bpmRef.current);
-      playTone('miss'); setFeedback('WRONG!'); setFeedbackType('miss');
+      const penalty = 8;
+      setScore(p => { const n = Math.max(0, p - penalty); scoreRef.current = n; return n; });
+      playTone('miss'); setFeedback(`WRONG! -${penalty}`); setFeedbackType('miss');
     }
     setTimeout(() => { setFeedback(''); setFeedbackType(''); }, 600);
   }, [gameActive, currentTarget]);
@@ -351,29 +357,50 @@ export default function RhythmRush() {
         </div>
 
         {/* Buttons 2×2 */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
+        <style>{`
+          @keyframes beatRing {
+            from { transform: scale(2.2); opacity: 0.9; }
+            to   { transform: scale(1.0); opacity: 0; }
+          }
+        `}</style>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginBottom: '24px' }}>
           {[1, 2, 3, 4].map(btn => {
             const c = BUTTON_COLORS[btn];
             const isTarget = gameActive && btn === currentTarget;
             return (
-              <button
-                key={btn}
-                onPointerDown={e => { e.preventDefault(); handleButtonClick(btn); }}
-                disabled={!gameActive || gameOver}
-                style={{
-                  aspectRatio: '1',
-                  borderRadius: '16px',
-                  border: `3px solid ${isTarget ? c.active : 'rgba(255,255,255,0.08)'}`,
-                  background: isTarget ? `${c.active}33` : `${c.active}11`,
-                  boxShadow: isTarget ? `0 0 32px ${c.glow}` : 'none',
-                  transform: isTarget ? 'scale(1.06)' : 'scale(1)',
-                  transition: 'all 0.1s ease',
-                  cursor: gameActive ? 'pointer' : 'default',
-                  minHeight: '80px',
-                }}
-              >
-                <span style={{ color: c.active, fontSize: '10px', fontWeight: 700 }}>{c.key}</span>
-              </button>
+              <div key={btn} style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {isTarget && (
+                  <div
+                    key={`ring-${beatTick}`}
+                    style={{
+                      position: 'absolute',
+                      width: '72px',
+                      height: '72px',
+                      borderRadius: '50%',
+                      border: `2px solid ${c.active}`,
+                      animation: `beatRing ${getBeatInterval(bpm)}ms linear forwards`,
+                      pointerEvents: 'none',
+                    }}
+                  />
+                )}
+                <button
+                  onPointerDown={e => { e.preventDefault(); handleButtonClick(btn); }}
+                  disabled={!gameActive || gameOver}
+                  style={{
+                    width: '72px',
+                    height: '72px',
+                    borderRadius: '50%',
+                    border: `3px solid ${isTarget ? c.active : 'rgba(255,255,255,0.08)'}`,
+                    background: isTarget ? `${c.active}33` : `${c.active}11`,
+                    boxShadow: isTarget ? `0 0 32px ${c.glow}, 0 0 8px ${c.glow}` : 'none',
+                    transform: isTarget ? 'scale(1.15)' : 'scale(1)',
+                    transition: 'all 0.1s ease',
+                    cursor: gameActive ? 'pointer' : 'default',
+                  }}
+                >
+                  <span style={{ color: c.active, fontSize: '9px', fontWeight: 700 }}>{c.key}</span>
+                </button>
+              </div>
             );
           })}
         </div>

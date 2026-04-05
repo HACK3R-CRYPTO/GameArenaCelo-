@@ -245,7 +245,7 @@ export default function SimonGame() {
   if (!ready || !authenticated) return null;
 
   return (
-    <div style={{ fontFamily: 'Orbitron, monospace', padding: '24px', maxWidth: '440px', margin: '0 auto' }}>
+    <div style={{ fontFamily: 'Orbitron, monospace', padding: '24px 16px', maxWidth: '440px', margin: '0 auto' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
@@ -264,7 +264,7 @@ export default function SimonGame() {
         </div>
       )}
 
-      <div style={{ background: 'rgba(10,10,20,0.8)', border: `1px solid rgba(6,182,212,${gameActive ? 0.4 : 0.2})`, borderRadius: '12px', padding: '28px' }}>
+      <div style={{ background: 'rgba(10,10,20,0.8)', border: `1px solid rgba(6,182,212,${gameActive ? 0.4 : 0.2})`, borderRadius: '12px', padding: bonusUnlocked ? '20px 12px' : '28px' }}>
         {/* Score + round */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
           <div style={{ textAlign: 'center' }}>
@@ -303,7 +303,7 @@ export default function SimonGame() {
         )}
 
         {/* Buttons */}
-        <div style={{ display: 'grid', gridTemplateColumns: bonusUnlocked ? '1fr 1fr 1fr' : '1fr 1fr', gap: '14px', marginBottom: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: bonusUnlocked ? '1fr 1fr 1fr' : '1fr 1fr', gap: bonusUnlocked ? '8px' : '14px', marginBottom: '24px' }}>
           {availableColors.map(btn => {
             const isActive = activeBtn === btn.id;
             return (

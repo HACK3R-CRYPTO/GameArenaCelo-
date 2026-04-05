@@ -35,11 +35,35 @@ async function verifyUser(accessToken: string, claimedAddress: string) {
 }
 
 // ─── rollDice ────────────────────────────────────────────────────────────────
-// Generates a cryptographically secure dice roll (1–6) on the server.
-// Client-side Math.random overrides cannot affect this result.
-export async function rollDice(): Promise<number> {
+// Requires a valid Privy session + matchId.
+// The roll is cached in Supabase per matchId — calling this twice for the
+// same match always returns the same number, so cherry-picking is pointless.
+export async function rollDice(accessToken: string, matchId: number): Promise<number | null> {
+  // 1. Must be an authenticated user
+  try {
+    await privy.verifyAuthToken(accessToken);
+  } catch {
+    return null;
+  }
+
+  // 2. Return cached roll if one already exists for this match
+  const { data: existing } = await supabase
+    .from('dice_rolls')
+    .select('roll')
+    .eq('match_id', matchId)
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    return existing[0].roll as number;
+  }
+
+  // 3. Generate a fresh roll and cache it
   const { randomInt } = await import('crypto');
-  return randomInt(1, 7); // 1 to 6 inclusive
+  const roll = randomInt(1, 7);
+
+  await supabase.from('dice_rolls').insert({ match_id: matchId, roll });
+
+  return roll;
 }
 
 // ─── submitScore ─────────────────────────────────────────────────────────────

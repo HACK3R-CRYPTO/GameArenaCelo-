@@ -41,7 +41,7 @@ export default function ArenaGame() {
     address,
     query: { refetchInterval: false, staleTime: 30000 },
   });
-  const { login } = usePrivy();
+  const { login, getAccessToken } = usePrivy();
   const publicClient = usePublicClient();
 
   const { isVerified, isVerifying, verifyIdentity, cancelVerification, claimG$, entitlement } = useSelfVerification();
@@ -566,7 +566,7 @@ export default function ArenaGame() {
             </div>
             <div style={{ padding: '16px 24px 28px' }}>
               {activeMatch.gameType === 1 ? (
-                <button onClick={async () => { const roll = await rollDice(); handlePlayMove(activeMatch.id, roll); }} className="hover:scale-[1.02] transition-all" style={{ width: '100%', padding: '28px', borderRadius: '16px', cursor: 'pointer', background: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(168,85,247,0.05))', border: '1px solid rgba(168,85,247,0.3)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', fontFamily: 'Orbitron, monospace' }}>
+                <button onClick={async () => { const token = await getAccessToken(); const roll = await rollDice(token ?? '', activeMatch.id); if (roll) handlePlayMove(activeMatch.id, roll); }} className="hover:scale-[1.02] transition-all" style={{ width: '100%', padding: '28px', borderRadius: '16px', cursor: 'pointer', background: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(168,85,247,0.05))', border: '1px solid rgba(168,85,247,0.3)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', fontFamily: 'Orbitron, monospace' }}>
                   <span style={{ fontSize: '48px' }}>🎲</span>
                   <span style={{ color: '#c084fc', fontSize: '14px', fontWeight: 900, letterSpacing: '2px' }}>ROLL DICE</span>
                 </button>

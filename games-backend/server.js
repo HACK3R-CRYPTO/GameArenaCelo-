@@ -454,8 +454,9 @@ app.post('/api/sign-score', requireSecret, async (req, res) => {
   if (!['rhythm', 'simon'].includes(game)) {
     return res.status(400).json({ error: 'Unknown game' });
   }
-  if (typeof score !== 'number' || score < 0 || score > 1_000_000) {
-    return res.status(400).json({ error: 'Score out of range' });
+  const MAX_SCORE = game === 'rhythm' ? 5000 : 2000;
+  if (typeof score !== 'number' || score < 0 || score > MAX_SCORE) {
+    return res.status(400).json({ error: `Score out of range (max ${MAX_SCORE})` });
   }
 
   const gameType = game === 'rhythm' ? 0 : 1;

@@ -66,6 +66,8 @@ export default function RhythmRush() {
   const beatHitRef = useRef(false);
   const audioContextRef = useRef(null);
   const toneGeneratorsRef = useRef({});
+  const sessionIdRef    = useRef(null);
+  const sessionTokenRef = useRef(null);
 
   const buttons = [1, 2, 3, 4];
   const BUTTON_COLORS = {
@@ -111,6 +113,21 @@ export default function RhythmRush() {
     if (typeof fn === 'function') fn();
   };
 
+  // Fire-and-forget: tell the backend what quality this hit was
+  const sendGameEvent = (quality) => {
+    if (!address || !sessionIdRef.current || !sessionTokenRef.current) return;
+    fetch(`${BACKEND_URL}/api/game-event`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: sessionIdRef.current,
+        playerAddress: address,
+        quality,
+        sessionToken: sessionTokenRef.current,
+      }),
+    }).catch(() => {});
+  };
+
   // Schedule next beat with dynamic BPM
   const scheduleNextBeat = () => {
     if (beatIntervalRef.current) clearTimeout(beatIntervalRef.current);
@@ -133,7 +150,7 @@ export default function RhythmRush() {
     }, getBeatInterval(bpmRef.current));
   };
 
-  const actualStart = () => {
+  const actualStart = async () => {
     setCountdown(null);
     setScore(0); scoreRef.current = 0;
     setCombo(0); comboRef.current = 0;
@@ -146,6 +163,8 @@ export default function RhythmRush() {
     setMissHits(0); missRef.current = 0;
     setTotalTaps(0); totalRef.current = 0;
     setCopied(false);
+    sessionIdRef.current    = null;
+    sessionTokenRef.current = null;
     setGameActive(true);
     setGameOver(false);
     setTimeRemaining(30);
@@ -157,6 +176,22 @@ export default function RhythmRush() {
     setComboFlash(null);
     startTimeRef.current = Date.now();
     targetStartTimeRef.current = Date.now();
+
+    // Start a server-side session so the backend can track and sign the score
+    if (address) {
+      try {
+        const r = await fetch(`${BACKEND_URL}/api/start-session`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerAddress: address, game: 'rhythm' }),
+        });
+        const d = await r.json();
+        if (d.sessionId) {
+          sessionIdRef.current    = d.sessionId;
+          sessionTokenRef.current = d.sessionToken;
+        }
+      } catch (_) {}
+    }
 
     beatHitRef.current = false;
     scheduleNextBeat();
@@ -203,15 +238,30 @@ export default function RhythmRush() {
       existing.sort((a, b) => b.score - a.score);
       localStorage.setItem('rhythmrush_scores', JSON.stringify(existing.slice(0, 10)));
     } catch (_) {}
-    if (!address) return;
+    if (!address || !sessionIdRef.current) return;
     try {
+      // Ask the server to sign the score it tracked — no client score is trusted
+      const endRes = await fetch(`${BACKEND_URL}/api/end-game`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: sessionIdRef.current,
+          playerAddress: address,
+          sessionToken: sessionTokenRef.current,
+        }),
+      });
+      if (!endRes.ok) return;
+      const { score: serverScore, signature, sessionId } = await endRes.json();
+
       const res = await fetch(`${BACKEND_URL}/api/submit-score`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           playerAddress: address,
+          signature,
+          sessionId,
           scoreData: {
-            game: 'rhythm', score: finalScore, gameTime,
+            game: 'rhythm', score: serverScore, gameTime,
             wagered: wagerInfo?.amount || null,
             wagerId: wagerInfo?.wagerId || null,
           },
@@ -314,6 +364,7 @@ export default function RhythmRush() {
         setPerfectStreak(p => p + 1);
         setFeedback(`PERFECT! +${pts}${mult > 1 ? ` (${mult}x)` : ''}`);
         setFeedbackType('perfect');
+        sendGameEvent('perfect');
       } else if (timeSince <= goodWindow) {
         goodRef.current++; setGoodHits(goodRef.current);
         const pts = 5 * mult;
@@ -321,6 +372,7 @@ export default function RhythmRush() {
         setPerfectStreak(0);
         setFeedback(`GOOD +${pts}${mult > 1 ? ` (${mult}x)` : ''}`);
         setFeedbackType('good');
+        sendGameEvent('good');
       } else {
         missRef.current++; setMissHits(missRef.current);
         comboRef.current = 0;
@@ -332,6 +384,7 @@ export default function RhythmRush() {
         playTone('miss');
         setFeedback('LATE!');
         setFeedbackType('miss');
+        sendGameEvent('miss');
       }
     } else {
       totalRef.current++; setTotalTaps(totalRef.current);
@@ -345,6 +398,7 @@ export default function RhythmRush() {
       playTone('miss');
       setFeedback('WRONG!');
       setFeedbackType('miss');
+      sendGameEvent('miss');
     }
 
     setTimeout(() => { setFeedback(''); setFeedbackType(''); }, 600);

@@ -59,6 +59,8 @@ export default function SimonGame() {
   const userPatternRef = useRef([]);
   const timeoutsRef    = useRef([]);
   const colorsRef      = useRef(BASE_COLORS);
+  const sessionIdRef    = useRef(null);
+  const sessionTokenRef = useRef(null);
 
   const clearTimeouts = () => {
     timeoutsRef.current.forEach(clearTimeout);
@@ -100,6 +102,21 @@ export default function SimonGame() {
 
   const playWrong = useCallback(() => playTone(100, 0.4), [playTone]);
   const playSuccess = useCallback(() => playTone(880, 0.15), [playTone]);
+
+  // Fire-and-forget: tell the backend what happened this event
+  const sendGameEvent = (quality) => {
+    if (!address || !sessionIdRef.current || !sessionTokenRef.current) return;
+    fetch(`${BACKEND_URL}/api/game-event`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: sessionIdRef.current,
+        playerAddress: address,
+        quality,
+        sessionToken: sessionTokenRef.current,
+      }),
+    }).catch(() => {});
+  };
 
   // Dynamic timing based on round
   const getFlashDuration = (round) => Math.max(MIN_FLASH_DURATION, BASE_FLASH_DURATION - round * 30);
@@ -159,15 +176,30 @@ export default function SimonGame() {
       localStorage.setItem('simon_scores', JSON.stringify(existing.slice(0, 10)));
     } catch (_) {}
 
-    if (!address) return;
+    if (!address || !sessionIdRef.current || !sessionTokenRef.current) return;
     try {
+      // Ask the server to sign the score it tracked — no client score is trusted
+      const endRes = await fetch(`${BACKEND_URL}/api/end-game`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: sessionIdRef.current,
+          playerAddress: address,
+          sessionToken: sessionTokenRef.current,
+        }),
+      });
+      if (!endRes.ok) return;
+      const { score: serverScore, signature, sessionId } = await endRes.json();
+
       const res = await fetch(`${BACKEND_URL}/api/submit-score`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           playerAddress: address,
+          signature,
+          sessionId,
           scoreData: {
-            game: 'simon', score: finalScore, gameTime,
+            game: 'simon', score: serverScore, gameTime,
             wagered: wagerInfo?.amount || null,
             wagerId: wagerInfo?.wagerId || null,
           },
@@ -237,6 +269,9 @@ export default function SimonGame() {
       scoreRef.current = newScore;
       setScore(newScore);
 
+      // Report sequence completion to backend for score tracking
+      sendGameEvent('sequence');
+
       // Show round complete flash
       playSuccess();
       setRoundFlash(`ROUND ${newSeqs} CLEAR!`);
@@ -257,14 +292,16 @@ export default function SimonGame() {
     }
   }, [gameActive, isShowingSequence, gameOver, playTone, handleGameOver, addNext, bonusUnlocked]);
 
-  const actualStart = () => {
+  const actualStart = async () => {
     setCountdown(null);
     clearTimeouts();
     patternRef.current     = [];
     userPatternRef.current = [];
     sequencesRef.current   = 0;
     scoreRef.current       = 0;
-    colorsRef.current      = BASE_COLORS;
+    colorsRef.current       = BASE_COLORS;
+    sessionIdRef.current    = null;
+    sessionTokenRef.current = null;
     setAvailableColors(BASE_COLORS);
     setBonusUnlocked(false);
     setCopied(false);
@@ -279,6 +316,22 @@ export default function SimonGame() {
     setNextGap(null);
     setRoundFlash(null);
     startTimeRef.current = Date.now();
+
+    if (address) {
+      try {
+        const r = await fetch(`${BACKEND_URL}/api/start-session`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerAddress: address, game: 'simon' }),
+        });
+        const d = await r.json();
+        if (d.sessionId) {
+          sessionIdRef.current    = d.sessionId;
+          sessionTokenRef.current = d.sessionToken;
+        }
+      } catch (_) {}
+    }
+
     addNext([]);
   };
 

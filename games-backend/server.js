@@ -8,22 +8,38 @@ const rateLimit = require('express-rate-limit');
 const app  = express();
 const PORT = process.env.PORT || 3005;
 
-app.use(cors());
+// ─── CORS — only the Next.js frontend may call this server ───────────────────
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000').split(',').map(o => o.trim());
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow server-to-server calls (no origin header) from Next.js server actions
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: origin ${origin} not allowed`));
+  },
+}));
 app.use(express.json());
 
 // ─── Rate Limiting ──────────────────────────────────────────────────────────
 const standardLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
-  max: 30, // limit each IP to 30 requests per windowMs
+  max: 30,
   message: { error: 'Too many requests, please try again later.' }
 });
 
 const strictLimiter = rateLimit({
   windowMs: 5 * 60 * 1000, // 5 minutes
-  max: 10, // limit each IP to 10 requests per windowMs (faucet/score)
+  max: 10,
   message: { error: 'Rate limit exceeded. Please wait a few minutes.' }
 });
 
+// ─── Internal secret — every request from Next.js must include this header ───
+const INTERNAL_SECRET = process.env.INTERNAL_SECRET;
+function requireSecret(req, res, next) {
+  if (!INTERNAL_SECRET) return next();
+  if (req.headers['x-internal-secret'] === INTERNAL_SECRET) return next();
+  return res.status(401).json({ error: 'Unauthorized' });
+}
 
 // ─── Supabase ────────────────────────────────────────────────────────────────
 const supabase = createClient(
@@ -365,7 +381,7 @@ function validateScore({ score, gameTime, game }) {
 }
 
 // ─── POST /api/start-session ───────────────────────────────────────────────
-app.post('/api/start-session', strictLimiter, async (req, res) => {
+app.post('/api/start-session', requireSecret, strictLimiter, async (req, res) => {
   const { playerAddress } = req.body;
   if (!playerAddress) return res.status(400).json({ error: 'Missing playerAddress' });
   if (!validator) return res.status(500).json({ error: 'Validator not ready' });
@@ -392,7 +408,7 @@ app.post('/api/start-session', strictLimiter, async (req, res) => {
 });
 
 // ─── POST /api/submit-score ─────────────────────────────────────────────────
-app.post('/api/submit-score', strictLimiter, async (req, res) => {
+app.post('/api/submit-score', requireSecret, strictLimiter, async (req, res) => {
   const { playerAddress, scoreData, session } = req.body;
 
   if (!playerAddress || !scoreData || !session) {
@@ -489,7 +505,7 @@ app.post('/api/submit-score', strictLimiter, async (req, res) => {
 });
 
 // ─── GET /api/leaderboard?game=rhythm|simon ─────────────────────────────────
-app.get('/api/leaderboard', async (req, res) => {
+app.get('/api/leaderboard', requireSecret, async (req, res) => {
   const game = req.query.game;
   if (!['rhythm', 'simon'].includes(game)) {
     return res.status(400).json({ error: 'game must be rhythm or simon' });
@@ -508,7 +524,7 @@ app.get('/api/leaderboard', async (req, res) => {
 });
 
 // ─── GET /api/activity ──────────────────────────────────────────────────────
-app.get('/api/activity', async (_, res) => {
+app.get('/api/activity', requireSecret, async (_, res) => {
   const entries = await getActivity(10);
   const enriched = await Promise.all(entries.map(async (e) => ({
     player: e.wallet_address,
@@ -522,7 +538,7 @@ app.get('/api/activity', async (_, res) => {
 });
 
 // ─── GET /api/stats ─────────────────────────────────────────────────────────
-app.get('/api/stats', async (_, res) => {
+app.get('/api/stats', requireSecret, async (_, res) => {
   const season = currentSeasonNumber();
   const { start, end } = seasonBounds(season);
   const startDate = new Date(start * 1000).toISOString();
@@ -585,7 +601,7 @@ app.get('/api/stats', async (_, res) => {
 });
 
 // ─── GET /api/seasons ───────────────────────────────────────────────────────
-app.get('/api/seasons', async (_, res) => {
+app.get('/api/seasons', requireSecret, async (_, res) => {
   const current = currentSeasonNumber();
   const { start, end } = seasonBounds(current);
   const startDate = new Date(start * 1000).toISOString();
@@ -656,7 +672,7 @@ app.get('/api/seasons', async (_, res) => {
 });
 
 // ─── GET /api/badges/:address ───────────────────────────────────────────────
-app.get('/api/badges/:address', async (req, res) => {
+app.get('/api/badges/:address', requireSecret, async (req, res) => {
   const addr = req.params.address.toLowerCase();
   const badges = await getBadges(addr);
 
@@ -710,7 +726,7 @@ app.get('/api/badges/:address', async (req, res) => {
 });
 
 // ─── GET /api/streak/:address ────────────────────────────────────────────
-app.get('/api/streak/:address', async (req, res) => {
+app.get('/api/streak/:address', requireSecret, async (req, res) => {
   const addr = req.params.address.toLowerCase();
   const today = new Date().toISOString().split('T')[0];
   const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
@@ -737,8 +753,14 @@ app.get('/api/streak/:address', async (req, res) => {
   res.json({ streak, playedToday });
 });
 
+// ─── POST /api/dice-roll — server-side randomness (blocks Math.random override) ─
+app.post('/api/dice-roll', requireSecret, async (_, res) => {
+  const { randomInt } = require('crypto');
+  res.json({ roll: randomInt(1, 7) }); // 1–6 inclusive, cryptographically secure
+});
+
 // ─── POST /api/faucet — send 0.01 CELO to new users (once per wallet) ────────
-app.post('/api/faucet', strictLimiter, async (req, res) => {
+app.post('/api/faucet', requireSecret, strictLimiter, async (req, res) => {
   const { address } = req.body;
   if (!address) return res.status(400).json({ error: 'Missing address' });
 
@@ -760,12 +782,10 @@ app.post('/api/faucet', strictLimiter, async (req, res) => {
   }
 
   try {
-    // 1. Verify GoodDollar Identity on-chain to prevent bots
     const provider = validator.provider;
     const GOODDOLLAR_IDENTITY_ADDR = "0xC361A6E67822a0EDc17D899227dd9FC50BD62F42";
     const ID_ABI = ["function isWhitelisted(address) view returns (bool)"];
-    
-    // We check the checksummed or non-checksummed address using ethers
+
     const idContract = new ethers.Contract(GOODDOLLAR_IDENTITY_ADDR, ID_ABI, provider);
     const isVerified = await idContract.isWhitelisted(address);
 
@@ -773,15 +793,12 @@ app.post('/api/faucet', strictLimiter, async (req, res) => {
       return res.status(403).json({ success: false, reason: 'unverified', error: 'Wallet must be verified via GoodDollar to claim free gas.' });
     }
 
-    // 2. Send Gas
-
     const tx = await validator.sendTransaction({
       to: address,
       value: ethers.parseEther('0.025'),
     });
     await tx.wait();
 
-    // Mark as sent
     await supabase.from('faucet').insert({ wallet_address: lower });
 
     console.log(`⛽ Faucet: sent 0.025 CELO to ${lower} (tx: ${tx.hash.slice(0, 10)}...)`);
@@ -844,7 +861,6 @@ async function indexOnChainScores() {
         if (block) timestamp = new Date(Number(block.timestamp) * 1000).toISOString();
       } catch (_) {}
 
-      // Check if already in Supabase with better score
       const { data: existing } = await supabase
         .from('scores')
         .select('id, score')
@@ -872,7 +888,6 @@ async function indexOnChainScores() {
         });
       }
 
-      // Register user
       await registerUser(player);
       added++;
     }

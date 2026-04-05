@@ -11,20 +11,16 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:300
 const TABS = [
   { id: 'live', label: 'RANKINGS' },
   { id: 'history', label: 'SEASONS' },
-  { id: 'pvp', label: 'PVP ARENA' },
+  { id: 'pvp', label: 'PVP' },
 ];
 const GAME_TABS = [
   { id: 'rhythm', label: 'RHYTHM_RUSH', accent: '#a855f7' },
   { id: 'simon', label: 'SIMON_MEMORY', accent: '#06b6d4' },
 ];
 const MEDALS = ['🥇', '🥈', '🥉'];
-const BADGE_COLORS: Record<string, string> = { gold: '#f59e0b', silver: '#9ca3af', bronze: '#b45309' };
 const GAME_ACCENT: Record<string, string> = { rhythm: '#a855f7', simon: '#06b6d4' };
 
 type Entry = { player: string; username?: string; score: number; timestamp: number; gWon?: number };
-type Badge = { type: string; rank: number; season: number; game: string; score?: number };
-type BadgesData = { badges: Badge[]; summary: { streakLabel?: string; totalGold?: number; totalSilver?: number; totalBronze?: number } };
-
 function fmt(addr: string, username?: string) {
   if (!addr || addr === 'you') return 'YOU';
   if (username) return username;
@@ -43,25 +39,6 @@ function formatDate(ts: number) {
   return new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function BadgeChip({ badge }: { badge: Badge }) {
-  const color = BADGE_COLORS[badge.type];
-  const medal = badge.rank === 1 ? '🥇' : badge.rank === 2 ? '🥈' : '🥉';
-  const game = badge.game === 'rhythm' ? 'RR' : 'SM';
-  return (
-    <div title={`#${badge.rank} in ${badge.game === 'rhythm' ? 'Rhythm Rush' : 'Simon Memory'} — Week ${badge.season}`}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '2px 7px', borderRadius: '10px', background: `${color}18`, border: `1px solid ${color}50`, fontSize: '9px', fontWeight: 700, color, letterSpacing: '0.5px', cursor: 'default' }}>
-      {medal} W{badge.season} {game}
-    </div>
-  );
-}
-
-function StreakBanner({ label }: { label: string }) {
-  return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 12px', borderRadius: '12px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.4)', fontSize: '10px', fontWeight: 900, color: '#f59e0b', letterSpacing: '1px' }}>
-      🔥 {label}
-    </div>
-  );
-}
 
 function SeasonRow({ season, game, myAddress, accent }: { season: { season: number; startTs: number; endTs: number; [key: string]: unknown }; game: string; myAddress?: string; accent: string }) {
   const entries = (season[game] as Entry[]) || [];
@@ -101,50 +78,69 @@ export default function Leaderboard() {
   const { address } = useAccount();
   const [activeTab, setActiveTab] = useState('live');
   const [gameTab, setGameTab] = useState('rhythm');
-  const [entries, setEntries] = useState<Entry[]>([]);
+  const [podium, setPodium] = useState<Entry[]>([]);
+  const [listEntries, setListEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
   const [backendDown, setBackendDown] = useState(false);
   const [newEntries, setNewEntries] = useState(new Set<string>());
   const [countdown, setCountdown] = useState(15);
   const [seasons, setSeasons] = useState<unknown>(null);
-  const [badges, setBadges] = useState<BadgesData | null>(null);
   const [pvpMatches, setPvpMatches] = useState<{ id: number; challenger: string; opponent: string; wager: bigint; gameType: number; status: number; winner: string }[]>([]);
   const [pvpLeaders, setPvpLeaders] = useState<{ address: string; count: number }[]>([]);
-  const [showAll, setShowAll] = useState(false);
+  const [listPage, setListPage] = useState(1);
+  const [totalListPages, setTotalListPages] = useState(1);
+  const [totalEntries, setTotalEntries] = useState(0);
   const prevPlayers = useRef(new Set<string>());
   const countRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const publicClient = usePublicClient();
 
   const tab = GAME_TABS.find(t => t.id === gameTab)!;
 
-  const fetchScores = useCallback(async (game: string, silent = false) => {
+  const LIST_SIZE = 7;
+
+  const fetchPodium = useCallback(async (game: string) => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/leaderboard?game=${game}&offset=0&limit=3`);
+      const data = await res.json();
+      setPodium(data.leaderboard || []);
+      setTotalEntries(data.total || 0);
+    } catch {}
+  }, []);
+
+  const fetchList = useCallback(async (game: string, p = 1, silent = false) => {
     if (!silent) setLoading(true);
     setBackendDown(false);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/leaderboard?game=${game}`);
+      const offset = 3 + (p - 1) * LIST_SIZE;
+      const res = await fetch(`${BACKEND_URL}/api/leaderboard?game=${game}&offset=${offset}&limit=${LIST_SIZE}`);
       const data = await res.json();
       const list: Entry[] = data.leaderboard || [];
       const fresh = new Set<string>();
       list.forEach(e => { if (!prevPlayers.current.has(e.player)) fresh.add(e.player); });
       if (fresh.size) { setNewEntries(fresh); setTimeout(() => setNewEntries(new Set()), 2000); }
       prevPlayers.current = new Set(list.map(e => e.player));
-      setEntries(list);
+      setListEntries(list);
+      const total = data.total || 0;
+      setTotalEntries(total);
+      setTotalListPages(Math.max(1, Math.ceil(Math.max(0, total - 3) / LIST_SIZE)));
     } catch {
       setBackendDown(true);
-      setEntries([]);
+      setListEntries([]);
     } finally { setLoading(false); }
   }, []);
 
+  const fetchScores = useCallback((game: string, silent = false) => {
+    fetchPodium(game);
+    fetchList(game, 1, silent);
+    setListPage(1);
+  }, [fetchPodium, fetchList]);
+
   const fetchMeta = useCallback(async () => {
     try {
-      const [sRes, bRes] = await Promise.all([
-        fetch(`${BACKEND_URL}/api/seasons`),
-        address ? fetch(`${BACKEND_URL}/api/badges/${address}`) : Promise.resolve(null),
-      ]);
+      const sRes = await fetch(`${BACKEND_URL}/api/seasons`);
       if (sRes.ok) setSeasons(await sRes.json());
-      if (bRes?.ok) setBadges(await bRes.json());
     } catch (_) {}
-  }, [address]);
+  }, []);
 
   useEffect(() => { fetchScores(gameTab); }, [gameTab, fetchScores]);
   useEffect(() => { fetchMeta(); }, [fetchMeta]);
@@ -199,9 +195,10 @@ export default function Leaderboard() {
     return () => { if (countRef.current) clearInterval(countRef.current); };
   }, [activeTab, gameTab, fetchScores]);
 
-  const myRank = address ? entries.findIndex(e => e.player.toLowerCase() === address.toLowerCase()) + 1 : 0;
-  const myScore = address ? entries.find(e => e.player.toLowerCase() === address.toLowerCase())?.score : null;
-  const aboveEntry = myRank > 1 ? entries[myRank - 2] : null;
+  const allVisible = [...podium, ...listEntries];
+  const myRank = address ? allVisible.findIndex((e: Entry) => e.player.toLowerCase() === address.toLowerCase()) + 1 : 0;
+  const myScore = address ? allVisible.find((e: Entry) => e.player.toLowerCase() === address.toLowerCase())?.score : null;
+  const aboveEntry = myRank > 1 ? allVisible[myRank - 2] : null;
   const gap = aboveEntry && myScore != null ? aboveEntry.score - myScore : null;
   const seasonsData = seasons as { currentSeason: number; currentEndsAt: number; live: Record<string, Entry[]>; past: ({ season: number; startTs: number; endTs: number } & Record<string, Entry[]>)[] } | null;
 
@@ -213,62 +210,38 @@ export default function Leaderboard() {
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
       `}</style>
 
-      <div style={{ fontFamily: 'Orbitron, monospace', maxWidth: '560px', margin: '0 auto' }}>
+      <div style={{ fontFamily: 'Orbitron, monospace', maxWidth: '560px', margin: '0 auto', padding: '0 4px' }}>
 
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
-          <div>
-            <h1 style={{ color: '#fff', fontSize: '20px', fontWeight: 900, letterSpacing: '2px', margin: 0 }}>LEADERBOARD</h1>
-            {backendDown && <p style={{ color: '#f59e0b', fontSize: '10px', letterSpacing: '1px', marginTop: '4px' }}>OFFLINE — showing local scores</p>}
+        <div style={{ marginBottom: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h1 style={{ color: '#fff', fontSize: '17px', fontWeight: 900, letterSpacing: '2px', margin: 0 }}>LEADERBOARD</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              {activeTab === 'live' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <span style={{ display: 'inline-block', width: '5px', height: '5px', borderRadius: '50%', background: '#10b981', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                  <span style={{ color: '#374151', fontSize: '9px' }}>{countdown}s</span>
+                </div>
+              )}
+              <button onClick={() => { fetchScores(gameTab); fetchMeta(); }} style={{ color: '#6b7280', fontSize: '9px', background: 'none', border: '1px solid rgba(255,255,255,0.1)', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontFamily: 'Orbitron, monospace' }}>↺</button>
+              <Link href="/" style={{ color: '#6b7280', fontSize: '9px', textDecoration: 'none', border: '1px solid rgba(255,255,255,0.1)', padding: '4px 8px', borderRadius: '4px', whiteSpace: 'nowrap' }}>← BACK</Link>
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {activeTab === 'live' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', animation: 'pulse 1.5s ease-in-out infinite' }} />
-                <span style={{ color: '#374151', fontSize: '9px' }}>LIVE · {countdown}s</span>
-              </div>
-            )}
-            <button onClick={() => { fetchScores(gameTab); fetchMeta(); }} style={{ color: '#6b7280', fontSize: '11px', background: 'none', border: '1px solid rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontFamily: 'Orbitron, monospace' }}>REFRESH</button>
-            <Link href="/" style={{ color: '#6b7280', fontSize: '11px', textDecoration: 'none', border: '1px solid rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '4px' }}>← GAMES</Link>
-          </div>
+          {backendDown && <p style={{ color: '#f59e0b', fontSize: '10px', letterSpacing: '1px', margin: '3px 0 0' }}>OFFLINE — showing local scores</p>}
         </div>
 
-        {/* Badges strip */}
-        {badges && (badges.badges.length > 0 || badges.summary.streakLabel) && (
-          <div style={{ marginBottom: '16px', padding: '12px 16px', background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: '10px' }}>
-            <div style={{ color: '#6b7280', fontSize: '9px', letterSpacing: '2px', marginBottom: '8px' }}>YOUR BADGES</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', alignItems: 'center' }}>
-              {badges.summary.streakLabel && <StreakBanner label={badges.summary.streakLabel} />}
-              {badges.badges.slice(0, 8).map((b, i) => <BadgeChip key={i} badge={b} />)}
-              {badges.badges.length > 8 && <span style={{ color: '#4b5563', fontSize: '9px' }}>+{badges.badges.length - 8} more</span>}
-            </div>
-            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-              {[
-                { label: 'GOLD', count: badges.summary.totalGold, color: '#f59e0b' },
-                { label: 'SILVER', count: badges.summary.totalSilver, color: '#9ca3af' },
-                { label: 'BRONZE', count: badges.summary.totalBronze, color: '#b45309' },
-              ].map(({ label, count, color }) => count != null && count > 0 && (
-                <div key={label} style={{ textAlign: 'center' }}>
-                  <div style={{ color, fontSize: '14px', fontWeight: 900 }}>{count}</div>
-                  <div style={{ color: '#374151', fontSize: '8px' }}>{label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Main tabs */}
-        <div style={{ display: 'flex', gap: '6px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', gap: '5px', marginBottom: '8px' }}>
           {TABS.map(t => (
-            <button key={t.id} onClick={() => setActiveTab(t.id)} style={{ flex: 1, padding: '9px', background: activeTab === t.id ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.02)', border: `1px solid ${activeTab === t.id ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.06)'}`, borderRadius: '8px', color: activeTab === t.id ? '#fff' : '#4b5563', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', cursor: 'pointer', fontFamily: 'Orbitron, monospace', transition: 'all 0.2s' }}>{t.label}</button>
+            <button key={t.id} onClick={() => setActiveTab(t.id)} style={{ flex: 1, padding: '7px', background: activeTab === t.id ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.02)', border: `1px solid ${activeTab === t.id ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.06)'}`, borderRadius: '8px', color: activeTab === t.id ? '#fff' : '#4b5563', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', cursor: 'pointer', fontFamily: 'Orbitron, monospace', transition: 'all 0.2s' }}>{t.label}</button>
           ))}
         </div>
 
         {/* Game sub-tabs */}
         {activeTab !== 'pvp' && (
-          <div style={{ display: 'flex', gap: '6px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', gap: '5px', marginBottom: '10px' }}>
             {GAME_TABS.map(t => (
-              <button key={t.id} onClick={() => { setGameTab(t.id); setShowAll(false); }} style={{ flex: 1, padding: '9px', background: gameTab === t.id ? `${t.accent}18` : 'rgba(255,255,255,0.02)', border: `1px solid ${gameTab === t.id ? t.accent : 'rgba(255,255,255,0.06)'}`, borderRadius: '8px', color: gameTab === t.id ? t.accent : '#6b7280', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', cursor: 'pointer', fontFamily: 'Orbitron, monospace', transition: 'all 0.2s' }}>{t.label}</button>
+              <button key={t.id} onClick={() => { setGameTab(t.id); }} style={{ flex: 1, padding: '7px 6px', background: gameTab === t.id ? `${t.accent}18` : 'rgba(255,255,255,0.02)', border: `1px solid ${gameTab === t.id ? t.accent : 'rgba(255,255,255,0.06)'}`, borderRadius: '8px', color: gameTab === t.id ? t.accent : '#6b7280', fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px', cursor: 'pointer', fontFamily: 'Orbitron, monospace', transition: 'all 0.2s', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}</button>
             ))}
           </div>
         )}
@@ -277,11 +250,11 @@ export default function Leaderboard() {
         {activeTab === 'live' && (
           <>
             {myRank > 0 && (
-              <div style={{ marginBottom: '16px', padding: '14px 18px', background: `${tab.accent}10`, border: `1px solid ${tab.accent}35`, borderRadius: '10px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <div style={{ marginBottom: '10px', padding: '10px 14px', background: `${tab.accent}10`, border: `1px solid ${tab.accent}35`, borderRadius: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                   <div>
                     <div style={{ color: '#6b7280', fontSize: '10px', letterSpacing: '1px' }}>YOUR RANK</div>
-                    <div style={{ color: tab.accent, fontSize: '28px', fontWeight: 900, lineHeight: 1.1 }}>#{myRank}</div>
+                    <div style={{ color: tab.accent, fontSize: '22px', fontWeight: 900, lineHeight: 1.1 }}>#{myRank}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ color: '#6b7280', fontSize: '10px', letterSpacing: '1px' }}>YOUR BEST</div>
@@ -299,15 +272,15 @@ export default function Leaderboard() {
                 {myRank === 1 && (
                   <div style={{ padding: '8px 12px', borderRadius: '6px', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)' }}>
                     <div style={{ color: '#10b981', fontSize: '11px', fontWeight: 700, letterSpacing: '1px' }}>YOU ARE #1 — DEFEND YOUR THRONE</div>
-                    <div style={{ color: '#6b7280', fontSize: '10px', marginTop: '3px' }}>{entries[1] ? `${fmt(entries[1].player, entries[1].username)} is ${myScore! - entries[1].score} pts behind` : 'No challengers yet'}</div>
+                    <div style={{ color: '#6b7280', fontSize: '10px', marginTop: '3px' }}>{podium[1] ? `${fmt(podium[1].player, podium[1].username)} is ${myScore! - podium[1].score} pts behind` : 'No challengers yet'}</div>
                   </div>
                 )}
               </div>
             )}
 
-            {!loading && entries.length >= 3 && (
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', height: '120px', marginBottom: '20px' }}>
-                {[entries[1], entries[0], entries[2]].map((e, i) => {
+            {podium.length >= 3 && (
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', height: '90px', marginBottom: '10px' }}>
+                {[podium[1], podium[0], podium[2]].map((e, i) => {
                   const rank = i === 0 ? 2 : i === 1 ? 1 : 3;
                   const height = rank === 1 ? '100%' : rank === 2 ? '70%' : '52%';
                   const isMe = address && e.player.toLowerCase() === address.toLowerCase();
@@ -328,46 +301,43 @@ export default function Leaderboard() {
             <div style={{ background: 'rgba(10,10,20,0.8)', border: `1px solid ${tab.accent}22`, borderRadius: '12px', overflow: 'hidden' }}>
               {loading ? (
                 <div style={{ padding: '40px', textAlign: 'center', color: '#4b5563', fontSize: '12px', letterSpacing: '1px' }}>LOADING...</div>
-              ) : entries.length === 0 ? (
+              ) : listEntries.length === 0 && podium.length === 0 ? (
                 <div style={{ padding: '40px', textAlign: 'center' }}>
                   <div style={{ fontSize: '32px', marginBottom: '12px' }}>🎮</div>
                   <div style={{ color: '#4b5563', fontSize: '12px', letterSpacing: '1px' }}>NO SCORES YET</div>
                 </div>
-              ) : (showAll ? entries : entries.slice(0, 10)).map((e, i) => {
+              ) : listEntries.map((e: Entry, i: number) => {
+                const globalRank = 3 + (listPage - 1) * LIST_SIZE + i + 1;
                 const isMe = address && e.player.toLowerCase() === address.toLowerCase();
                 const isNew = newEntries.has(e.player);
-                const theirBadges = isMe && badges ? badges.badges.filter(b => b.game === gameTab).slice(0, 3) : [];
                 return (
-                  <div key={`${e.player}-${i}`} style={{ padding: '12px 20px', borderBottom: i < entries.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', background: isMe ? `${tab.accent}0d` : isNew ? 'rgba(16,185,129,0.06)' : i === 0 ? `${tab.accent}06` : 'transparent', outline: isMe ? `1px solid ${tab.accent}40` : 'none', animation: isNew ? 'slideDown 0.4s ease-out' : 'none' }}>
+                  <div key={`${e.player}-${i}`} style={{ padding: '10px 14px', borderBottom: i < listEntries.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', background: isMe ? `${tab.accent}0d` : isNew ? 'rgba(16,185,129,0.06)' : 'transparent', outline: isMe ? `1px solid ${tab.accent}40` : 'none', animation: isNew ? 'slideDown 0.4s ease-out' : 'none' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                        <span style={{ fontSize: i < 3 ? '18px' : '13px', minWidth: '28px', textAlign: 'center', color: '#6b7280' }}>{i < 3 ? MEDALS[i] : `#${i + 1}`}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <span style={{ fontSize: '12px', minWidth: '26px', textAlign: 'center', color: '#6b7280', fontWeight: 700 }}>{`#${globalRank}`}</span>
                         <div>
-                          <div style={{ color: isMe ? tab.accent : i === 0 ? '#fff' : '#d1d5db', fontSize: '13px', fontWeight: 700 }}>
+                          <div style={{ color: isMe ? tab.accent : '#d1d5db', fontSize: '13px', fontWeight: 700 }}>
                             {isMe ? 'YOU' : fmt(e.player, e.username)}
                             {isNew && <span style={{ color: '#10b981', fontSize: '9px', marginLeft: '6px' }}>NEW</span>}
                           </div>
-                          <div style={{ color: '#4b5563', fontSize: '10px', marginTop: '2px' }}>{timeAgo(e.timestamp)}</div>
+                          <div style={{ color: '#4b5563', fontSize: '10px', marginTop: '1px' }}>{timeAgo(e.timestamp)}</div>
                         </div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ color: i === 0 ? tab.accent : '#fff', fontSize: '18px', fontWeight: 900 }}>{e.score}</div>
+                        <div style={{ color: '#fff', fontSize: '16px', fontWeight: 900 }}>{e.score}</div>
                         <div style={{ color: '#4b5563', fontSize: '10px' }}>pts</div>
                       </div>
                     </div>
-                    {theirBadges.length > 0 && (
-                      <div style={{ display: 'flex', gap: '4px', marginTop: '6px', paddingLeft: '42px' }}>
-                        {theirBadges.map((b, bi) => <BadgeChip key={bi} badge={b} />)}
-                      </div>
-                    )}
                   </div>
                 );
               })}
             </div>
-            {!loading && entries.length > 10 && (
-              <button onClick={() => setShowAll(p => !p)} style={{ width: '100%', padding: '10px', marginTop: '8px', borderRadius: '10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: '#6b7280', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', cursor: 'pointer', fontFamily: 'Orbitron, monospace' }}>
-                {showAll ? 'SHOW LESS' : `SHOW ALL ${entries.length} PLAYERS`}
-              </button>
+            {!loading && totalListPages > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px', gap: '8px' }}>
+                <button onClick={() => { const p = Math.max(1, listPage - 1); setListPage(p); fetchList(gameTab, p, true); }} disabled={listPage === 1} style={{ flex: 1, padding: '10px', borderRadius: '10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: listPage === 1 ? '#374151' : '#9ca3af', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', cursor: listPage === 1 ? 'not-allowed' : 'pointer', fontFamily: 'Orbitron, monospace' }}>← PREV</button>
+                <span style={{ color: '#4b5563', fontSize: '10px', letterSpacing: '1px', whiteSpace: 'nowrap' }}>{listPage} / {totalListPages}</span>
+                <button onClick={() => { const p = Math.min(totalListPages, listPage + 1); setListPage(p); fetchList(gameTab, p, true); }} disabled={listPage === totalListPages} style={{ flex: 1, padding: '10px', borderRadius: '10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: listPage === totalListPages ? '#374151' : '#9ca3af', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', cursor: listPage === totalListPages ? 'not-allowed' : 'pointer', fontFamily: 'Orbitron, monospace' }}>NEXT →</button>
+              </div>
             )}
           </>
         )}
@@ -450,7 +420,7 @@ export default function Leaderboard() {
                   );
                 })}
               </div>
-              <Link href="/arena" style={{ display: 'block', padding: '14px', textAlign: 'center', background: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(168,85,247,0.05))', border: '1px solid rgba(168,85,247,0.25)', borderRadius: '12px', color: '#a855f7', fontSize: '12px', fontWeight: 900, letterSpacing: '2px', textDecoration: 'none', fontFamily: 'Orbitron, monospace' }}>CHALLENGE AI</Link>
+              <Link href="/games/arena" style={{ display: 'block', padding: '14px', textAlign: 'center', background: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(168,85,247,0.05))', border: '1px solid rgba(168,85,247,0.25)', borderRadius: '12px', color: '#a855f7', fontSize: '12px', fontWeight: 900, letterSpacing: '2px', textDecoration: 'none', fontFamily: 'Orbitron, monospace' }}>CHALLENGE AI</Link>
             </div>
           );
         })()}

@@ -510,8 +510,16 @@ app.get('/api/leaderboard', async (req, res) => {
   if (!['rhythm', 'simon'].includes(game)) {
     return res.status(400).json({ error: 'game must be rhythm or simon' });
   }
-  const entries = await getLeaderboard(game);
-  const enriched = await Promise.all(entries.map(async (e) => ({
+  const limit  = Math.min(50, parseInt(req.query.limit) || 20);
+  const offset = Math.max(0, parseInt(req.query.offset) || 0);
+  const page   = offset > 0 ? null : Math.max(1, parseInt(req.query.page) || 1);
+  const start  = offset > 0 ? offset : (page - 1) * limit;
+
+  const all = await getLeaderboard(game);
+  const total = all.length;
+  const slice = all.slice(start, start + limit);
+
+  const enriched = await Promise.all(slice.map(async (e) => ({
     player: e.wallet_address,
     score: e.score,
     gameTime: e.game_time,
@@ -520,7 +528,8 @@ app.get('/api/leaderboard', async (req, res) => {
     tx_hash: e.tx_hash,
     username: await resolveUsername(e.wallet_address) || null,
   })));
-  res.json({ leaderboard: enriched });
+  const listTotal = Math.max(0, total - (offset > 0 ? offset : 0));
+  res.json({ leaderboard: enriched, total, page, limit, pages: Math.ceil(listTotal / limit) });
 });
 
 // ─── GET /api/activity ──────────────────────────────────────────────────────

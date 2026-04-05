@@ -36,12 +36,14 @@ const GAMES = [
     desc: 'Tap the glowing button in time with the beat.',
     accent: '#a855f7', faint: 'rgba(168,85,247,0.08)', border: 'rgba(168,85,247,0.25)',
     gameType: 0, winAt: '350 pts', payout: '1.3x',
+    howTo: ['🎵 A button pulses to the beat', 'Tap it exactly when it glows', 'Keep the combo going for more points', 'Hit 350 pts to win a wager payout'],
   },
   {
     id: 'simon', path: '/games/simon', emoji: '🧠', title: 'SIMON MEMORY',
     desc: 'Watch the color sequence flash and repeat it.',
     accent: '#06b6d4', faint: 'rgba(6,182,212,0.08)', border: 'rgba(6,182,212,0.25)',
     gameType: 1, winAt: '7 sequences', payout: '1.3x', noWager: true,
+    howTo: ['🧠 Watch the color sequence flash', 'Tap the same colors in order', 'Each round adds one more color', 'Survive 7 rounds to win'],
   },
 ];
 
@@ -71,10 +73,16 @@ export default function GamesHub() {
   const [usernameInput, setUsernameInput] = useState('');
   const [mintingPass, setMintingPass] = useState(false);
   const [playStreak, setPlayStreak] = useState({ streak: 0, playedToday: false });
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [howToOpen, setHowToOpen] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (address) getPlayStreak(address).then(setPlayStreak);
   }, [address]);
+
+  useEffect(() => {
+    if (!localStorage.getItem('ga_onboarding_seen')) setShowOnboarding(true);
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -286,12 +294,17 @@ export default function GamesHub() {
               <div style={{ color: '#4b5563', fontSize: '8px', marginTop: '1px' }}>{gBal} G$</div>
             </div>
             {isVerified ? (
-              <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '8px', fontWeight: 700, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981' }}>VERIFIED</span>
+              canClaim ? (
+                <button onClick={claimG$} className="gb" style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '8px', fontWeight: 700, cursor: 'pointer', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#10b981', fontFamily: 'Orbitron, monospace', whiteSpace: 'nowrap' }}>
+                  CLAIM {claimable} G$
+                </button>
+              ) : (
+                <span title="GoodDollar identity verified" style={{ padding: '3px 8px', borderRadius: '20px', fontSize: '8px', fontWeight: 700, background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', color: '#10b981' }}>✓ UBI</span>
+              )
             ) : (
-              <button onClick={verifyIdentity} disabled={isVerifying} className="gb" style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '8px', fontWeight: 700, cursor: 'pointer', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', color: '#fbbf24', fontFamily: 'Orbitron, monospace' }}>{isVerifying ? '...' : 'VERIFY'}</button>
-            )}
-            {canClaim && (
-              <button onClick={claimG$} className="gb" style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '8px', fontWeight: 700, cursor: 'pointer', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.35)', color: '#c084fc', fontFamily: 'Orbitron, monospace' }}>CLAIM</button>
+              <button onClick={verifyIdentity} disabled={isVerifying} className="gb" title="Verify once to claim weekly G$ UBI" style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '8px', fontWeight: 700, cursor: 'pointer', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.35)', color: '#fbbf24', fontFamily: 'Orbitron, monospace', whiteSpace: 'nowrap' }}>
+                {isVerifying ? '...' : '🔓 VERIFY FOR G$'}
+              </button>
             )}
           </div>
         ) : !isConnected ? (
@@ -308,6 +321,17 @@ export default function GamesHub() {
             <div style={{ color: '#9ca3af', fontSize: '10px', letterSpacing: '1px' }}>SETTING UP WALLET...</div>
           </div>
         ) : null}
+
+        {/* Onboarding — shown once until dismissed */}
+        {showOnboarding && (
+          <div style={{ marginBottom: '12px', padding: '10px 14px', background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.18)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '16px', flexShrink: 0 }}>💡</span>
+            <span style={{ color: '#9ca3af', fontSize: '9px', flex: 1, lineHeight: 1.5 }}>
+              <span style={{ color: '#a855f7', fontWeight: 700 }}>Verify once</span> → claim free G$ weekly → wager on games to win <span style={{ color: '#10b981', fontWeight: 700 }}>1.3×</span>
+            </span>
+            <button onClick={() => { setShowOnboarding(false); localStorage.setItem('ga_onboarding_seen', '1'); }} style={{ background: 'none', border: 'none', color: '#4b5563', fontSize: '16px', cursor: 'pointer', lineHeight: 1, flexShrink: 0, padding: '0 2px' }}>×</button>
+          </div>
+        )}
 
         {/* Season Strip */}
         {stats && (
@@ -382,10 +406,10 @@ export default function GamesHub() {
         {/* Identity Notice */}
         {isConnected && hasPass && !isVerified && (
           <div style={{ marginBottom: '16px', padding: '12px 16px', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.15)', borderRadius: '12px', display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <span style={{ fontSize: '20px' }}>👤</span>
+            <span style={{ fontSize: '20px' }}>🪙</span>
             <div style={{ flex: 1 }}>
-              <div style={{ color: '#fbbf24', fontSize: '10px', fontWeight: 700, letterSpacing: '1px' }}>VERIFY TO UNLOCK WAGERS</div>
-              <div style={{ color: '#4b5563', fontSize: '9px', marginTop: '2px' }}>One-time face scan via GoodDollar — prevents bots</div>
+              <div style={{ color: '#fbbf24', fontSize: '10px', fontWeight: 700, letterSpacing: '1px' }}>CLAIM FREE G$ TO WAGER</div>
+              <div style={{ color: '#4b5563', fontSize: '9px', marginTop: '2px' }}>Verify once → claim weekly G$ → use it to wager on games</div>
             </div>
             <button onClick={verifyIdentity} disabled={isVerifying} className="gb" style={{ padding: '8px 16px', borderRadius: '10px', cursor: 'pointer', background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.3)', color: '#fbbf24', fontSize: '10px', fontWeight: 700, fontFamily: 'Orbitron, monospace' }}>{isVerifying ? '...' : 'VERIFY'}</button>
           </div>
@@ -410,8 +434,19 @@ export default function GamesHub() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{ color: '#fff', fontSize: '15px', fontWeight: 900, letterSpacing: '1.5px' }}>{game.title}</span>
                         {myBest != null && <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '8px', fontWeight: 900, background: `${game.accent}15`, color: game.accent }}>PB {myBest}</span>}
+                        <button onClick={() => setHowToOpen(p => ({ ...p, [game.id]: !p[game.id] }))} style={{ marginLeft: 'auto', width: '20px', height: '20px', borderRadius: '50%', background: howToOpen[game.id] ? `${game.accent}30` : 'rgba(255,255,255,0.05)', border: `1px solid ${howToOpen[game.id] ? game.accent : 'rgba(255,255,255,0.1)'}`, color: howToOpen[game.id] ? game.accent : '#6b7280', fontSize: '10px', fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: 'Orbitron, monospace' }}>?</button>
                       </div>
                       <div style={{ color: '#4b5563', fontSize: '10px', marginTop: '3px' }}>{game.desc}</div>
+                      {howToOpen[game.id] && (
+                        <div style={{ marginTop: '8px', padding: '10px 12px', background: 'rgba(0,0,0,0.25)', borderRadius: '10px', border: `1px solid ${game.accent}20` }}>
+                          {game.howTo.map((tip, ti) => (
+                            <div key={ti} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: ti < game.howTo.length - 1 ? '6px' : 0 }}>
+                              <span style={{ color: game.accent, fontSize: '9px', fontWeight: 900, minWidth: '14px' }}>{ti + 1}.</span>
+                              <span style={{ color: '#9ca3af', fontSize: '9px', lineHeight: 1.4 }}>{tip}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 

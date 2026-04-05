@@ -68,7 +68,7 @@ export default function LandingOverlay({ onEnter }: Props) {
               boxShadow: '0 4px 20px rgba(168,85,247,0.3)',
             }}>PLAY GAMES</button>
 
-            <button onClick={() => { onEnter(); router.push('/arena'); }} style={{
+            <button onClick={() => { onEnter(); router.push('/games/arena'); }} style={{
               width: '100%', padding: '14px', background: 'transparent',
               border: '1px solid rgba(168,85,247,0.3)', borderRadius: '14px',
               color: '#a855f7', fontSize: '11px', fontWeight: 700, letterSpacing: '2px',

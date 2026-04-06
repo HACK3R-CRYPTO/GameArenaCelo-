@@ -326,8 +326,16 @@ export default function RhythmRush() {
         </div>
       )}
 
-      {/* Game panel */}
-      <div style={{ background: 'rgba(10,10,20,0.8)', border: `1px solid rgba(168,85,247,${gameActive ? 0.4 : 0.2})`, borderRadius: '12px', padding: '20px 16px' }}>
+      {/* Game panel — border shifts purple → red as BPM climbs */}
+      {(() => {
+        const intensity = Math.min(1, (bpm - BASE_BPM) / (MAX_BPM - BASE_BPM));
+        const r = Math.round(168 + 71 * intensity);
+        const g = Math.round(85  - 85  * intensity);
+        const b = Math.round(247 - 200 * intensity);
+        const a = gameActive ? 0.2 + intensity * 0.4 : 0.2;
+        const panelBorder = `1px solid rgba(${r},${g},${b},${a})`;
+        return (
+      <div style={{ background: 'rgba(10,10,20,0.8)', border: panelBorder, borderRadius: '12px', padding: '20px 16px' }}>
         {/* Stats row */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
           <div style={{ textAlign: 'center' }}>
@@ -382,6 +390,9 @@ export default function RhythmRush() {
           {[1, 2, 3, 4].map(btn => {
             const c = BUTTON_COLORS[btn];
             const isTarget = gameActive && btn === currentTarget;
+            const intensity = Math.min(1, (bpm - BASE_BPM) / (MAX_BPM - BASE_BPM));
+            const glowSize  = Math.round(24 + intensity * 20); // 24px → 44px as BPM climbs
+            const scale     = isTarget ? 1.1 + intensity * 0.05 : 1;
             return (
               <div key={btn} style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {isTarget && (
@@ -407,9 +418,9 @@ export default function RhythmRush() {
                     borderRadius: '50%',
                     border: `3px solid ${isTarget ? c.active : 'rgba(255,255,255,0.08)'}`,
                     background: isTarget ? `${c.active}33` : `${c.active}11`,
-                    boxShadow: isTarget ? `0 0 32px ${c.glow}, 0 0 8px ${c.glow}` : 'none',
-                    transform: isTarget ? 'scale(1.15)' : 'scale(1)',
-                    transition: 'all 0.1s ease',
+                    boxShadow: isTarget ? `0 0 ${glowSize}px ${c.glow}` : 'none',
+                    transform: `scale(${scale})`,
+                    transition: 'all 0.08s ease',
                     cursor: gameActive ? 'pointer' : 'default',
                   }}
                 >
@@ -521,6 +532,8 @@ export default function RhythmRush() {
           );
         })()}
       </div>
+        );
+      })()}
 
       {/* Wallet signing overlay */}
       {signingOnChain && (

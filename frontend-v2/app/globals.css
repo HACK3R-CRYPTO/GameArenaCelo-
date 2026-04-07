@@ -1,5 +1,20 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Melon Pop";
+  src: url("/fonts/Melon Pop/Melon Pop.ttf") format("truetype"),
+       url("/fonts/Melon Pop/Melon Pop.otf") format("opentype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  html {
+    font-family: "Melon Pop", sans-serif;
+  }
+}
+
 @keyframes icon-float {
   0%, 100% { transform: translateY(0px); }
   50%       { transform: translateY(-14px); }
@@ -28,14 +43,24 @@
   animation-delay: var(--delay, 0s);
 }
 
-@keyframes progress-bar {
-  0% { width: 0px; }
-  10% { width: 20%; }
-  25% { width: 45%; }
-  35% { width: 45%; }
-  50% { width: 60% }
-  74% { width: 60% }
-  90% { width: 85%; }
-  100% { width: 100%; }
+@keyframes progress-bar-1 {
+  0% { width: 0%; }
+  100% { width: 25%; }
 
+}
+
+@keyframes progress-bar-2 {
+  0% { width: 25%; }
+  100% { width: 50%; }
+
+}
+
+@keyframes progress-bar-3 {
+  0% { width: 50%; }
+  100% { width: 75%; }
+}
+
+@keyframes progress-bar-4 {
+  0% { width: 75%; }
+  100% { width: 100%; }
 }

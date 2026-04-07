@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@keyframes icon-float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-14px); }
+}
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%       { opacity: 1;    transform: scale(1.35); }
+}
+
+@keyframes bounce-scale-in {
+  0%   { transform: scale(0);   }
+  60%  { transform: scale(1.18);  }
+  78%  { transform: scale(0.93); }
+  90%  { transform: scale(1.07); }
+  100% { transform: scale(1); }
+}
+
+.icon-float {
+  animation: icon-float var(--dur, 5s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+.dot-pulse {
+  animation: dot-pulse var(--dur, 3.5s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}

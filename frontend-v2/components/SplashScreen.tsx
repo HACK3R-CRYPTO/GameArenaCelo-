@@ -241,11 +241,11 @@ export default function SplashScreen() {
             width: "100%",
             height: "80px",
             animationName: "progress-bar",
-            animationDuration: "2s",
+            animationDuration: "5s",
             animationTimingFunction: "linear",
             animationDirection: "normal",
             animationFillMode: "both",
-            animationDelay: "5s",
+            animationDelay: "2s",
           }}
         />
         <img src="/components/progress_filled_right.png"

@@ -278,8 +278,10 @@ async function saveScore(entry) {
 }
 
 async function getLeaderboard(game, limit = 50, seasonFilter = true) {
+  // Use the activity table so we pick up every play this week,
+  // not just players whose all-time best happened to fall in this week.
   let query = supabase
-    .from('scores')
+    .from('activity')
     .select('*')
     .eq('game', game);
 
@@ -292,11 +294,11 @@ async function getLeaderboard(game, limit = 50, seasonFilter = true) {
 
   const { data } = await query
     .order('score', { ascending: false })
-    .limit(500); // fetch more then dedup in JS
+    .limit(500);
 
   if (!data) return [];
 
-  // Keep only best score per wallet address
+  // Keep only best score per wallet for this period
   const seen = new Map();
   for (const row of data) {
     const key = row.wallet_address?.toLowerCase();
@@ -349,26 +351,40 @@ async function sealCompletedSeasons() {
     const startDate = new Date(start * 1000).toISOString();
     const endDate = new Date(end * 1000).toISOString();
 
-    const { data: rhythmScores } = await supabase
-      .from('scores')
+    const { data: rhythmRaw } = await supabase
+      .from('activity')
       .select('*')
       .eq('game', 'rhythm')
       .gte('created_at', startDate)
       .lt('created_at', endDate)
       .order('score', { ascending: false })
-      .limit(10);
+      .limit(500);
 
-    const { data: simonScores } = await supabase
-      .from('scores')
+    const { data: simonRaw } = await supabase
+      .from('activity')
       .select('*')
       .eq('game', 'simon')
       .gte('created_at', startDate)
       .lt('created_at', endDate)
       .order('score', { ascending: false })
-      .limit(10);
+      .limit(500);
 
-    const rEntries = rhythmScores || [];
-    const sEntries = simonScores || [];
+    // Deduplicate: best score per wallet per season
+    const dedup = (rows) => {
+      const seen = new Map();
+      for (const row of (rows || [])) {
+        const key = row.wallet_address?.toLowerCase();
+        if (!key) continue;
+        if (!seen.has(key) || row.score > seen.get(key).score) seen.set(key, row);
+      }
+      return Array.from(seen.values()).sort((a, b) => b.score - a.score).slice(0, 10);
+    };
+
+    const rhythmScores = dedup(rhythmRaw);
+    const simonScores  = dedup(simonRaw);
+
+    const rEntries = rhythmScores;
+    const sEntries = simonScores;
 
     // Upsert season record
     await supabase.from('seasons').upsert({
@@ -693,32 +709,32 @@ app.get('/api/seasons', async (_, res) => {
   const { start, end } = seasonBounds(current);
   const startDate = new Date(start * 1000).toISOString();
 
-  // Live current season standings
+  // Live current season standings — use activity so any play this week is counted
   const { data: liveRhythm } = await supabase
-    .from('scores')
+    .from('activity')
     .select('*')
     .eq('game', 'rhythm')
     .gte('created_at', startDate)
     .order('score', { ascending: false })
-    .limit(200);
+    .limit(500);
 
   const { data: liveSimon } = await supabase
-    .from('scores')
+    .from('activity')
     .select('*')
     .eq('game', 'simon')
     .gte('created_at', startDate)
     .order('score', { ascending: false })
-    .limit(200);
+    .limit(500);
 
-  // Dedup by wallet — keep best score per user
-  const dedupScores = (rows) => {
+  // Dedup by wallet — keep best score per user this week
+  const dedupScores = (rows, limit = 10) => {
     const seen = new Map();
     for (const row of (rows || [])) {
       const key = row.wallet_address?.toLowerCase();
       if (!key) continue;
       if (!seen.has(key) || row.score > seen.get(key).score) seen.set(key, row);
     }
-    return Array.from(seen.values()).sort((a, b) => b.score - a.score).slice(0, 10);
+    return Array.from(seen.values()).sort((a, b) => b.score - a.score).slice(0, limit);
   };
 
   // Past sealed seasons
@@ -727,6 +743,40 @@ app.get('/api/seasons', async (_, res) => {
     .select('*')
     .eq('sealed', true)
     .order('season_number', { ascending: false });
+
+  // Fetch actual scores for each past season from the activity table
+  const pastWithScores = await Promise.all((pastSeasons || []).map(async (s) => {
+    const startIso = new Date(s.start_ts * 1000).toISOString();
+    const endIso   = new Date(s.end_ts   * 1000).toISOString();
+
+    const [{ data: rRaw }, { data: siRaw }] = await Promise.all([
+      supabase.from('activity').select('*').eq('game', 'rhythm')
+        .gte('created_at', startIso).lt('created_at', endIso)
+        .order('score', { ascending: false }).limit(500),
+      supabase.from('activity').select('*').eq('game', 'simon')
+        .gte('created_at', startIso).lt('created_at', endIso)
+        .order('score', { ascending: false }).limit(500),
+    ]);
+
+    const fmt = async (e) => ({
+      player: e.wallet_address,
+      username: await resolveUsername(e.wallet_address) || null,
+      score: e.score,
+      gameTime: e.game_time,
+      timestamp: Math.floor(new Date(e.created_at).getTime() / 1000),
+      tx_hash: e.tx_hash,
+    });
+
+    return {
+      season:   s.season_number,
+      startTs:  s.start_ts,
+      endTs:    s.end_ts,
+      prizePot: s.prize_pot,
+      sealedAt: Math.floor(new Date(s.created_at).getTime() / 1000),
+      rhythm:   await Promise.all(dedupScores(rRaw,  10).map(fmt)),
+      simon:    await Promise.all(dedupScores(siRaw, 10).map(fmt)),
+    };
+  }));
 
   // Format for frontend — same shape as /api/leaderboard so fmt() works correctly
   const formatEntry = async (e) => ({
@@ -746,15 +796,7 @@ app.get('/api/seasons', async (_, res) => {
       rhythm: await Promise.all(dedupScores(liveRhythm).map(formatEntry)),
       simon: await Promise.all(dedupScores(liveSimon).map(formatEntry)),
     },
-    past: (pastSeasons || []).map(s => ({
-      season: s.season_number,
-      startTs: s.start_ts,
-      endTs: s.end_ts,
-      prizePot: s.prize_pot,
-      sealedAt: Math.floor(new Date(s.created_at).getTime() / 1000),
-      rhythm: [],
-      simon: [],
-    })),
+    past: pastWithScores,
   });
 });
 

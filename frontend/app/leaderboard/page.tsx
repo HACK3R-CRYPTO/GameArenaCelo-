@@ -295,11 +295,12 @@ export default function Leaderboard() {
               </div>
             )}
 
-            {podium.length >= 3 && (
+            {podium.length > 0 && (
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', height: '90px', marginBottom: '10px' }}>
                 {[podium[1], podium[0], podium[2]].map((e, i) => {
                   const rank = i === 0 ? 2 : i === 1 ? 1 : 3;
                   const height = rank === 1 ? '100%' : rank === 2 ? '70%' : '52%';
+                  if (!e) return <div key={i} style={{ flex: 1 }} />;
                   const isMe = address && e.player.toLowerCase() === address.toLowerCase();
                   const isNew = newEntries.has(e.player);
                   return (
@@ -323,6 +324,8 @@ export default function Leaderboard() {
                   <div style={{ fontSize: '32px', marginBottom: '12px' }}>🎮</div>
                   <div style={{ color: '#4b5563', fontSize: '12px', letterSpacing: '1px' }}>NO SCORES YET</div>
                 </div>
+              ) : listEntries.length === 0 && podium.length > 0 ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: '#4b5563', fontSize: '10px', letterSpacing: '1px' }}>TOP {podium.length} PLAYER{podium.length > 1 ? 'S' : ''} SHOWN ABOVE</div>
               ) : listEntries.map((e: Entry, i: number) => {
                 const globalRank = 3 + (listPage - 1) * LIST_SIZE + i + 1;
                 const isMe = address && e.player.toLowerCase() === address.toLowerCase();

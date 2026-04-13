@@ -7,6 +7,9 @@ const rateLimit = require('express-rate-limit');
 const app = express();
 const PORT = process.env.PORT || 3005;
 
+// Trust Railway/Vercel reverse proxy so rate-limiter reads X-Forwarded-For correctly
+app.set('trust proxy', 1);
+
 // ─── CORS — only allowed origins or trusted server-to-server calls ───────────
 const allowedOrigins = (process.env.ALLOWED_ORIGINS).split(',').map(o => o.trim());
 app.use(express.json());

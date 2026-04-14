@@ -83,26 +83,9 @@ export function SelfVerificationProvider({ children }: { children: React.ReactNo
   }, [address, publicClient, walletClient, identitySDK, checkEntitlement]);
 
   const checkVerificationStatus = useCallback(async () => {
-    if (!isConnected || !address || !publicClient || !identitySDK) {
-      setIsVerified(false);
+    if (!address || !publicClient || !identitySDK) {
+      if (!address) setIsVerified(false);
       return false;
-    }
-
-    if (hasCheckedRef.current && lastAddressRef.current === address) {
-      return isVerified;
-    }
-
-    const cached = localStorage.getItem(`gd_verified_${address.toLowerCase()}`);
-    if (cached) {
-      try {
-        const { verified, timestamp } = JSON.parse(cached);
-        if (verified && Date.now() - timestamp < 7 * 24 * 60 * 60 * 1000) {
-          setIsVerified(true);
-          hasCheckedRef.current = true;
-          lastAddressRef.current = address;
-          return true;
-        }
-      } catch { /* ignore */ }
     }
 
     try {
@@ -126,18 +109,19 @@ export function SelfVerificationProvider({ children }: { children: React.ReactNo
         );
       }
       return verified;
-    } catch {
+    } catch (error) {
+      console.error('GoodDollar verification check failed:', error);
       setIsVerified(false);
       return false;
     }
-  }, [isConnected, address, publicClient, walletClient, identitySDK, isVerified]);
+  }, [address, publicClient, walletClient, identitySDK]);
 
   useEffect(() => {
-    if (isConnected && address && identitySDK && lastAddressRef.current !== address) {
-      hasCheckedRef.current = false;
+    if (isConnected && address && identitySDK) {
+      if (lastAddressRef.current !== address) hasCheckedRef.current = false;
       checkVerificationStatus();
     }
-  }, [isConnected, address, identitySDK]); // eslint-disable-line
+  }, [isConnected, address, identitySDK, walletClient]); // eslint-disable-line
 
   useEffect(() => {
     if (isConnected && identitySDK && address) {

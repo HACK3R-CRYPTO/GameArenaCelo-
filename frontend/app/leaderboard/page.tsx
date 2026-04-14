@@ -319,6 +319,9 @@ export default function Leaderboard() {
                       <div style={{ width: '100%', height, background: rank === 1 ? `${tab.accent}22` : 'rgba(255,255,255,0.05)', border: `1px solid ${rank === 1 ? tab.accent : 'rgba(255,255,255,0.1)'}`, borderRadius: '8px 8px 0 0', outline: isMe ? `2px solid ${tab.accent}` : 'none', animation: isNew ? 'flashGlow 1.5s ease-out' : 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', padding: '8px' }}>
                         <div style={{ color: rank === 1 ? tab.accent : '#fff', fontSize: '14px', fontWeight: 900 }}>{e.score}</div>
                         <div style={{ color: '#6b7280', fontSize: '9px', marginTop: '2px', textAlign: 'center' }}>{isMe ? 'YOU' : fmt(e.player, e.username)}</div>
+                        {e.streak && e.streak >= 2 && (
+                          <div style={{ fontSize: '8px', fontWeight: 700, color: '#f59e0b', marginTop: '2px' }}>🔥{e.streak}d</div>
+                        )}
                       </div>
                     </div>
                   );

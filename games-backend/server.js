@@ -7,6 +7,9 @@ const rateLimit = require('express-rate-limit');
 const app = express();
 const PORT = process.env.PORT || 3005;
 
+// Trust Railway/Vercel reverse proxy so rate-limiter reads X-Forwarded-For correctly
+app.set('trust proxy', 1);
+
 // ─── CORS — only allowed origins or trusted server-to-server calls ───────────
 const allowedOrigins = (process.env.ALLOWED_ORIGINS).split(',').map(o => o.trim());
 app.use(express.json());
@@ -278,8 +281,10 @@ async function saveScore(entry) {
 }
 
 async function getLeaderboard(game, limit = 50, seasonFilter = true) {
+  // Use the activity table so we pick up every play this week,
+  // not just players whose all-time best happened to fall in this week.
   let query = supabase
-    .from('scores')
+    .from('activity')
     .select('*')
     .eq('game', game);
 
@@ -292,11 +297,11 @@ async function getLeaderboard(game, limit = 50, seasonFilter = true) {
 
   const { data } = await query
     .order('score', { ascending: false })
-    .limit(500); // fetch more then dedup in JS
+    .limit(500);
 
   if (!data) return [];
 
-  // Keep only best score per wallet address
+  // Keep only best score per wallet for this period
   const seen = new Map();
   for (const row of data) {
     const key = row.wallet_address?.toLowerCase();
@@ -349,26 +354,40 @@ async function sealCompletedSeasons() {
     const startDate = new Date(start * 1000).toISOString();
     const endDate = new Date(end * 1000).toISOString();
 
-    const { data: rhythmScores } = await supabase
-      .from('scores')
+    const { data: rhythmRaw } = await supabase
+      .from('activity')
       .select('*')
       .eq('game', 'rhythm')
       .gte('created_at', startDate)
       .lt('created_at', endDate)
       .order('score', { ascending: false })
-      .limit(10);
+      .limit(500);
 
-    const { data: simonScores } = await supabase
-      .from('scores')
+    const { data: simonRaw } = await supabase
+      .from('activity')
       .select('*')
       .eq('game', 'simon')
       .gte('created_at', startDate)
       .lt('created_at', endDate)
       .order('score', { ascending: false })
-      .limit(10);
+      .limit(500);
 
-    const rEntries = rhythmScores || [];
-    const sEntries = simonScores || [];
+    // Deduplicate: best score per wallet per season
+    const dedup = (rows) => {
+      const seen = new Map();
+      for (const row of (rows || [])) {
+        const key = row.wallet_address?.toLowerCase();
+        if (!key) continue;
+        if (!seen.has(key) || row.score > seen.get(key).score) seen.set(key, row);
+      }
+      return Array.from(seen.values()).sort((a, b) => b.score - a.score).slice(0, 10);
+    };
+
+    const rhythmScores = dedup(rhythmRaw);
+    const simonScores  = dedup(simonRaw);
+
+    const rEntries = rhythmScores;
+    const sEntries = simonScores;
 
     // Upsert season record
     await supabase.from('seasons').upsert({
@@ -597,6 +616,14 @@ app.get('/api/leaderboard', async (req, res) => {
   const total = all.length;
   const slice = all.slice(start, start + limit);
 
+  // Fetch streaks for all players in this slice in one query
+  const wallets = slice.map(e => e.wallet_address.toLowerCase());
+  const { data: streakRows } = await supabase
+    .from('users')
+    .select('wallet_address, play_streak')
+    .in('wallet_address', wallets);
+  const streakMap = new Map((streakRows || []).map(r => [r.wallet_address.toLowerCase(), r.play_streak || 0]));
+
   const enriched = await Promise.all(slice.map(async (e) => ({
     player: e.wallet_address,
     score: e.score,
@@ -605,6 +632,7 @@ app.get('/api/leaderboard', async (req, res) => {
     timestamp: Math.floor(new Date(e.created_at).getTime() / 1000),
     tx_hash: e.tx_hash,
     username: await resolveUsername(e.wallet_address) || null,
+    streak: streakMap.get(e.wallet_address.toLowerCase()) || 0,
   })));
   const listTotal = Math.max(0, total - (offset > 0 ? offset : 0));
   res.json({ leaderboard: enriched, total, page, limit, pages: Math.ceil(listTotal / limit) });
@@ -693,32 +721,32 @@ app.get('/api/seasons', async (_, res) => {
   const { start, end } = seasonBounds(current);
   const startDate = new Date(start * 1000).toISOString();
 
-  // Live current season standings
+  // Live current season standings — use activity so any play this week is counted
   const { data: liveRhythm } = await supabase
-    .from('scores')
+    .from('activity')
     .select('*')
     .eq('game', 'rhythm')
     .gte('created_at', startDate)
     .order('score', { ascending: false })
-    .limit(200);
+    .limit(500);
 
   const { data: liveSimon } = await supabase
-    .from('scores')
+    .from('activity')
     .select('*')
     .eq('game', 'simon')
     .gte('created_at', startDate)
     .order('score', { ascending: false })
-    .limit(200);
+    .limit(500);
 
-  // Dedup by wallet — keep best score per user
-  const dedupScores = (rows) => {
+  // Dedup by wallet — keep best score per user this week
+  const dedupScores = (rows, limit = 10) => {
     const seen = new Map();
     for (const row of (rows || [])) {
       const key = row.wallet_address?.toLowerCase();
       if (!key) continue;
       if (!seen.has(key) || row.score > seen.get(key).score) seen.set(key, row);
     }
-    return Array.from(seen.values()).sort((a, b) => b.score - a.score).slice(0, 10);
+    return Array.from(seen.values()).sort((a, b) => b.score - a.score).slice(0, limit);
   };
 
   // Past sealed seasons
@@ -727,6 +755,40 @@ app.get('/api/seasons', async (_, res) => {
     .select('*')
     .eq('sealed', true)
     .order('season_number', { ascending: false });
+
+  // Fetch actual scores for each past season from the activity table
+  const pastWithScores = await Promise.all((pastSeasons || []).map(async (s) => {
+    const startIso = new Date(s.start_ts * 1000).toISOString();
+    const endIso   = new Date(s.end_ts   * 1000).toISOString();
+
+    const [{ data: rRaw }, { data: siRaw }] = await Promise.all([
+      supabase.from('activity').select('*').eq('game', 'rhythm')
+        .gte('created_at', startIso).lt('created_at', endIso)
+        .order('score', { ascending: false }).limit(500),
+      supabase.from('activity').select('*').eq('game', 'simon')
+        .gte('created_at', startIso).lt('created_at', endIso)
+        .order('score', { ascending: false }).limit(500),
+    ]);
+
+    const fmt = async (e) => ({
+      player: e.wallet_address,
+      username: await resolveUsername(e.wallet_address) || null,
+      score: e.score,
+      gameTime: e.game_time,
+      timestamp: Math.floor(new Date(e.created_at).getTime() / 1000),
+      tx_hash: e.tx_hash,
+    });
+
+    return {
+      season:   s.season_number,
+      startTs:  s.start_ts,
+      endTs:    s.end_ts,
+      prizePot: s.prize_pot,
+      sealedAt: Math.floor(new Date(s.created_at).getTime() / 1000),
+      rhythm:   await Promise.all(dedupScores(rRaw,  10).map(fmt)),
+      simon:    await Promise.all(dedupScores(siRaw, 10).map(fmt)),
+    };
+  }));
 
   // Format for frontend — same shape as /api/leaderboard so fmt() works correctly
   const formatEntry = async (e) => ({
@@ -746,15 +808,7 @@ app.get('/api/seasons', async (_, res) => {
       rhythm: await Promise.all(dedupScores(liveRhythm).map(formatEntry)),
       simon: await Promise.all(dedupScores(liveSimon).map(formatEntry)),
     },
-    past: (pastSeasons || []).map(s => ({
-      season: s.season_number,
-      startTs: s.start_ts,
-      endTs: s.end_ts,
-      prizePot: s.prize_pot,
-      sealedAt: Math.floor(new Date(s.created_at).getTime() / 1000),
-      rhythm: [],
-      simon: [],
-    })),
+    past: pastWithScores,
   });
 });
 
@@ -840,6 +894,78 @@ app.get('/api/streak/:address', async (req, res) => {
   res.json({ streak, playedToday });
 });
 
+// ─── GET /api/competition — 3-week cumulative leaderboard (weeks 11-13) ────────
+// Each player's best score per week is summed. Top 3 win $15/$10/$5.
+const COMPETITION_WEEKS = [11, 12, 13];
+
+app.get('/api/competition', async (_, res) => {
+  const totals = new Map(); // wallet -> { username, rhythm, simon, weeks: { 11: n, 12: n, 13: n } }
+
+  for (const week of COMPETITION_WEEKS) {
+    const { start, end } = seasonBounds(week);
+    const startIso = new Date(start * 1000).toISOString();
+    const endIso   = new Date(end   * 1000).toISOString();
+
+    for (const game of ['rhythm', 'simon']) {
+      const { data: rows } = await supabase
+        .from('activity')
+        .select('wallet_address, score')
+        .eq('game', game)
+        .gte('created_at', startIso)
+        .lt('created_at', endIso)
+        .order('score', { ascending: false })
+        .limit(500);
+
+      // Best score per player this week
+      const weekBest = new Map();
+      for (const row of (rows || [])) {
+        const key = row.wallet_address?.toLowerCase();
+        if (!key) continue;
+        if (!weekBest.has(key) || row.score > weekBest.get(key)) {
+          weekBest.set(key, row.score);
+        }
+      }
+
+      // Add to cumulative totals
+      for (const [wallet, score] of weekBest.entries()) {
+        if (!totals.has(wallet)) totals.set(wallet, { wallet, totalRhythm: 0, totalSimon: 0, weeklyScores: {} });
+        const entry = totals.get(wallet);
+        if (game === 'rhythm') entry.totalRhythm += score;
+        else entry.totalSimon += score;
+        if (!entry.weeklyScores[week]) entry.weeklyScores[week] = {};
+        entry.weeklyScores[week][game] = score;
+      }
+    }
+  }
+
+  // Build final rankings by total (rhythm + simon combined)
+  const rankings = await Promise.all(
+    Array.from(totals.values())
+      .map(e => ({ ...e, total: e.totalRhythm + e.totalSimon }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 20)
+      .map(async e => ({
+        ...e,
+        username: await resolveUsername(e.wallet) || null,
+      }))
+  );
+
+  const current = currentSeasonNumber();
+  const weeksLeft = COMPETITION_WEEKS.filter(w => w > current).length;
+  const { start: compStart } = seasonBounds(COMPETITION_WEEKS[0]);
+  const { end: compEnd }     = seasonBounds(COMPETITION_WEEKS[COMPETITION_WEEKS.length - 1]);
+
+  res.json({
+    weeks: COMPETITION_WEEKS,
+    prizes: { first: 15, second: 10, third: 5 },
+    compStart,
+    compEnd,
+    weeksLeft,
+    currentWeek: current,
+    rankings,
+  });
+});
+
 // ─── POST /api/dice-roll — disabled until Phase 2 signed oracle ──────────────
 // app.post('/api/dice-roll', requireSecret, standardLimiter, async (_, res) => {
 //   const { randomInt } = require('crypto');
@@ -882,13 +1008,13 @@ app.post('/api/faucet', requireSecret, strictLimiter, async (req, res) => {
 
     const tx = await validator.sendTransaction({
       to: address,
-      value: ethers.parseEther('0.025'),
+      value: ethers.parseEther('0.1'),
     });
     await tx.wait();
 
     await supabase.from('faucet').insert({ wallet_address: lower });
 
-    console.log(`⛽ Faucet: sent 0.025 CELO to ${lower} (tx: ${tx.hash.slice(0, 10)}...)`);
+    console.log(`⛽ Faucet: sent 0.1 CELO to ${lower} (tx: ${tx.hash.slice(0, 10)}...)`);
     res.json({ success: true, txHash: tx.hash });
   } catch (e) {
     console.error(`⛽ Faucet failed for ${lower}:`, e.message);

@@ -36,14 +36,14 @@ const GAMES = [
     desc: 'Tap the glowing button in time with the beat.',
     accent: '#a855f7', faint: 'rgba(168,85,247,0.08)', border: 'rgba(168,85,247,0.25)',
     gameType: 0, winAt: '350 pts', payout: '1.3x',
-    howTo: ['🎵 A button pulses to the beat', 'Tap it exactly when it glows', 'Keep the combo going for more points', 'Hit 350 pts to win a wager payout'],
+    howTo: ['A button lights up to the beat', 'Tap it right when it glows', 'Keep your combo up for more points', 'Hit 350 pts to win the wager'],
   },
   {
     id: 'simon', path: '/games/simon', emoji: '🧠', title: 'SIMON MEMORY',
-    desc: 'Watch the color sequence flash and repeat it.',
+    desc: 'Watch the color sequence and repeat it back.',
     accent: '#06b6d4', faint: 'rgba(6,182,212,0.08)', border: 'rgba(6,182,212,0.25)',
     gameType: 1, winAt: '7 sequences', payout: '1.3x', noWager: true,
-    howTo: ['🧠 Watch the color sequence flash', 'Tap the same colors in order', 'Each round adds one more color', 'Survive 7 rounds to win'],
+    howTo: ['Watch the colors flash in order', 'Tap them back in the same order', 'Each round adds one more color', 'Get through 7 rounds to win'],
   },
 ];
 
@@ -325,7 +325,7 @@ export default function GamesHub() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', padding: '12px 16px', borderRadius: '14px', background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.15)' }}>
             <div>
               <div style={{ color: '#fff', fontSize: '13px', fontWeight: 900, letterSpacing: '2px' }}>GAME<span style={{ color: '#a855f7' }}>_</span>ARENA</div>
-              <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '2px' }}>Play · Earn G$ · Fund UBI</div>
+              <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '2px' }}>Play games. Win real rewards.</div>
             </div>
             <button onClick={() => login()} className="gb" style={{ padding: '10px 20px', borderRadius: '12px', cursor: 'pointer', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', border: 'none', color: '#fff', fontSize: '10px', fontWeight: 700, fontFamily: 'Orbitron, monospace', letterSpacing: '1px' }}>CONNECT</button>
           </div>
@@ -341,7 +341,7 @@ export default function GamesHub() {
           <div style={{ marginBottom: '12px', padding: '10px 14px', background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.18)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '16px', flexShrink: 0 }}>💡</span>
             <span style={{ color: '#9ca3af', fontSize: '11px', flex: 1, lineHeight: 1.5 }}>
-              <span style={{ color: '#a855f7', fontWeight: 700 }}>Verify once</span> → claim free G$ weekly → wager on games to win <span style={{ color: '#9ca3af', fontWeight: 700 }}>1.3×</span>
+              <span style={{ color: '#a855f7', fontWeight: 700 }}>Verify once</span>, claim free G$ every week, and use it to wager on games for a <span style={{ color: '#9ca3af', fontWeight: 700 }}>1.3x</span> payout.
             </span>
             <button onClick={() => { setShowOnboarding(false); localStorage.setItem('ga_onboarding_seen', '1'); }} style={{ background: 'none', border: 'none', color: '#4b5563', fontSize: '16px', cursor: 'pointer', lineHeight: 1, flexShrink: 0, padding: '0 2px' }}>×</button>
           </div>
@@ -380,7 +380,7 @@ export default function GamesHub() {
             <span style={{ fontSize: '18px' }}>⛽</span>
             <div style={{ flex: 1 }}>
               <div style={{ color: '#e2e8f0', fontSize: '12px', fontWeight: 700, letterSpacing: '1px' }}>NEED GAS?</div>
-              <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '3px' }}>{isVerified ? 'Get free 0.025 CELO for transactions (one time)' : 'Verify your humanity to unlock free gas'}</div>
+              <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '3px' }}>{isVerified ? 'Get free 0.1 CELO for transactions (one time)' : 'Verify your humanity to unlock free gas'}</div>
             </div>
             <button onClick={async () => {
               if (!isVerified) { verifyIdentity(); return; }
@@ -388,7 +388,7 @@ export default function GamesHub() {
               try {
                 const res = await fetch(`${BACKEND_URL}/api/faucet`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address }) });
                 const data = await res.json();
-                if (data.success) { toast.success('0.025 CELO sent to your wallet!'); setGasReceived(true); }
+                if (data.success) { toast.success('0.1 CELO sent to your wallet!'); setGasReceived(true); }
                 else { toast(data.reason || 'Already received', { icon: 'ℹ️' }); setGasReceived(true); }
               } catch (_) { toast.error('Faucet failed'); }
               setRequestingGas(false);
@@ -403,7 +403,7 @@ export default function GamesHub() {
           <div id="create-player" style={{ marginBottom: '20px', padding: '28px 24px', background: 'linear-gradient(160deg, rgba(168,85,247,0.08), rgba(168,85,247,0.03))', border: '1px solid rgba(168,85,247,0.2)', borderRadius: '16px', textAlign: 'center', animation: 'slideUp 0.5s ease-out' }}>
             <div style={{ fontSize: '48px', marginBottom: '12px', animation: 'float 3s ease-in-out infinite' }}>🎮</div>
             <div style={{ color: '#a855f7', fontSize: '16px', fontWeight: 900, letterSpacing: '3px', marginBottom: '6px' }}>CREATE YOUR PLAYER</div>
-            <div style={{ color: '#6b7280', fontSize: '12px', marginBottom: '12px', lineHeight: 1.5 }}>Pick a username · Mint your free soulbound pass · Start playing</div>
+            <div style={{ color: '#6b7280', fontSize: '12px', marginBottom: '12px', lineHeight: 1.5 }}>Pick a username and you are in. It is free and takes about 10 seconds.</div>
             {!hasGasForMint && (
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginBottom: '20px', padding: '7px 14px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '8px' }}>
                 <span style={{ fontSize: '13px' }}>⛽</span>
@@ -429,8 +429,8 @@ export default function GamesHub() {
           <div style={{ marginBottom: '16px', padding: '12px 16px', background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.15)', borderRadius: '12px', display: 'flex', gap: '12px', alignItems: 'center' }}>
             <span style={{ fontSize: '20px' }}>🪙</span>
             <div style={{ flex: 1 }}>
-              <div style={{ color: '#e2e8f0', fontSize: '12px', fontWeight: 700, letterSpacing: '1px' }}>CLAIM FREE G$ TO WAGER</div>
-              <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '3px' }}>Verify once → claim weekly G$ → use it to wager on games</div>
+              <div style={{ color: '#e2e8f0', fontSize: '12px', fontWeight: 700, letterSpacing: '1px' }}>GET FREE G$ TO WAGER</div>
+              <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '3px' }}>Verify your identity once to unlock free weekly G$ you can wager on games.</div>
             </div>
             <button onClick={verifyIdentity} disabled={isVerifying} className="gb" style={{ padding: '8px 16px', borderRadius: '10px', cursor: 'pointer', background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.3)', color: '#a855f7', fontSize: '10px', fontWeight: 700, fontFamily: 'Orbitron, monospace' }}>{isVerifying ? '...' : 'VERIFY'}</button>
           </div>
@@ -518,7 +518,7 @@ export default function GamesHub() {
             <span style={{ fontSize: '22px' }}>🤖</span>
             <div>
               <div style={{ color: '#a855f7', fontSize: '11px', fontWeight: 900, letterSpacing: '1px' }}>CHALLENGE AI</div>
-              <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '2px' }}>PvP vs Markov-1</div>
+              <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '2px' }}>1v1 vs the AI. Winner takes the pot.</div>
             </div>
           </div>
           <button onClick={() => router.push('/leaderboard')} className="gb" style={{ flex: 1, padding: '14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '14px', color: '#9ca3af', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', cursor: 'pointer', fontFamily: 'Orbitron, monospace' }}>SCORES</button>
@@ -527,13 +527,13 @@ export default function GamesHub() {
         {/* FAQ */}
         {(() => {
           const FAQS = [
-            { q: 'What is G$ (GoodDollar)?', a: 'G$ is a free digital currency given as Universal Basic Income. Every verified human can claim a small amount weekly — just for being human, on the Celo blockchain.' },
-            { q: 'What do I actually win?', a: 'Wager G$ and hit the win target — get your stake back plus a 1.3× payout. 2% of every wager funds the GoodDollar UBI pool.' },
-            { q: 'What\'s the point of the leaderboard?', a: 'Top players at the end of each weekly season earn a permanent on-chain badge. G$ prizes go to the top 3 when the prize pot is large enough.' },
-            { q: 'What is the Arena?', a: 'PvP mode where you challenge Markov-1, our AI. Both sides lock G$ into a smart contract — whoever scores higher wins the pot. Fully on-chain.' },
-            { q: 'Is it free to play?', a: 'Yes — free play is always available. Wagering requires a verified GoodDollar identity and a G$ balance, which you can claim for free after verifying.' },
-            { q: 'How do I get G$ to wager?', a: 'Verify your identity once via GoodDollar (a quick face scan), then claim your weekly G$ from the home screen. No purchase needed.' },
-            { q: 'What is a Game Pass?', a: 'A free soulbound NFT on Celo that ties a username to your wallet. Mint it once — it\'s your permanent player identity on GameArena.' },
+            { q: 'What is G$?', a: 'G$ is a free digital currency from GoodDollar. Every verified person can claim a small amount each week for free — no purchase needed.' },
+            { q: 'What do I actually win?', a: 'Wager G$ and hit the score target — you get your stake back plus a 1.3x payout. Small and consistent wins.' },
+            { q: 'What is the leaderboard for?', a: 'Top players each week earn a badge on their profile. When the prize pot grows big enough, the top 3 get G$ rewards.' },
+            { q: 'What is the Arena?', a: 'Challenge the AI in a 1v1 match. Both sides put G$ in, whoever wins the game takes it all. The result is settled on-chain.' },
+            { q: 'Is it free to play?', a: 'Yes, free play is always available. Wagering just needs a G$ balance, which you can claim for free after a quick identity check.' },
+            { q: 'How do I get G$ to wager?', a: 'Do a one-time identity verification (takes about a minute), then claim your weekly G$ from the home screen. That\'s it.' },
+            { q: 'What is a Game Pass?', a: 'It\'s your player profile. You pick a username, it gets saved on-chain, and that\'s what shows on the leaderboard. It\'s free and you only do it once.' },
           ];
           return (
             <div style={{ marginTop: '6px', marginBottom: '24px' }}>

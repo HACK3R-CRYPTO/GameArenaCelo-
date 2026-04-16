@@ -41,13 +41,14 @@ function formatDate(ts: number) {
 }
 
 
-function SeasonRow({ season, game, myAddress, accent }: { season: { season: number; startTs: number; endTs: number; [key: string]: unknown }; game: string; myAddress?: string; accent: string }) {
+function SeasonRow({ season, game, myAddress, accent }: { season: { season: number; startTs: number; endTs: number; totalPlayers?: number; [key: string]: unknown }; game: string; myAddress?: string; accent: string }) {
   const entries = (season[game] as Entry[]) || [];
   const myRank = myAddress ? entries.findIndex(e => e.player === myAddress.toLowerCase()) + 1 : 0;
+  const totalPlayers = (season.totalPlayers as number) || entries.length;
   if (entries.length === 0) return null;
   return (
     <div style={{ padding: '12px 16px', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '10px', marginBottom: '10px', background: myRank > 0 ? `${accent}08` : 'rgba(0,0,0,0.2)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
         <div>
           <span style={{ color: '#9ca3af', fontSize: '12px', fontWeight: 700 }}>WEEK {season.season}</span>
           <span style={{ color: '#374151', fontSize: '9px', marginLeft: '8px' }}>{formatDate(season.startTs)} – {formatDate(season.endTs)}</span>
@@ -58,12 +59,17 @@ function SeasonRow({ season, game, myAddress, accent }: { season: { season: numb
           </div>
         )}
       </div>
+      {/* Total players pill */}
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', marginBottom: '10px', padding: '3px 10px', borderRadius: '20px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+        <span style={{ color: '#6b7280', fontSize: '9px', fontWeight: 700, letterSpacing: '0.08em' }}>👥 {totalPlayers} PLAYER{totalPlayers !== 1 ? 'S' : ''} THIS WEEK</span>
+      </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        {entries.slice(0, 3).map((e, i) => {
+        {entries.slice(0, 10).map((e, i) => {
           const isMe = myAddress && e.player === myAddress.toLowerCase();
+          const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : null;
           return (
             <div key={e.player} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '5px 8px', borderRadius: '6px', background: isMe ? `${accent}12` : 'transparent' }}>
-              <span style={{ fontSize: '14px', minWidth: '20px' }}>{MEDALS[i]}</span>
+              <span style={{ fontSize: medal ? '14px' : '10px', minWidth: '20px', color: medal ? undefined : '#4b5563', fontWeight: 700, textAlign: 'center' }}>{medal || `#${i + 1}`}</span>
               <span style={{ color: isMe ? accent : '#9ca3af', fontSize: '11px', fontWeight: isMe ? 700 : 400, flex: 1 }}>{isMe ? 'YOU' : fmt(e.player, e.username)}</span>
               <span style={{ color: i === 0 ? accent : '#6b7280', fontSize: '13px', fontWeight: 900 }}>{e.score}</span>
               <span style={{ color: '#374151', fontSize: '9px' }}>pts</span>

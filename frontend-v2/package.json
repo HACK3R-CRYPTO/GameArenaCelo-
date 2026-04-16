@@ -9,9 +9,17 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@goodsdks/citizen-sdk": "^1.2.3",
+    "@goodsdks/identity-sdk": "^1.0.5",
+    "@privy-io/react-auth": "^3.21.2",
+    "@privy-io/wagmi": "^4.0.5",
+    "@tanstack/react-query": "^5.99.0",
     "next": "16.2.2",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "react-hot-toast": "^2.6.0",
+    "viem": "^2.47.4",
+    "wagmi": "^3.6.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

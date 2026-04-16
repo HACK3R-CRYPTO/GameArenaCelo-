@@ -554,11 +554,11 @@ export default function HomePage() {
         {/* Buttons */}
         <div style={{ display: "flex", gap: "50px", alignItems: "center" }}>
           {[
-            { 
-              label: "PLAY\nGAMES", 
-              icon: <GamepadIcon />, 
+            {
+              label: "PLAY\nGAMES",
+              icon: <GamepadIcon />,
               iconDark: "#005572", // Deep cyan/teal inset color
-              path: "/games",
+              path: "/connect?next=/games",
               gradient: "linear-gradient(160deg, #a4f480 0%, #2bd0b9 55%, #05a0cd 100%)",
               wall: "#006282", // Extremely dark heavy bottom base
               shadowGlow: "rgba(5, 160, 205, 0.6)"
@@ -567,7 +567,7 @@ export default function HomePage() {
               label: "CHALLENGE\nAI", 
               icon: <RobotIcon />, 
               iconDark: "#6b0000", // Deep red inset color
-              path: "/games/coinflip",
+              path: "/connect?next=/games/coinflip",
               gradient: "linear-gradient(160deg, #ffc76b 0%, #ff5232 50%, #cc0c0c 100%)",
               wall: "#800000",
               shadowGlow: "rgba(216, 17, 17, 0.6)"

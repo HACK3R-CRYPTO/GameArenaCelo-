@@ -97,21 +97,6 @@ const GAMES = [
   },
 ];
 
-const NEWS = [
-  {
-    title: "Rhythm Rush is now a top Community game!",
-    desc: "Join the weekly leaderboard now.",
-    thumb: "linear-gradient(135deg, #9333ea 0%, #c026d3 100%)",
-    thumbIcon: "🥁",
-  },
-  {
-    title: "Game Arena adds an awesome Playing Community!",
-    desc: "Over 1.2M players and growing.",
-    thumb: "linear-gradient(135deg, #0891b2 0%, #06b6d4 100%)",
-    thumbIcon: "🎮",
-  },
-];
-
 const TOURNAMENTS = [
   { rank: 1, name: "Rhythm Tourney", winner: "Alex W.", color: "#fbbf24" },
   { rank: 2, name: "Memory Masters", winner: "0x44f…", color: "#e2e8f0" },
@@ -429,90 +414,6 @@ export default function GamesPage() {
             }}
           />
 
-          {/* Daily Missions widget — only when connected */}
-          {address && missions.length > 0 && (
-            <div style={{ width: "100%", maxWidth: "680px", flexShrink: 0 }}>
-              <div style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                marginBottom: "8px", padding: "0 4px",
-              }}>
-                <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                  <span style={{ fontSize: "14px" }}>🎯</span>
-                  <span style={{ color: "white", fontSize: "11px", fontWeight: 900, letterSpacing: "0.16em", textShadow: "0 0 10px rgba(167,139,250,0.6)" }}>DAILY MISSIONS</span>
-                </div>
-                <div style={{
-                  display: "inline-flex", alignItems: "center", gap: "5px",
-                  padding: "3px 9px", borderRadius: "999px",
-                  background: "rgba(0,0,0,0.4)",
-                  border: "1px solid rgba(167,139,250,0.3)",
-                }}>
-                  <span style={{ color: "rgba(200,180,255,0.6)", fontSize: "8px", fontWeight: 800, letterSpacing: "0.12em" }}>RESETS IN</span>
-                  <span style={{ color: "#a78bfa", fontSize: "10px", fontWeight: 900, fontFamily: "monospace" }}>{fmtCountdown(missionResetSec)}</span>
-                </div>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px" }}>
-                {missions.map(m => {
-                  const pct = Math.round((m.progress / m.target) * 100);
-                  const ready = m.completed && !m.claimed;
-                  const done  = m.claimed;
-                  return (
-                    <div key={m.id} style={{
-                      borderRadius: "14px",
-                      background: done
-                        ? "linear-gradient(180deg, rgba(34,197,94,0.1) 0%, rgba(20,10,50,0.6) 100%)"
-                        : ready
-                          ? "linear-gradient(180deg, rgba(251,191,36,0.18) 0%, rgba(20,10,50,0.7) 100%)"
-                          : "rgba(20,10,50,0.7)",
-                      border: `1.5px solid ${done ? "rgba(34,197,94,0.5)" : ready ? "#fbbf24" : "rgba(167,139,250,0.25)"}`,
-                      boxShadow: ready ? "0 0 14px rgba(251,191,36,0.45)" : "0 4px 12px rgba(0,0,0,0.4)",
-                      padding: "10px 12px",
-                      display: "flex", flexDirection: "column", gap: "8px",
-                      opacity: done ? 0.6 : 1,
-                    }}>
-                      <div style={{ color: "white", fontSize: "11px", fontWeight: 800, lineHeight: 1.3, minHeight: "30px" }}>
-                        {m.label}
-                      </div>
-                      {/* Progress bar */}
-                      <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
-                          <span style={{ color: "rgba(200,180,255,0.6)", fontSize: "9px", fontWeight: 700 }}>{m.progress} / {m.target}</span>
-                          <span style={{ color: "#fbbf24", fontSize: "9px", fontWeight: 900 }}>+{m.rewardXp} XP</span>
-                        </div>
-                        <div style={{ height: "6px", borderRadius: "999px", background: "rgba(0,0,0,0.5)", overflow: "hidden", border: "1px solid rgba(167,139,250,0.15)" }}>
-                          <div style={{
-                            width: `${pct}%`, height: "100%", borderRadius: "999px",
-                            background: done ? "#22c55e" : ready ? "#fbbf24" : "#a78bfa",
-                            boxShadow: done ? "0 0 6px #22c55e" : ready ? "0 0 8px rgba(251,191,36,0.7)" : "0 0 6px rgba(167,139,250,0.5)",
-                            transition: "width 0.3s",
-                          }} />
-                        </div>
-                      </div>
-                      {/* Action */}
-                      {done ? (
-                        <div style={{ textAlign: "center", color: "#22c55e", fontSize: "10px", fontWeight: 900, letterSpacing: "0.1em" }}>✓ CLAIMED</div>
-                      ) : ready ? (
-                        <div role="button" tabIndex={0} onClick={() => claimMission(m.id)}
-                          style={{ cursor: "pointer", userSelect: "none" }}>
-                          <div style={{
-                            borderRadius: "10px",
-                            background: "linear-gradient(180deg, #fbbf24 0%, #b45309 100%)",
-                            padding: "6px", textAlign: "center",
-                            border: "1.5px solid rgba(255,255,255,0.45)",
-                            boxShadow: "inset 0 4px 8px rgba(255,255,255,0.4), inset 0 -2px 4px rgba(0,0,0,0.3)",
-                          }}>
-                            <span style={{ color: "white", fontSize: "11px", fontWeight: 900, letterSpacing: "0.12em", textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}>CLAIM</span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div style={{ textAlign: "center", color: "rgba(200,180,255,0.5)", fontSize: "10px", fontWeight: 700, letterSpacing: "0.06em" }}>IN PROGRESS</div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {/* Game cards row */}
           <div style={{
             display: "grid",
@@ -554,80 +455,120 @@ export default function GamesPage() {
               background: "linear-gradient(135deg, #3b1fa3 0%, #6d28d9 60%, #3b1fa3 100%)",
               padding: "12px 14px",
               position: "relative", overflow: "hidden",
+              display: "flex", alignItems: "center", justifyContent: "space-between",
             }}>
               <div style={{
                 position: "absolute", top: 0, left: 0, right: 0, height: "50%",
                 background: "linear-gradient(180deg,rgba(255,255,255,0.28) 0%,transparent 100%)",
                 pointerEvents: "none",
               }}/>
-              <div style={{ color: "white", fontSize: "13px", fontWeight: 900, letterSpacing: "0.1em", position: "relative", zIndex: 1 }}>
-                NEWS/EVENTS
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", position: "relative", zIndex: 1 }}>
+                <span style={{ fontSize: "14px" }}>🎯</span>
+                <span style={{ color: "white", fontSize: "13px", fontWeight: 900, letterSpacing: "0.1em" }}>DAILY MISSIONS</span>
               </div>
+              {address && missions.length > 0 && (
+                <div style={{ position: "relative", zIndex: 1, color: "#fbbf24", fontSize: "10px", fontWeight: 900, fontFamily: "monospace", textShadow: "0 0 8px rgba(251,191,36,0.6)" }}>
+                  {fmtCountdown(missionResetSec)}
+                </div>
+              )}
             </div>
 
             <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: "10px", overflowY: "auto", flex: 1 }}>
 
-              {/* Latest Updates */}
-              <div style={{ fontSize: "9px", fontWeight: 900, letterSpacing: "0.15em", color: "rgba(200,180,255,0.7)" }}>
-                LATEST UPDATES
-              </div>
-
-              {NEWS.map((n, i) => (
-                <div key={i} style={{
-                  display: "flex", gap: "8px", alignItems: "flex-start",
-                  background: "rgba(255,255,255,0.04)",
-                  borderRadius: "10px",
-                  border: "1px solid rgba(255,255,255,0.07)",
-                  padding: "8px",
-                }}>
-                  {/* Thumbnail */}
-                  <div style={{
-                    width: "38px", height: "38px", borderRadius: "8px", flexShrink: 0,
-                    background: n.thumb,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: "18px",
-                    boxShadow: "0 2px 6px rgba(0,0,0,0.5)",
-                  }}>
-                    {n.thumbIcon}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
-                      color: "white", fontSize: "10px", fontWeight: 700, lineHeight: 1.3,
-                      display: "-webkit-box", WebkitLineClamp: 2,
-                      WebkitBoxOrient: "vertical", overflow: "hidden",
-                    }}>{n.title}</div>
-                    <div style={{ color: "rgba(180,155,255,0.5)", fontSize: "9px", marginTop: "2px" }}>{n.desc}</div>
-                  </div>
+              {/* MISSIONS — primary content */}
+              {!address ? (
+                <div style={{ padding: "20px 8px", textAlign: "center", color: "rgba(200,180,255,0.5)", fontSize: "10px", fontWeight: 700 }}>
+                  Connect wallet to see daily missions
                 </div>
-              ))}
+              ) : missions.length === 0 ? (
+                <div style={{ padding: "20px 8px", textAlign: "center", color: "rgba(200,180,255,0.5)", fontSize: "10px", fontWeight: 700 }}>
+                  Loading missions...
+                </div>
+              ) : (
+                missions.map(m => {
+                  const pct = Math.round((m.progress / m.target) * 100);
+                  const ready = m.completed && !m.claimed;
+                  const done  = m.claimed;
+                  return (
+                    <div key={m.id} style={{
+                      borderRadius: "12px",
+                      background: done
+                        ? "linear-gradient(180deg, rgba(34,197,94,0.08) 0%, rgba(0,0,0,0.2) 100%)"
+                        : ready
+                          ? "linear-gradient(180deg, rgba(251,191,36,0.18) 0%, rgba(0,0,0,0.2) 100%)"
+                          : "rgba(255,255,255,0.04)",
+                      border: `1.5px solid ${done ? "rgba(34,197,94,0.45)" : ready ? "#fbbf24" : "rgba(167,139,250,0.22)"}`,
+                      boxShadow: ready ? "0 0 12px rgba(251,191,36,0.4)" : "none",
+                      padding: "9px 10px",
+                      display: "flex", flexDirection: "column", gap: "6px",
+                      opacity: done ? 0.6 : 1,
+                    }}>
+                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "6px" }}>
+                        <div style={{ color: "white", fontSize: "10px", fontWeight: 700, lineHeight: 1.3, flex: 1 }}>
+                          {m.label}
+                        </div>
+                        <div style={{ color: "#fbbf24", fontSize: "9px", fontWeight: 900, whiteSpace: "nowrap", flexShrink: 0 }}>+{m.rewardXp} XP</div>
+                      </div>
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
+                          <span style={{ color: "rgba(200,180,255,0.55)", fontSize: "8px", fontWeight: 700 }}>{m.progress} / {m.target}</span>
+                          <span style={{ color: "rgba(200,180,255,0.55)", fontSize: "8px", fontWeight: 700 }}>{pct}%</span>
+                        </div>
+                        <div style={{ height: "5px", borderRadius: "999px", background: "rgba(0,0,0,0.5)", overflow: "hidden", border: "1px solid rgba(167,139,250,0.12)" }}>
+                          <div style={{
+                            width: `${pct}%`, height: "100%", borderRadius: "999px",
+                            background: done ? "#22c55e" : ready ? "#fbbf24" : "#a78bfa",
+                            boxShadow: ready ? "0 0 6px rgba(251,191,36,0.6)" : "none",
+                            transition: "width 0.3s",
+                          }} />
+                        </div>
+                      </div>
+                      {done ? (
+                        <div style={{ textAlign: "center", color: "#22c55e", fontSize: "9px", fontWeight: 900, letterSpacing: "0.1em" }}>✓ CLAIMED</div>
+                      ) : ready ? (
+                        <div role="button" tabIndex={0} onClick={() => claimMission(m.id)}
+                          style={{ cursor: "pointer", userSelect: "none" }}>
+                          <div style={{
+                            borderRadius: "8px",
+                            background: "linear-gradient(180deg, #fbbf24 0%, #b45309 100%)",
+                            padding: "5px", textAlign: "center",
+                            border: "1.5px solid rgba(255,255,255,0.45)",
+                            boxShadow: "inset 0 3px 6px rgba(255,255,255,0.4), inset 0 -2px 4px rgba(0,0,0,0.3)",
+                          }}>
+                            <span style={{ color: "white", fontSize: "10px", fontWeight: 900, letterSpacing: "0.14em", textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}>CLAIM</span>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })
+              )}
 
-              {/* Upcoming Tournaments */}
-              <div style={{ fontSize: "9px", fontWeight: 900, letterSpacing: "0.15em", color: "rgba(200,180,255,0.7)", marginTop: "2px" }}>
-                UPCOMING TOURNAMENTS
+              {/* EVENTS — secondary content (3-week competition + tournaments teaser) */}
+              <div style={{ fontSize: "9px", fontWeight: 900, letterSpacing: "0.15em", color: "rgba(200,180,255,0.7)", marginTop: "6px" }}>
+                EVENTS
               </div>
-
-              {TOURNAMENTS.map((t, i) => (
+              {TOURNAMENTS.slice(0, 2).map((t, i) => (
                 <div key={i} style={{
                   display: "flex", alignItems: "center", gap: "8px",
                   background: "rgba(255,255,255,0.04)",
                   borderRadius: "10px",
                   border: "1px solid rgba(255,255,255,0.07)",
-                  padding: "8px 10px",
+                  padding: "7px 9px",
                 }}>
-                  {/* Trophy badge */}
                   <div style={{
-                    width: "32px", height: "32px", borderRadius: "8px", flexShrink: 0,
+                    width: "28px", height: "28px", borderRadius: "8px", flexShrink: 0,
                     background: `linear-gradient(135deg, ${t.color}dd 0%, ${t.color}66 100%)`,
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    boxShadow: `0 0 10px ${t.color}55`,
+                    boxShadow: `0 0 8px ${t.color}55`,
                   }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
                       <path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2z"/>
                     </svg>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ color: "white", fontSize: "10px", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</div>
-                    <div style={{ color: t.color, fontSize: "9px", fontWeight: 700, marginTop: "1px" }}>Winner {t.rank} · {t.winner}</div>
+                    <div style={{ color: t.color, fontSize: "8px", fontWeight: 700, marginTop: "1px" }}>Winner {t.rank} · {t.winner}</div>
                   </div>
                 </div>
               ))}

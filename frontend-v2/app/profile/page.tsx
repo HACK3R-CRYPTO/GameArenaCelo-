@@ -386,8 +386,24 @@ export default function ProfilePage() {
   const xpCurrent = userMeta?.xpInLevel ?? 0;
   const xpToNext = userMeta?.xpToNext ?? 100;
   const xpPct = Math.round((xpCurrent / xpToNext) * 100);
-  const playerRank = 7;
-  const { tier, division } = tierFromRank(playerRank);
+  // Fetch player's real leaderboard rank — best across both games
+  const [playerRank, setPlayerRank] = useState<number>(0);
+  useEffect(() => {
+    if (!address) { setPlayerRank(0); return; }
+    Promise.all([
+      fetch(`${BACKEND_URL}/api/leaderboard?game=rhythm&offset=0&limit=500`).then(r => r.json()).catch(() => ({ leaderboard: [] })),
+      fetch(`${BACKEND_URL}/api/leaderboard?game=simon&offset=0&limit=500`).then(r => r.json()).catch(() => ({ leaderboard: [] })),
+    ]).then(([rh, sm]) => {
+      const findRank = (data: { leaderboard?: { player: string }[] }) => {
+        const i = (data.leaderboard || []).findIndex(e => e.player.toLowerCase() === address.toLowerCase());
+        return i >= 0 ? i + 1 : 0;
+      };
+      const ranks = [findRank(rh), findRank(sm)].filter(r => r > 0);
+      setPlayerRank(ranks.length ? Math.min(...ranks) : 0);
+    });
+  }, [address]);
+
+  const { tier, division } = tierFromRank(playerRank || 9999);
 
   // Fetch real championship badges from backend
   const [badgeData, setBadgeData] = useState<BadgeData | null>(null);

@@ -64,6 +64,35 @@ function rowColorByRank(rank: number): string {
 
 type Entry = { player: string; username?: string; score: number; timestamp: number; streak?: number };
 
+// /api/seasons response
+type PastSeason = {
+  season: number;
+  startTs: number;
+  endTs: number;
+  prizePot: number;
+  sealedAt: number;
+  totalPlayers?: number;
+  rhythm: Entry[];
+  simon: Entry[];
+};
+type SeasonsData = {
+  currentSeason: number;
+  currentEndsAt: number;
+  live: { rhythm: Entry[]; simon: Entry[] };
+  past: PastSeason[];
+};
+
+// /api/competition response
+type CompRanking = { wallet: string; username: string | null; total: number; totalRhythm: number; totalSimon: number };
+type CompetitionData = {
+  weeks: number[];
+  prizes: { first: number; second: number; third: number };
+  compEnd: number;
+  weeksLeft: number;
+  currentWeek: number;
+  rankings: CompRanking[];
+};
+
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 
 // ─── Dummy data for preview ────────────────────────────────────────────────────
@@ -334,8 +363,8 @@ function PlayerRow({
         }}>
           {isMe ? "YOU" : fmtName(entry.player, entry.username)}
         </div>
-        {/* Streak flex chip — only shown for serious grinders (>= 3 days) */}
-        {entry.streak && entry.streak >= 3 && (
+        {/* Streak flex chip — shown after at least one return (>= 2 days) */}
+        {entry.streak && entry.streak >= 2 && (
           <div style={{
             display: "inline-flex", alignItems: "center", gap: "3px",
             padding: "2px 7px", borderRadius: "999px",
@@ -379,6 +408,34 @@ export default function LeaderboardPage() {
       .then(d => setStreak({ streak: d.streak || 0, playedToday: !!d.playedToday }))
       .catch(() => setStreak(null));
   }, [address]);
+
+  // Seasons + competition data (for SEASONS tab)
+  const [seasonsData, setSeasonsData] = useState<SeasonsData | null>(null);
+  const [competition, setCompetition] = useState<CompetitionData | null>(null);
+  const [selectedSeason, setSelectedSeason] = useState<PastSeason | null>(null);
+  useEffect(() => {
+    if (activeTab !== "seasons") return;
+    fetch(`${BACKEND_URL}/api/seasons`).then(r => r.json()).then(setSeasonsData).catch(() => setSeasonsData(null));
+    fetch(`${BACKEND_URL}/api/competition`).then(r => r.json()).then(setCompetition).catch(() => setCompetition(null));
+  }, [activeTab]);
+
+  // Live countdown to season end (refreshes every second)
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
+  useEffect(() => {
+    if (activeTab !== "seasons") return;
+    const t = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
+    return () => clearInterval(t);
+  }, [activeTab]);
+  function formatCountdown(secondsLeft: number) {
+    if (secondsLeft <= 0) return "ENDED";
+    const d = Math.floor(secondsLeft / 86400);
+    const h = Math.floor((secondsLeft % 86400) / 3600);
+    const m = Math.floor((secondsLeft % 3600) / 60);
+    const s = secondsLeft % 60;
+    if (d > 0) return `${d}D ${h}H ${m}M`;
+    if (h > 0) return `${h}H ${m}M ${s}S`;
+    return `${m}M ${s}S`;
+  }
 
   const fetchEntries = useCallback(async () => {
     setLoading(true);
@@ -569,17 +626,325 @@ export default function LeaderboardPage() {
 
             {/* SEASONS / PVP placeholders */}
             {activeTab === "seasons" && (
-              <div style={{
-                width: "100%", maxWidth: "540px",
-                padding: "30px 20px", borderRadius: "18px",
-                background: "rgba(20,10,50,0.6)", border: "1px solid rgba(255,255,255,0.08)",
-                textAlign: "center",
-              }}>
-                <div style={{ fontSize: "36px", marginBottom: "10px" }}>📅</div>
-                <div style={{ color: "white", fontSize: "14px", fontWeight: 900, letterSpacing: "0.1em", marginBottom: "6px" }}>SEASON HISTORY</div>
-                <div style={{ color: "rgba(200,180,255,0.55)", fontSize: "11px", lineHeight: 1.5 }}>
-                  Completed weekly seasons with their top players and prize pool — coming here soon.
-                </div>
+              <div style={{ width: "100%", maxWidth: "720px", display: "flex", flexDirection: "column", gap: "16px" }}>
+
+                {/* ── ACTIVE SEASON HERO ── */}
+                {seasonsData && (() => {
+                  const liveEntries = (gameTab === "rhythm" ? seasonsData.live.rhythm : seasonsData.live.simon) || [];
+                  const top3 = liveEntries.slice(0, 3);
+                  const myEntry = address ? liveEntries.find(e => e.player.toLowerCase() === address.toLowerCase()) : undefined;
+                  const myRank = myEntry ? liveEntries.findIndex(e => e.player.toLowerCase() === address!.toLowerCase()) + 1 : 0;
+                  const secondsLeft = Math.max(0, seasonsData.currentEndsAt - now);
+                  return (
+                    <div style={{
+                      borderRadius: "20px", padding: "3px",
+                      background: "linear-gradient(135deg, #fbbf24 0%, #f97316 50%, #fbbf24 100%)",
+                      boxShadow: "0 0 32px rgba(251,191,36,0.4), 0 0 60px rgba(249,115,22,0.2), 0 12px 30px rgba(0,0,0,0.6)",
+                    }}>
+                      <div style={{
+                        borderRadius: "18px",
+                        background: "linear-gradient(180deg, #2a0c6e 0%, #13063a 50%, #07021a 100%)",
+                        padding: "18px 18px 16px",
+                        position: "relative", overflow: "hidden",
+                      }}>
+                        {/* Top gloss */}
+                        <div style={{
+                          position: "absolute", top: 0, left: 0, right: 0, height: "60px",
+                          background: "linear-gradient(180deg, rgba(251,191,36,0.18) 0%, transparent 100%)",
+                          pointerEvents: "none",
+                        }} />
+
+                        {/* Header row */}
+                        <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", marginBottom: "12px" }}>
+                          <div>
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                              <span style={{ display: "inline-block", width: "7px", height: "7px", borderRadius: "50%", background: "#22c55e", boxShadow: "0 0 8px #22c55e", animation: "icon-float 1.5s ease-in-out infinite" }} />
+                              <span style={{ color: "#22c55e", fontSize: "9px", fontWeight: 900, letterSpacing: "0.18em" }}>LIVE NOW</span>
+                            </div>
+                            <div style={{ color: "white", fontSize: "20px", fontWeight: 900, letterSpacing: "0.04em", textShadow: "0 0 16px rgba(251,191,36,0.6)" }}>
+                              SEASON {seasonsData.currentSeason}
+                            </div>
+                          </div>
+                          {/* Countdown */}
+                          <div style={{
+                            padding: "6px 12px", borderRadius: "12px",
+                            background: "rgba(0,0,0,0.5)",
+                            border: "1.5px solid rgba(251,191,36,0.6)",
+                            boxShadow: "inset 0 2px 6px rgba(0,0,0,0.6)",
+                            textAlign: "right",
+                          }}>
+                            <div style={{ color: "rgba(251,191,36,0.7)", fontSize: "8px", fontWeight: 800, letterSpacing: "0.14em" }}>ENDS IN</div>
+                            <div style={{ color: "#fbbf24", fontSize: "13px", fontWeight: 900, fontFamily: "monospace", textShadow: "0 0 8px rgba(251,191,36,0.7)" }}>
+                              {formatCountdown(secondsLeft)}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Prize pool + players */}
+                        <div style={{ position: "relative", zIndex: 1, display: "grid", gridTemplateColumns: "2fr 1fr", gap: "10px", marginBottom: "14px" }}>
+                          <div style={{
+                            borderRadius: "14px",
+                            background: "linear-gradient(180deg, rgba(251,191,36,0.18) 0%, rgba(0,0,0,0.3) 100%)",
+                            border: "1.5px solid rgba(251,191,36,0.5)",
+                            padding: "10px 14px",
+                          }}>
+                            <div style={{ color: "rgba(251,191,36,0.7)", fontSize: "9px", fontWeight: 800, letterSpacing: "0.14em" }}>PRIZE POOL</div>
+                            <div style={{ display: "flex", alignItems: "baseline", gap: "5px", marginTop: "2px" }}>
+                              <span style={{ color: "#fbbf24", fontSize: "20px", fontWeight: 900, textShadow: "0 0 14px rgba(251,191,36,0.7)" }}>50</span>
+                              <span style={{ color: "rgba(254,215,170,0.85)", fontSize: "11px", fontWeight: 800, letterSpacing: "0.1em" }}>G$</span>
+                            </div>
+                            <div style={{ display: "flex", gap: "8px", marginTop: "6px", fontSize: "8px", fontWeight: 800 }}>
+                              <span style={{ color: "#fbbf24" }}>🥇 25</span>
+                              <span style={{ color: "#e2e8f0" }}>🥈 15</span>
+                              <span style={{ color: "#f97316" }}>🥉 10</span>
+                            </div>
+                          </div>
+                          <div style={{
+                            borderRadius: "14px",
+                            background: "linear-gradient(180deg, rgba(167,139,250,0.18) 0%, rgba(0,0,0,0.3) 100%)",
+                            border: "1.5px solid rgba(167,139,250,0.5)",
+                            padding: "10px 12px", textAlign: "center",
+                            display: "flex", flexDirection: "column", justifyContent: "center",
+                          }}>
+                            <div style={{ color: "#a78bfa", fontSize: "20px", fontWeight: 900, textShadow: "0 0 14px rgba(167,139,250,0.7)" }}>
+                              {liveEntries.length}
+                            </div>
+                            <div style={{ color: "rgba(200,180,255,0.7)", fontSize: "8px", fontWeight: 800, letterSpacing: "0.12em", marginTop: "2px" }}>PLAYERS</div>
+                          </div>
+                        </div>
+
+                        {/* Mini podium (top 3 chips) */}
+                        {top3.length > 0 && (
+                          <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", gap: "6px" }}>
+                            <div style={{ color: "rgba(200,180,255,0.7)", fontSize: "9px", fontWeight: 900, letterSpacing: "0.16em", marginBottom: "2px" }}>
+                              CURRENT TOP 3 — {gameTab === "rhythm" ? "RHYTHM RUSH" : "SIMON MEMORY"}
+                            </div>
+                            {top3.map((e, i) => {
+                              const medalColor = i === 0 ? "#fbbf24" : i === 1 ? "#e2e8f0" : "#f97316";
+                              const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : "🥉";
+                              const isMe = !!address && e.player.toLowerCase() === address.toLowerCase();
+                              return (
+                                <div key={e.player} style={{
+                                  display: "flex", alignItems: "center", gap: "10px",
+                                  padding: "7px 12px", borderRadius: "10px",
+                                  background: isMe ? `${medalColor}26` : "rgba(255,255,255,0.04)",
+                                  border: `1px solid ${isMe ? medalColor : "rgba(255,255,255,0.07)"}`,
+                                }}>
+                                  <span style={{ fontSize: "16px" }}>{medal}</span>
+                                  <span style={{ flex: 1, color: isMe ? medalColor : "white", fontSize: "11px", fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {isMe ? "YOU" : fmtName(e.player, e.username)}
+                                  </span>
+                                  <span style={{ color: medalColor, fontSize: "13px", fontWeight: 900, textShadow: `0 0 8px ${medalColor}` }}>{e.score}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Your status */}
+                        {myEntry && myRank > 3 && (
+                          <div style={{
+                            position: "relative", zIndex: 1, marginTop: "10px",
+                            padding: "8px 12px", borderRadius: "10px",
+                            background: "rgba(192,38,211,0.12)",
+                            border: "1px solid rgba(192,38,211,0.45)",
+                            display: "flex", alignItems: "center", justifyContent: "space-between",
+                          }}>
+                            <span style={{ color: "rgba(244,182,253,0.85)", fontSize: "10px", fontWeight: 800, letterSpacing: "0.08em" }}>
+                              YOU&apos;RE #{myRank}
+                            </span>
+                            <span style={{ color: "#e879f9", fontSize: "13px", fontWeight: 900, textShadow: "0 0 8px rgba(232,121,249,0.6)" }}>
+                              {myEntry.score} pts
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* ── 3-WEEK COMPETITION SPECIAL EVENT — single gold accent ── */}
+                {competition && competition.weeksLeft > 0 && (
+                  <div style={{
+                    borderRadius: "18px", padding: "2px",
+                    background: "linear-gradient(180deg, #fbbf24 0%, #b45309 100%)",
+                    boxShadow: "0 0 18px rgba(251,191,36,0.3), 0 10px 24px rgba(0,0,0,0.6)",
+                  }}>
+                    <div style={{
+                      borderRadius: "16px",
+                      background: "linear-gradient(180deg, #2a0c6e 0%, #07021a 100%)",
+                      padding: "16px 18px",
+                      position: "relative", overflow: "hidden",
+                    }}>
+                      <div style={{
+                        position: "absolute", top: 0, left: 0, right: 0, height: "55%",
+                        background: "linear-gradient(180deg, rgba(251,191,36,0.1) 0%, transparent 100%)",
+                        pointerEvents: "none",
+                      }} />
+                      <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", marginBottom: "12px" }}>
+                        <div>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "2px 8px", borderRadius: "999px", background: "rgba(251,191,36,0.15)", border: "1px solid rgba(251,191,36,0.5)", marginBottom: "6px" }}>
+                            <span style={{ color: "#fbbf24", fontSize: "8px", fontWeight: 900, letterSpacing: "0.16em" }}>SPECIAL EVENT</span>
+                          </div>
+                          <div style={{ color: "white", fontSize: "15px", fontWeight: 900, letterSpacing: "0.04em", lineHeight: 1.1 }}>
+                            3-WEEK COMPETITION
+                          </div>
+                        </div>
+                        <div style={{
+                          padding: "5px 10px", borderRadius: "10px",
+                          background: "rgba(0,0,0,0.5)",
+                          border: "1px solid rgba(251,191,36,0.4)",
+                          textAlign: "right",
+                        }}>
+                          <div style={{ color: "rgba(254,215,170,0.7)", fontSize: "8px", fontWeight: 800, letterSpacing: "0.14em" }}>WEEKS LEFT</div>
+                          <div style={{ color: "#fbbf24", fontSize: "16px", fontWeight: 900, lineHeight: 1 }}>
+                            {competition.weeksLeft}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ position: "relative", zIndex: 1, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px" }}>
+                        {[
+                          { rank: "1ST", emoji: "🥇", color: "#fbbf24", prize: competition.prizes.first },
+                          { rank: "2ND", emoji: "🥈", color: "#e2e8f0", prize: competition.prizes.second },
+                          { rank: "3RD", emoji: "🥉", color: "#f97316", prize: competition.prizes.third },
+                        ].map(p => (
+                          <div key={p.rank} style={{
+                            borderRadius: "10px",
+                            background: "rgba(0,0,0,0.35)",
+                            border: `1px solid ${p.color}55`,
+                            padding: "8px 4px", textAlign: "center",
+                          }}>
+                            <div style={{ fontSize: "14px" }}>{p.emoji}</div>
+                            <div style={{ color: p.color, fontSize: "15px", fontWeight: 900, marginTop: "2px" }}>
+                              ${p.prize}
+                            </div>
+                            <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "8px", fontWeight: 800, letterSpacing: "0.1em", marginTop: "1px" }}>{p.rank}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {address && (() => {
+                        const myCompRank = competition.rankings.findIndex(r => r.wallet === address.toLowerCase());
+                        if (myCompRank < 0) return null;
+                        const me = competition.rankings[myCompRank];
+                        return (
+                          <div style={{
+                            position: "relative", zIndex: 1, marginTop: "10px",
+                            padding: "8px 12px", borderRadius: "10px",
+                            background: "rgba(251,191,36,0.08)",
+                            border: "1px solid rgba(251,191,36,0.4)",
+                            display: "flex", alignItems: "center", justifyContent: "space-between",
+                          }}>
+                            <span style={{ color: "rgba(254,215,170,0.85)", fontSize: "10px", fontWeight: 800, letterSpacing: "0.08em" }}>
+                              YOU&apos;RE #{myCompRank + 1} OVERALL
+                            </span>
+                            <span style={{ color: "#fbbf24", fontSize: "13px", fontWeight: 900 }}>
+                              {me.total} pts
+                            </span>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── PAST SEASONS HISTORY ── */}
+                {seasonsData && seasonsData.past.length > 0 && (
+                  <div>
+                    <div style={{
+                      fontSize: "10px", fontWeight: 900, letterSpacing: "0.2em",
+                      color: "rgba(200,180,255,0.8)", textAlign: "center",
+                      textShadow: "0 0 14px rgba(160,100,255,0.8)", marginBottom: "12px",
+                    }}>── COMPLETED SEASONS ──</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "10px" }}>
+                      {seasonsData.past.slice(0, 12).map(s => {
+                        const entries = (gameTab === "rhythm" ? s.rhythm : s.simon) || [];
+                        const winner = entries[0];
+                        const myFinish = address ? entries.findIndex(e => e.player.toLowerCase() === address.toLowerCase()) + 1 : 0;
+                        const placedTop3 = myFinish > 0 && myFinish <= 3;
+                        const myMedalColor = myFinish === 1 ? "#fbbf24" : myFinish === 2 ? "#e2e8f0" : myFinish === 3 ? "#f97316" : null;
+                        const myMedal = myFinish === 1 ? "🥇" : myFinish === 2 ? "🥈" : myFinish === 3 ? "🥉" : null;
+                        return (
+                          <div key={s.season}
+                            role="button" tabIndex={0}
+                            onClick={() => setSelectedSeason(s)}
+                            style={{
+                              borderRadius: "14px",
+                              background: "rgba(20,10,50,0.6)",
+                              border: placedTop3
+                                ? `1.5px solid ${myMedalColor}88`
+                                : "1px solid rgba(167,139,250,0.18)",
+                              boxShadow: placedTop3
+                                ? `0 0 12px ${myMedalColor}33, 0 6px 14px rgba(0,0,0,0.5)`
+                                : "0 6px 14px rgba(0,0,0,0.5)",
+                              padding: "12px 14px",
+                              cursor: "pointer", userSelect: "none",
+                              transition: "transform 0.15s, border-color 0.15s",
+                            }}
+                            onMouseEnter={e => {
+                              const el = e.currentTarget as HTMLDivElement;
+                              el.style.transform = "translateY(-2px)";
+                              if (!placedTop3) el.style.borderColor = "rgba(167,139,250,0.5)";
+                            }}
+                            onMouseLeave={e => {
+                              const el = e.currentTarget as HTMLDivElement;
+                              el.style.transform = "";
+                              if (!placedTop3) el.style.borderColor = "rgba(167,139,250,0.18)";
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                              <div style={{ color: "white", fontSize: "13px", fontWeight: 900, letterSpacing: "0.06em" }}>
+                                SEASON {s.season}
+                              </div>
+                              {myMedal && (
+                                <div style={{
+                                  padding: "2px 8px", borderRadius: "999px",
+                                  background: `${myMedalColor}1a`, border: `1px solid ${myMedalColor}66`,
+                                }}>
+                                  <span style={{ fontSize: "10px" }}>{myMedal}</span>
+                                  <span style={{ color: myMedalColor!, fontSize: "9px", fontWeight: 900, marginLeft: "4px" }}>YOU</span>
+                                </div>
+                              )}
+                            </div>
+                            {winner ? (
+                              <div style={{
+                                display: "flex", alignItems: "center", gap: "8px",
+                                padding: "6px 8px", borderRadius: "8px",
+                                background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)",
+                                marginBottom: "8px",
+                              }}>
+                                <span style={{ fontSize: "13px" }}>🏆</span>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ color: "rgba(254,215,170,0.65)", fontSize: "8px", fontWeight: 800, letterSpacing: "0.1em" }}>WINNER</div>
+                                  <div style={{ color: "white", fontSize: "11px", fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {fmtName(winner.player, winner.username)}
+                                  </div>
+                                </div>
+                                <div style={{ color: "#fbbf24", fontSize: "13px", fontWeight: 900 }}>
+                                  {winner.score}
+                                </div>
+                              </div>
+                            ) : (
+                              <div style={{ color: "rgba(200,180,255,0.4)", fontSize: "10px", textAlign: "center", padding: "12px 0" }}>
+                                No scores
+                              </div>
+                            )}
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "rgba(200,180,255,0.55)", fontSize: "9px", fontWeight: 700 }}>
+                              <span>👥 {s.totalPlayers || entries.length} player{(s.totalPlayers || entries.length) !== 1 ? "s" : ""}</span>
+                              <span style={{ color: "rgba(167,139,250,0.7)", fontSize: "10px", fontWeight: 800, letterSpacing: "0.1em" }}>VIEW →</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {!seasonsData && (
+                  <div style={{
+                    padding: "40px 20px", textAlign: "center",
+                    color: "rgba(200,180,255,0.5)", fontSize: "11px", fontWeight: 700, letterSpacing: "0.15em",
+                  }}>LOADING SEASONS...</div>
+                )}
               </div>
             )}
 
@@ -602,6 +967,134 @@ export default function LeaderboardPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Season Detail Modal ── */}
+      {selectedSeason && (() => {
+        const s = selectedSeason;
+        const entries = (gameTab === "rhythm" ? s.rhythm : s.simon) || [];
+        const top10 = entries.slice(0, 10);
+        const myRank = address ? entries.findIndex(e => e.player.toLowerCase() === address.toLowerCase()) + 1 : 0;
+        const startDate = new Date(s.startTs * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        const endDate   = new Date(s.endTs   * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        return (
+          <div onClick={() => setSelectedSeason(null)}
+            style={{
+              position: "fixed", inset: 0, zIndex: 100,
+              background: "rgba(4,0,20,0.78)", backdropFilter: "blur(8px)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              padding: "20px",
+            }}
+          >
+            <div onClick={e => e.stopPropagation()} style={{
+              width: "100%", maxWidth: "440px", maxHeight: "88vh",
+              borderRadius: "24px",
+              background: "#1a0550", paddingBottom: "6px",
+              boxShadow: "0 0 0 3px #5b21b6, 0 0 50px rgba(109,40,217,0.5), 0 30px 60px rgba(0,0,0,0.9)",
+              display: "flex", flexDirection: "column",
+            }}>
+              <div style={{
+                flex: 1, minHeight: 0,
+                borderRadius: "22px 22px 18px 18px",
+                background: "linear-gradient(180deg, #2a0c6e 0%, #13063a 50%, #07021a 100%)",
+                border: "2px solid rgba(255,255,255,0.12)",
+                display: "flex", flexDirection: "column", overflow: "hidden",
+              }}>
+                {/* Header */}
+                <div style={{
+                  padding: "16px 18px",
+                  borderBottom: "1px solid rgba(167,139,250,0.18)",
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  background: "linear-gradient(180deg, rgba(167,139,250,0.1) 0%, transparent 100%)",
+                }}>
+                  <div>
+                    <div style={{ color: "white", fontSize: "16px", fontWeight: 900, letterSpacing: "0.06em" }}>
+                      SEASON {s.season}
+                    </div>
+                    <div style={{ color: "rgba(200,180,255,0.55)", fontSize: "10px", fontWeight: 700, marginTop: "2px" }}>
+                      {startDate} – {endDate} · {gameTab === "rhythm" ? "RHYTHM RUSH" : "SIMON MEMORY"}
+                    </div>
+                  </div>
+                  <button onClick={() => setSelectedSeason(null)} style={{
+                    width: "32px", height: "32px", borderRadius: "50%",
+                    background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)",
+                    color: "rgba(200,180,255,0.7)", fontSize: "16px", cursor: "pointer", fontFamily: "inherit",
+                  }}>×</button>
+                </div>
+
+                {/* Stats strip */}
+                <div style={{
+                  padding: "10px 18px",
+                  display: "flex", justifyContent: "space-between", gap: "8px",
+                  borderBottom: "1px solid rgba(255,255,255,0.05)",
+                }}>
+                  <div>
+                    <div style={{ color: "rgba(200,180,255,0.6)", fontSize: "8px", fontWeight: 800, letterSpacing: "0.12em" }}>PLAYERS</div>
+                    <div style={{ color: "#a78bfa", fontSize: "14px", fontWeight: 900 }}>{s.totalPlayers || entries.length}</div>
+                  </div>
+                  <div>
+                    <div style={{ color: "rgba(200,180,255,0.6)", fontSize: "8px", fontWeight: 800, letterSpacing: "0.12em" }}>POOL</div>
+                    <div style={{ color: "#fbbf24", fontSize: "14px", fontWeight: 900 }}>{s.prizePot || 50} G$</div>
+                  </div>
+                  {myRank > 0 && (
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ color: "rgba(200,180,255,0.6)", fontSize: "8px", fontWeight: 800, letterSpacing: "0.12em" }}>YOUR FINISH</div>
+                      <div style={{
+                        color: myRank <= 3 ? (myRank === 1 ? "#fbbf24" : myRank === 2 ? "#e2e8f0" : "#f97316") : "#a78bfa",
+                        fontSize: "14px", fontWeight: 900,
+                      }}>#{myRank}</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Top 10 list */}
+                <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px" }}>
+                  {top10.length === 0 ? (
+                    <div style={{ padding: "30px", textAlign: "center", color: "rgba(200,180,255,0.5)", fontSize: "11px" }}>
+                      No scores recorded for this season
+                    </div>
+                  ) : top10.map((e, i) => {
+                    const rank = i + 1;
+                    const isMe = !!address && e.player.toLowerCase() === address.toLowerCase();
+                    const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
+                    const medalColor = rank === 1 ? "#fbbf24" : rank === 2 ? "#e2e8f0" : rank === 3 ? "#f97316" : null;
+                    return (
+                      <div key={e.player} style={{
+                        display: "flex", alignItems: "center", gap: "10px",
+                        padding: "8px 10px", borderRadius: "10px",
+                        background: isMe ? "rgba(167,139,250,0.15)" : "transparent",
+                        border: `1px solid ${isMe ? "rgba(167,139,250,0.4)" : "transparent"}`,
+                        marginBottom: "4px",
+                      }}>
+                        <div style={{
+                          minWidth: "26px", textAlign: "center",
+                          color: medalColor || "rgba(200,180,255,0.6)",
+                          fontSize: medal ? "16px" : "11px", fontWeight: 900,
+                        }}>{medal || `#${rank}`}</div>
+                        <div style={{
+                          width: "30px", height: "30px", borderRadius: "50%",
+                          border: "1.5px solid rgba(167,139,250,0.4)", flexShrink: 0, overflow: "hidden",
+                          background: "#1a0550",
+                        }}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={avatarUrl(e.player, e.username)} alt="" width={30} height={30}
+                            style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0, color: isMe ? "#a78bfa" : "white", fontSize: "12px", fontWeight: 800,
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {isMe ? "YOU" : fmtName(e.player, e.username)}
+                        </div>
+                        <div style={{ color: "#fbbf24", fontSize: "13px", fontWeight: 900, flexShrink: 0 }}>
+                          {e.score}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

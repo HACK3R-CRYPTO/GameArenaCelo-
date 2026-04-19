@@ -462,8 +462,7 @@ export default function LeaderboardPage() {
       const res = await fetch(`${BACKEND_URL}/api/leaderboard?game=${gameTab}&offset=0&limit=20`);
       const data = await res.json();
       const fetched = data.leaderboard || [];
-      // Pad with dummy entries so we always see a full preview of the tier system
-      setEntries(fetched.length >= 10 ? fetched : DUMMY_ENTRIES);
+      setEntries(fetched.length > 0 ? fetched : DUMMY_ENTRIES);
     } catch {
       setEntries(DUMMY_ENTRIES);
     } finally {

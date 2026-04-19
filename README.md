@@ -101,6 +101,75 @@ Built as part of the **GoodBuilders Program** — expanding real G$ usage throug
 
 ---
 
+## Retention & Progression Systems
+
+GameArena runs three independent progression loops so players always have something to chase — skill, grind, or daily ritual.
+
+### Player Level & XP
+- Every game played awards XP: `+10` base, `+25` if you beat the win threshold, `+25` for a new personal best
+- Mission claims give `+50` to `+120` XP on top
+- Level curve is the **Clash Royale / Pokémon GO standard triangular formula** — `totalXp(N) = 50·N·(N-1)`
+- LV 2 at 100 XP, LV 5 at 1,000, LV 10 at 4,500, LV 50 at 122,500
+- No cap — keeps long-term grinders engaged
+
+### Rank Tiers (weekly, leaderboard-driven)
+6 metallic tiers pyramid-distributed like LoL / Wild Rift — elite tiers stay rare:
+
+| Rank | Tier |
+|---|---|
+| #1 | MASTER |
+| #2–3 | DIAMOND |
+| #4–6 | PLATINUM |
+| #7–15 | GOLD |
+| #16–50 | SILVER |
+| #51+ | BRONZE |
+
+Tier is volatile (moves with weekly rankings) — keeps competitive pressure active.
+
+### Pet Evolution
+- Each player has a slime pet that evolves with their level
+- 5 stages: 🥚 Egg → 🟢 Baby Slime → 🟣 Teen Slime → 💎 Crystal Slime → 👑 King Slime
+- Pet lives on the profile trainer card, breathes + reacts to taps with speech bubbles
+- Emotional hook borrowed from Adopt Me / Tamagotchi retention playbook
+
+### Daily Missions
+- 3 fresh missions every 24h, deterministically picked per `(wallet, date)` — same missions all day, new set tomorrow
+- 10-template pool covering play count, wins, score milestones, personal bests, multi-game days
+- Guaranteed mix: 1 easy + 1 win + 1 random → balanced difficulty curve
+- Progress updates from the existing score-submit hook (no separate calls)
+- Claim button awards XP directly
+- Built with off-chain Supabase for <100ms UX
+
+### Milestone Achievements
+- 13-achievement catalog: First Win, 3/7/30-day streaks, 5/25/100 games, Rhythm score milestones (300/500/700), Simon milestones (5/10/15)
+- Unlocked automatically after matching score submissions
+- Display counter `X / 13 UNLOCKED` on profile with unlocked = gold glow, locked = grayscale
+- Database schema reserves `nft_token_id` + `tx_hash` fields for future on-chain mint via `WinnerBadge.sol` (hybrid path)
+
+### Play Streak
+- Consecutive-day play counter on every player's record
+- Shown as a glowing 🔥 chip in the persistent sidebar across all post-connect pages (Duolingo pattern)
+- Displayed on leaderboard rows when streak ≥ 2 days as a status flex
+
+### Backend API (all retention endpoints are off-chain Supabase)
+
+| Endpoint | Purpose |
+|---|---|
+| `GET  /api/user/:address` | Returns `xp`, `level`, `xpInLevel`, `xpToNext`, `streak`, `playedToday` |
+| `GET  /api/missions/today/:address` | Today's 3 missions with progress + seconds until midnight reset |
+| `POST /api/missions/claim` | Claim a completed mission → awards reward XP |
+| `GET  /api/achievements/:address` | Full 13-achievement catalog with unlock flag per player |
+| `GET  /api/streak/:address` | `{ streak, playedToday }` |
+| `GET  /api/badges/:address` | Seasonal gold/silver/bronze championship badges + streak labels |
+
+### Migrations
+Run these in order in Supabase SQL Editor:
+- `games-backend/migrations/2026-04-19_add_xp.sql` — adds `xp` column to `users`
+- `games-backend/migrations/2026-04-19_daily_missions.sql` — `daily_missions` table
+- `games-backend/migrations/2026-04-19_achievements.sql` — `achievements_unlocked` table
+
+---
+
 ## Smart Contracts
 
 | Contract | Address | Purpose |

@@ -254,16 +254,25 @@ function SectionDivider({ label }: { label: string }) {
 
 function AboutModal({ onClose }: { onClose: () => void }) {
   const games = [
-    { name: "RHYTHM RUSH", desc: "Tap the beat. Hit 350 pts. Win 1.3x.", accent: "#c084fc" },
-    { name: "SIMON MEMORY", desc: "Repeat 7 sequences. Win 1.3x.", accent: "#a78bfa" },
-    { name: "CHALLENGE AI", desc: "Beat the AI. Take 95% of the pot.", accent: "#e879f9" },
+    { name: "RHYTHM RUSH", desc: "Tap the beat. Hit 350 pts to win 1.3x your wager.", accent: "#c084fc" },
+    { name: "SIMON MEMORY", desc: "Repeat color sequences. Reach round 7+ to win 1.3x.", accent: "#06b6d4" },
+    { name: "MORE COMING", desc: "This is an Arena — more games roll in as we grow.", accent: "#fbbf24" },
+  ];
+
+  const progression = [
+    { name: "LEVEL UP", desc: "Every game earns XP. Climb levels. No cap.", accent: "#fbbf24" },
+    { name: "EVOLVE YOUR PET", desc: "Egg → Baby → Teen → Crystal → King Slime across 5 stages.", accent: "#22c55e" },
+    { name: "RANK TIER", desc: "Bronze → Silver → Gold → Platinum → Diamond → Master — based on weekly leaderboard.", accent: "#a78bfa" },
+    { name: "DAILY MISSIONS", desc: "3 fresh missions every 24h. Claim XP rewards.", accent: "#f97316" },
+    { name: "ACHIEVEMENTS", desc: "13 milestones to unlock — first win, win streaks, score records.", accent: "#fbbf24" },
   ];
 
   const steps = [
-    { num: "1", title: "Verify", text: "Verify with GoodDollar. Takes 1 minute." },
-    { num: "2", title: "Claim", text: "Claim free G$ every week. No purchase needed." },
-    { num: "3", title: "Profile", text: "Create your Game Pass. Free on-chain profile." },
-    { num: "4", title: "Play", text: "Wager, play skill games, and top the leaderboard." },
+    { num: "1", title: "Connect", text: "Sign in with Google, email, or wallet — takes 10 seconds." },
+    { num: "2", title: "Verify", text: "Verify with GoodDollar face scan to unlock G$ claims + wagering." },
+    { num: "3", title: "Claim daily G$", text: "Claim free G$ every 24h straight from the app." },
+    { num: "4", title: "Play", text: "Rhythm Rush or Simon — free or wagered. Every game earns XP." },
+    { num: "5", title: "Climb", text: "Win weeks for badges. Rank tier updates live. Pet evolves with you." },
   ];
 
   return (
@@ -274,7 +283,7 @@ function AboutModal({ onClose }: { onClose: () => void }) {
         {/* Intro panel */}
         <InfoCard>
           <p style={{ color: "rgba(255,255,255,0.88)", fontSize: "13.5px", lineHeight: 1.7, margin: 0 }}>
-            Play skill games on <strong style={{ color: "#d8b4fe" }}>Celo</strong>. Wager <strong style={{ color: "#fde68a" }}>G$</strong> and win real rewards. Every wager funds <strong style={{ color: "#86efac" }}>GoodDollar UBI</strong> for real people.
+            Skill-based arena on <strong style={{ color: "#d8b4fe" }}>Celo</strong>. Wager <strong style={{ color: "#fde68a" }}>G$</strong> on your reflexes, climb the weekly leaderboard, evolve your pet, earn NFT badges. Every wager funds <strong style={{ color: "#86efac" }}>GoodDollar UBI</strong> for real people.
           </p>
         </InfoCard>
 
@@ -289,13 +298,23 @@ function AboutModal({ onClose }: { onClose: () => void }) {
           ))}
         </div>
 
+        <SectionDivider label="PROGRESSION" />
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {progression.map(p => (
+            <InfoCard key={p.name} accentColor={p.accent}>
+              <div style={{ color: "white", fontSize: "13px", fontWeight: 900, letterSpacing: "0.06em", marginBottom: "4px" }}>{p.name}</div>
+              <div style={{ color: "rgba(200,170,255,0.8)", fontSize: "12.5px", lineHeight: 1.45 }}>{p.desc}</div>
+            </InfoCard>
+          ))}
+        </div>
+
         <SectionDivider label="HOW IT WORKS" />
 
         <div style={{ display: "flex", flexDirection: "column", gap: "8px", paddingBottom: "8px" }}>
           {steps.map(s => (
             <InfoCard key={s.num}>
               <div style={{ display: "flex", gap: "14px", alignItems: "flex-start" }}>
-                {/* Step gem token — display badge, not a button */}
                 <div style={{
                   flexShrink: 0,
                   width: "26px", height: "26px", borderRadius: "50%",
@@ -321,11 +340,15 @@ function AboutModal({ onClose }: { onClose: () => void }) {
 
 function SupportModal({ onClose }: { onClose: () => void }) {
   const faqs = [
-    { q: "My score is not on the leaderboard", a: "Scores update every few minutes. Refresh and check again." },
-    { q: "I can't claim G$", a: "Verify your identity first. Tap Verify and complete the face scan." },
-    { q: "My Game Pass won't mint", a: "You need a small amount of CELO for gas. Add CELO to your wallet and retry." },
-    { q: "My wallet connected but nothing loads", a: "Disconnect and reconnect. Standard social logins work best." },
-    { q: "My wager went through but no reward", a: "The result settles on-chain. Check your wallet balance directly." },
+    { q: "My score is not on the leaderboard", a: "Scores post on-chain after each game. If it's missing, refresh — the leaderboard polls every 15s." },
+    { q: "I can't claim G$", a: "Verify with GoodDollar first. Tap VERIFY on home and complete the face scan. Claims reset daily." },
+    { q: "My Game Pass won't mint", a: "You need a small amount of CELO for gas. Top up via the Celo faucet or a bridge and retry." },
+    { q: "How does my XP / level work?", a: "Every game earns +10 XP. Win = +25 bonus. New personal best = +25 bonus. Mission claims give 50-120 XP. No level cap." },
+    { q: "When does my pet evolve?", a: "Egg at LV 1-4, Baby Slime at LV 5, Teen Slime at LV 15, Crystal at LV 30, King Slime at LV 50. Check your profile for progress." },
+    { q: "Why is my tier so high / low?", a: "Tier = your weekly leaderboard rank. #1 = Master, #2-3 = Diamond, #4-6 = Platinum, etc. It changes every week as others play." },
+    { q: "How do daily missions work?", a: "3 fresh missions appear every day. Finish, tap CLAIM, earn XP. They reset at midnight UTC." },
+    { q: "My wager went through but no reward", a: "Wager resolution settles on-chain — check your wallet for the tx and updated G$ balance." },
+    { q: "I connected but nothing loads", a: "Disconnect and reconnect. Social login (Google/email) is the most reliable path." },
   ];
 
   return (

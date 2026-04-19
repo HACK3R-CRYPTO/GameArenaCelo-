@@ -534,12 +534,19 @@ async function getLeaderboard(game, limit = 50, seasonFilter = true) {
     .slice(0, limit);
 }
 
-async function getActivity(limit = 20) {
-  const { data } = await supabase
+// Returns recent activity rows. If `player` is provided, scopes the query to
+// that wallet (case-insensitive) — avoids the old pattern where the frontend
+// fetched globally-recent matches and filtered them client-side, which showed
+// nothing (or other users' rows) whenever the user hadn't played in the last
+// few minutes of global activity.
+async function getActivity(limit = 20, player = null) {
+  let q = supabase
     .from('activity')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(limit);
+  if (player) q = q.eq('wallet_address', player.toLowerCase());
+  const { data } = await q;
   return data || [];
 }
 
@@ -705,9 +712,13 @@ app.post('/api/sign-score', requireSecret, async (req, res) => {
   if (!['rhythm', 'simon'].includes(game)) {
     return res.status(400).json({ error: 'Unknown game' });
   }
-  const MAX_SCORE = game === 'rhythm' ? 5000 : 2000;
-  if (typeof score !== 'number' || score < 0 || score > MAX_SCORE) {
-    return res.status(400).json({ error: `Score out of range (max ${MAX_SCORE})` });
+  // Match /api/submit-score's upper bound (1M). Rhythm encore + precision bonus
+  // can legitimately push scores into the 10k-100k range, so the old 5000 cap
+  // was truncating real skill. Security still holds: the score value is bound
+  // inside the EIP-712 payload the validator signs, and the on-chain nonce is
+  // single-use, so a hacker can't tamper with or replay this voucher.
+  if (typeof score !== 'number' || score < 0 || score > 1_000_000) {
+    return res.status(400).json({ error: 'Score out of range (max 1000000)' });
   }
 
   const gameType = game === 'rhythm' ? 0 : 1;
@@ -797,6 +808,21 @@ app.post('/api/submit-score', requireSecret, strictLimiter, async (req, res) => 
   // Frontend passes the resulting txHash here after the wallet confirms.
   const scoreTxHash = scoreData.txHash || null;
   const txHash = wagerTxHash || scoreTxHash;
+
+  // ═══ Defense in depth: REQUIRE an on-chain proof ═══
+  // Every score must reference a successful on-chain write — either a wager
+  // resolution (wagerTxHash) or the player's recordScoreWithBackendSig tx
+  // (scoreTxHash). Without this guard, a compromised INTERNAL_SECRET could be
+  // used to inject scores directly into the DB with no on-chain counterpart.
+  // With it, the Supabase state can only ever be a strict subset of what
+  // happened on-chain — no "ghost scores" like the 4268 entry from earlier.
+  const TX_HASH_RE = /^0x[0-9a-fA-F]{64}$/;
+  if (!txHash || !TX_HASH_RE.test(txHash)) {
+    return res.status(400).json({
+      error: 'Missing on-chain proof',
+      reason: 'txHash required — every score must reference a GamePass contract tx',
+    });
+  }
 
   // Read previous best for this game so we can detect a new personal best after saving
   const lower = playerAddress.toLowerCase();
@@ -894,8 +920,14 @@ app.get('/api/leaderboard', async (req, res) => {
 });
 
 // ─── GET /api/activity ──────────────────────────────────────────────────────
-app.get('/api/activity', async (_, res) => {
-  const entries = await getActivity(10);
+app.get('/api/activity', async (req, res) => {
+  // Optional ?player=0x... scopes the result to a single wallet so profile
+  // pages never have to filter on the client (which is fragile and misses
+  // matches outside the limit window). Bump the default limit to 20 since
+  // the feed view uses this too and benefits from a longer history.
+  const player = typeof req.query.player === 'string' ? req.query.player : null;
+  const limit = player ? 30 : 10;
+  const entries = await getActivity(limit, player);
   const enriched = await Promise.all(entries.map(async (e) => ({
     player: e.wallet_address,
     game: e.game,

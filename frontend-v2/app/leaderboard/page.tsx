@@ -47,19 +47,30 @@ const GAME_TABS = [
   { id: "simon", label: "SIMON_MEMORY", accent: "#06b6d4" },
 ];
 
-// Tier-based row colors — same metallic system as the profile page.
-// Color carries MEANING (tier) instead of being arbitrary rainbow.
-//   1     → MASTER  (pink)
-//   2-5   → DIAMOND (violet)
-//   6-15  → PLATINUM (cyan)
-//   16-50 → GOLD    (amber)
-//   51+   → SILVER  (cool grey)
+// Tier pyramid — elite tiers stay rare (like LoL: <1% Master, ~3% Diamond).
+//   #1       → MASTER    (the king)
+//   #2-3     → DIAMOND   (podium runners-up)
+//   #4-6     → PLATINUM  (elite competitive)
+//   #7-15    → GOLD      (solid regulars)
+//   #16-50   → SILVER    (active players)
+//   #51+     → BRONZE    (everyone else)
 function rowColorByRank(rank: number): string {
   if (rank === 1)   return "#f472b6"; // MASTER
-  if (rank <= 5)    return "#a78bfa"; // DIAMOND
-  if (rank <= 15)   return "#67e8f9"; // PLATINUM
-  if (rank <= 50)   return "#fbbf24"; // GOLD
-  return "#c0c0c0";                    // SILVER
+  if (rank <= 3)    return "#a78bfa"; // DIAMOND
+  if (rank <= 6)    return "#67e8f9"; // PLATINUM
+  if (rank <= 15)   return "#fbbf24"; // GOLD
+  if (rank <= 50)   return "#c0c0c0"; // SILVER
+  return "#cd7f32";                    // BRONZE
+}
+
+function tierLabelByRank(rank: number): string {
+  if (rank === 1)                  return "MASTER I";
+  if (rank <= 3)                   return `DIAMOND ${rank === 2 ? "I" : "II"}`;
+  if (rank <= 6)                   return `PLATINUM ${rank === 4 ? "I" : rank === 5 ? "II" : "III"}`;
+  if (rank <= 15)                  return `GOLD ${rank <= 9 ? "I" : rank <= 12 ? "II" : "III"}`;
+  if (rank <= 50)                  return `SILVER ${rank <= 25 ? "I" : rank <= 38 ? "II" : "III"}`;
+  if (rank <= 200)                 return `BRONZE ${rank <= 100 ? "I" : "II"}`;
+  return "BRONZE III";
 }
 
 type Entry = { player: string; username?: string; score: number; timestamp: number; streak?: number };
@@ -354,14 +365,22 @@ function PlayerRow({
             style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }}
           />
         </div>
-        {/* Name */}
-        <div style={{
-          flex: 1, minWidth: 0,
-          color: isMe ? color : "white",
-          fontSize: "12px", fontWeight: 800,
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>
-          {isMe ? "YOU" : fmtName(entry.player, entry.username)}
+        {/* Name + tier subtitle (Wild Rift style — tier explicit under the name) */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            color: isMe ? color : "white",
+            fontSize: "12px", fontWeight: 800, lineHeight: 1.15,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>
+            {isMe ? "YOU" : fmtName(entry.player, entry.username)}
+          </div>
+          <div style={{
+            color: color, fontSize: "8.5px", fontWeight: 800,
+            letterSpacing: "0.1em", marginTop: "1px",
+            textShadow: `0 0 6px ${color}88`,
+          }}>
+            {tierLabelByRank(rank)}
+          </div>
         </div>
         {/* Streak flex chip — shown after at least one return (>= 2 days) */}
         {entry.streak && entry.streak >= 2 && (
@@ -502,11 +521,13 @@ export default function LeaderboardPage() {
               display: "flex", flexDirection: "column", alignItems: "center", gap: "1px",
               padding: "7px 6px", borderRadius: "12px",
               background: streak.playedToday
-                ? "linear-gradient(180deg, rgba(249,115,22,0.25) 0%, rgba(249,115,22,0.1) 100%)"
-                : "linear-gradient(180deg, rgba(107,114,128,0.2) 0%, rgba(31,41,55,0.1) 100%)",
-              border: `1.5px solid ${streak.playedToday ? "#f97316" : "rgba(107,114,128,0.5)"}`,
-              boxShadow: streak.playedToday ? "0 0 16px rgba(249,115,22,0.6), 0 0 30px rgba(249,115,22,0.25)" : "none",
-              minWidth: "44px",
+                ? "linear-gradient(180deg, #7c2d00 0%, #3f1300 100%)"
+                : "linear-gradient(180deg, #1f2937 0%, #111827 100%)",
+              border: `2px solid ${streak.playedToday ? "#f97316" : "#4b5563"}`,
+              boxShadow: streak.playedToday
+                ? "0 0 14px rgba(249,115,22,0.7), 0 0 28px rgba(249,115,22,0.3), inset 0 1px 0 rgba(255,255,255,0.15)"
+                : "inset 0 1px 0 rgba(255,255,255,0.08)",
+              minWidth: "46px",
             }}>
               <span style={{ fontSize: "16px", lineHeight: 1, filter: streak.playedToday ? "drop-shadow(0 0 6px rgba(249,115,22,0.9))" : "grayscale(0.5)" }}>🔥</span>
               <span style={{

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useAccount } from "wagmi";
 import { useSelfVerification } from "@/contexts/SelfVerificationContext";
@@ -13,60 +14,111 @@ const M = "/splash_screen_icons/golden_music.png";
 const V = "/splash_screen_icons/vending.png";
 
 const LEFT_ICONS = [
-  { src: D, top: "1%",  left: "-18px", size: 120, delay: 0.0, dur: 5.2, glow: "#cc44ff", rotate: -18 },
-  { src: M, top: "8%",  left: "34px",  size: 80,  delay: 0.7, dur: 4.3, glow: "#ffaa00", rotate: 12  },
-  { src: G, top: "24%", left: "6px",   size: 110, delay: 1.4, dur: 6.0, glow: "#aa88ff", rotate: -6  },
-  { src: D, top: "36%", left: "72px",  size: 140, delay: 0.3, dur: 4.8, glow: "#cc44ff", rotate: 16  },
-  { src: J, top: "54%", left: "-10px", size: 105, delay: 2.1, dur: 5.5, glow: "#22aaff", rotate: -8  },
-  { src: G, top: "72%", left: "4px",   size: 108, delay: 2.8, dur: 5.0, glow: "#aa88ff", rotate: -14 },
-  { src: D, top: "88%", left: "60px",  size: 95,  delay: 1.9, dur: 4.6, glow: "#cc44ff", rotate: 10  },
+  { src: D, top: "1%", left: "-18px", size: 120, delay: 0.0, dur: 5.2, glow: "#cc44ff", rotate: -18 },
+  { src: M, top: "8%", left: "34px", size: 80, delay: 0.7, dur: 4.3, glow: "#ffaa00", rotate: 12 },
+  { src: G, top: "24%", left: "6px", size: 110, delay: 1.4, dur: 6.0, glow: "#aa88ff", rotate: -6 },
+  { src: D, top: "36%", left: "72px", size: 140, delay: 0.3, dur: 4.8, glow: "#cc44ff", rotate: 16 },
+  { src: J, top: "54%", left: "-10px", size: 105, delay: 2.1, dur: 5.5, glow: "#22aaff", rotate: -8 },
+  { src: G, top: "72%", left: "4px", size: 108, delay: 2.8, dur: 5.0, glow: "#aa88ff", rotate: -14 },
+  { src: D, top: "88%", left: "60px", size: 95, delay: 1.9, dur: 4.6, glow: "#cc44ff", rotate: 10 },
 ];
 const RIGHT_ICONS = [
-  { src: D, top: "0%",  right: "-22px", size: 115, delay: 0.4, dur: 5.0, glow: "#cc44ff", rotate: 20  },
-  { src: J, top: "16%", right: "54px",  size: 100, delay: 1.2, dur: 4.8, glow: "#22aaff", rotate: 8   },
-  { src: V, top: "30%", right: "0px",   size: 120, delay: 2.0, dur: 6.2, glow: "#ff44cc", rotate: -4  },
-  { src: M, top: "50%", right: "44px",  size: 82,  delay: 0.6, dur: 4.0, glow: "#ffaa00", rotate: -16 },
-  { src: D, top: "65%", right: "-8px",  size: 100, delay: 2.4, dur: 5.2, glow: "#cc44ff", rotate: 10  },
-  { src: G, top: "80%", right: "58px",  size: 108, delay: 1.8, dur: 5.8, glow: "#aa88ff", rotate: -10 },
+  { src: D, top: "0%", right: "-22px", size: 115, delay: 0.4, dur: 5.0, glow: "#cc44ff", rotate: 20 },
+  { src: J, top: "16%", right: "54px", size: 100, delay: 1.2, dur: 4.8, glow: "#22aaff", rotate: 8 },
+  { src: V, top: "30%", right: "0px", size: 120, delay: 2.0, dur: 6.2, glow: "#ff44cc", rotate: -4 },
+  { src: M, top: "50%", right: "44px", size: 82, delay: 0.6, dur: 4.0, glow: "#ffaa00", rotate: -16 },
+  { src: D, top: "65%", right: "-8px", size: 100, delay: 2.4, dur: 5.2, glow: "#cc44ff", rotate: 10 },
+  { src: G, top: "80%", right: "58px", size: 108, delay: 1.8, dur: 5.8, glow: "#aa88ff", rotate: -10 },
 ];
 
 const NAV_ITEMS = [
-  { label: "Home",        path: "/home",        icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg> },
-  { label: "Games",       path: "/games",       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M21 6H3a1 1 0 00-1 1v10a1 1 0 001 1h18a1 1 0 001-1V7a1 1 0 00-1-1zm-10 7H9v2H7v-2H5v-2h2V9h2v2h2v2zm4.5 1a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm3-3a1.5 1.5 0 110-3 1.5 1.5 0 010 3z"/></svg> },
-  { label: "Leaderboard", path: "/leaderboard", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M11 21H5a2 2 0 01-2-2v-7a2 2 0 012-2h6v11zm2 0V6a2 2 0 012-2h4a2 2 0 012 2v13h-8z"/></svg> },
-  { label: "Profile",     path: "/profile",     icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg> },
+  { label: "Home", path: "/home", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg> },
+  { label: "Games", path: "/games", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M21 6H3a1 1 0 00-1 1v10a1 1 0 001 1h18a1 1 0 001-1V7a1 1 0 00-1-1zm-10 7H9v2H7v-2H5v-2h2V9h2v2h2v2zm4.5 1a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm3-3a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" /></svg> },
+  { label: "Leaderboard", path: "/leaderboard", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M11 21H5a2 2 0 01-2-2v-7a2 2 0 012-2h6v11zm2 0V6a2 2 0 012-2h4a2 2 0 012 2v13h-8z" /></svg> },
+  { label: "Profile", path: "/profile", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" /></svg> },
 ];
 
+// DiceBear avatar — unique face per wallet (matches leaderboard rows)
+function avatarUrl(address: string, username?: string | null) {
+  const seed = `${username || ""}-${address}`;
+  return `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(seed)}&backgroundType=gradientLinear&backgroundColor=ffdfbf,ffd5dc,c0aede,b6e3f4,d1d4f9`;
+}
+
+// Rank tier system — Clash Royale / LoL inspired metallic tiers
+type Tier = { name: string; color: string; ringGrad: string };
+const TIERS: Tier[] = [
+  { name: "BRONZE",   color: "#cd7f32", ringGrad: "conic-gradient(from 0deg, #cd7f32, #8b4513, #f0a060, #cd7f32)" },
+  { name: "SILVER",   color: "#c0c0c0", ringGrad: "conic-gradient(from 0deg, #f1f5f9, #94a3b8, #e2e8f0, #f1f5f9)" },
+  { name: "GOLD",     color: "#fbbf24", ringGrad: "conic-gradient(from 0deg, #fde68a, #d97706, #fef3c7, #fde68a)" },
+  { name: "PLATINUM", color: "#67e8f9", ringGrad: "conic-gradient(from 0deg, #a5f3fc, #0e7490, #cffafe, #a5f3fc)" },
+  { name: "DIAMOND",  color: "#a78bfa", ringGrad: "conic-gradient(from 0deg, #c4b5fd, #6d28d9, #ddd6fe, #c4b5fd)" },
+  { name: "MASTER",   color: "#f472b6", ringGrad: "conic-gradient(from 0deg, #f9a8d4, #be185d, #fce7f3, #f9a8d4)" },
+];
+function tierFromRank(rank: number): { tier: Tier; division: string } {
+  if (rank === 1)   return { tier: TIERS[5], division: "I" };
+  if (rank <= 5)    return { tier: TIERS[4], division: rank === 2 ? "I" : rank === 3 ? "II" : "III" };
+  if (rank <= 15)   return { tier: TIERS[3], division: rank <= 8 ? "I" : rank <= 11 ? "II" : "III" };
+  if (rank <= 50)   return { tier: TIERS[2], division: rank <= 20 ? "I" : rank <= 30 ? "II" : "III" };
+  if (rank <= 200)  return { tier: TIERS[1], division: rank <= 100 ? "I" : "II" };
+  return                   { tier: TIERS[0], division: "I" };
+}
+
+// ─── Tabs ──────────────────────────────────────────────────────────────────────
+const TABS = [
+  { id: "stats", label: "STATS", icon: "📊" },
+  { id: "matches", label: "MATCHES", icon: "⚔️" },
+  { id: "achievements", label: "TROPHIES", icon: "🏆" },
+  { id: "settings", label: "SETTINGS", icon: "⚙️" },
+] as const;
+type TabId = typeof TABS[number]["id"];
+
+// ─── Data ──────────────────────────────────────────────────────────────────────
 const GAME_STATS = [
-  { name: "RHYTHM\nRUSH",  played: 10, wins: 8, color: "#f59e0b", grad: "linear-gradient(160deg,#7e22ce,#a21caf)", icon: "🥁" },
-  { name: "SIMON\nMEMORY", played: 9,  wins: 6, color: "#22c55e", grad: "linear-gradient(160deg,#0e4f6b,#075985)", icon: "🧠" },
-  { name: "CHALLENGE\nAI", played: 5,  wins: 3, color: "#3b82f6", grad: "linear-gradient(160deg,#1e3a5f,#1e4080)", icon: "🤖" },
+  { name: "RHYTHM RUSH", played: 10, wins: 8, color: "#f59e0b", grad: "linear-gradient(160deg,#7e22ce 0%,#a21caf 100%)", icon: "🥁" },
+  { name: "SIMON MEMORY", played: 9, wins: 6, color: "#22c55e", grad: "linear-gradient(160deg,#0e4f6b 0%,#075985 100%)", icon: "🧠" },
+  { name: "CHALLENGE AI", played: 5, wins: 3, color: "#3b82f6", grad: "linear-gradient(160deg,#1e3a5f 0%,#1e4080 100%)", icon: "🤖" },
 ];
 
 const RECENT = [
-  { game: "Rhythm Rush",  result: "WIN",  earned: "+1.3 G$", color: "#22c55e", icon: "🥁" },
-  { game: "Simon Memory", result: "WIN",  earned: "+1.3 G$", color: "#22c55e", icon: "🧠" },
-  { game: "Challenge AI", result: "LOSS", earned: "-1 G$",   color: "#ef4444", icon: "🤖" },
-  { game: "Rhythm Rush",  result: "WIN",  earned: "+1.3 G$", color: "#22c55e", icon: "🥁" },
-  { game: "Simon Memory", result: "LOSS", earned: "-1 G$",   color: "#ef4444", icon: "🧠" },
+  { game: "Rhythm Rush", result: "WIN", earned: "+1.3 G$", color: "#22c55e", icon: "🥁", time: "2h ago" },
+  { game: "Simon Memory", result: "WIN", earned: "+1.3 G$", color: "#22c55e", icon: "🧠", time: "5h ago" },
+  { game: "Challenge AI", result: "LOSS", earned: "-1 G$", color: "#ef4444", icon: "🤖", time: "1d ago" },
+  { game: "Rhythm Rush", result: "WIN", earned: "+1.3 G$", color: "#22c55e", icon: "🥁", time: "1d ago" },
+  { game: "Simon Memory", result: "LOSS", earned: "-1 G$", color: "#ef4444", icon: "🧠", time: "2d ago" },
+  { game: "Rhythm Rush", result: "WIN", earned: "+1.3 G$", color: "#22c55e", icon: "🥁", time: "3d ago" },
+];
+
+// All achievements use the gold reward color. Locked = grayscale.
+const ACHIEVEMENT_COLOR = "#fbbf24";
+const ACHIEVEMENTS = [
+  { icon: "🥇", label: "First Win", desc: "Win your first game", unlocked: true },
+  { icon: "🔥", label: "5 Game Streak", desc: "Win 5 in a row", unlocked: true },
+  { icon: "💎", label: "Top 10 Player", desc: "Reach top 10 leaderboard", unlocked: true },
+  { icon: "🥁", label: "Drum Master", desc: "Score 500+ in Rhythm Rush", unlocked: true },
+  { icon: "🧠", label: "Memory Genius", desc: "Complete 10 Simon levels", unlocked: false },
+  { icon: "🤖", label: "AI Slayer", desc: "Beat the AI 5 times", unlocked: false },
+  { icon: "👑", label: "Weekly Champion", desc: "Win a weekly competition", unlocked: false },
+  { icon: "🌟", label: "100 Games", desc: "Play 100 total games", unlocked: false },
 ];
 
 // ─── Juicy Button ─────────────────────────────────────────────────────────────
 function JuicyBtn({
-  label, wallColor, faceGrad, glowColor, onClick,
-}: { label: string; wallColor: string; faceGrad: string; glowColor: string; onClick?: () => void }) {
+  label, wallColor, faceGrad, glowColor, onClick, fullWidth, fontSize = 13, padding = "11px 18px",
+}: {
+  label: string; wallColor: string; faceGrad: string; glowColor: string;
+  onClick?: () => void; fullWidth?: boolean; fontSize?: number; padding?: string;
+}) {
   return (
     <div role="button" tabIndex={0} onClick={onClick}
-      style={{ cursor: "pointer", userSelect: "none" }}
-      onMouseDown={e => { (e.currentTarget as HTMLDivElement).style.transform = "scale(0.95) translateY(4px)"; }}
+      style={{ cursor: "pointer", userSelect: "none", width: fullWidth ? "100%" : "auto" }}
+      onMouseDown={e => { (e.currentTarget as HTMLDivElement).style.transform = "scale(0.97) translateY(3px)"; }}
       onMouseUp={e => { (e.currentTarget as HTMLDivElement).style.transform = ""; }}
       onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = ""; }}
     >
       <div style={{ borderRadius: "14px", background: wallColor, paddingBottom: "5px", boxShadow: `0 10px 24px -4px ${glowColor}` }}>
         <div style={{
           borderRadius: "12px 12px 10px 10px", background: faceGrad,
-          padding: "11px 20px", textAlign: "center",
-          position: "relative", overflow: "hidden",
+          padding, textAlign: "center", position: "relative", overflow: "hidden",
           border: "2px solid rgba(255,255,255,0.45)",
           boxShadow: "inset 0 6px 14px rgba(255,255,255,0.65), inset 0 -3px 6px rgba(0,0,0,0.3)",
         }}>
@@ -75,11 +127,185 @@ function JuicyBtn({
             background: "linear-gradient(180deg, rgba(255,255,255,0.7) 0%, transparent 100%)",
             borderRadius: "12px 12px 60px 60px", pointerEvents: "none",
           }} />
-          <span style={{ color: "white", fontSize: "13px", fontWeight: 900, letterSpacing: "0.14em", position: "relative", zIndex: 1 }}>
+          <span style={{ color: "white", fontSize, fontWeight: 900, letterSpacing: "0.14em", position: "relative", zIndex: 1 }}>
             {label}
           </span>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Pill Tab (matches leaderboard) ────────────────────────────────────────────
+function PillTab({ label, icon, active, onClick }: { label: string; icon: string; active: boolean; onClick: () => void }) {
+  return (
+    <div role="button" tabIndex={0} onClick={onClick}
+      style={{ cursor: "pointer", userSelect: "none", flex: "0 0 auto", transition: "transform 0.15s" }}
+      onMouseDown={e => { (e.currentTarget as HTMLDivElement).style.transform = "scale(0.95) translateY(2px)"; }}
+      onMouseUp={e => { (e.currentTarget as HTMLDivElement).style.transform = ""; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = ""; }}
+    >
+      <div style={{
+        borderRadius: "999px",
+        background: active ? "#083a6b" : "#1a0550",
+        paddingBottom: "5px",
+        boxShadow: active
+          ? "0 0 0 2px #3b82f6, 0 0 20px rgba(59,130,246,0.7), 0 0 40px rgba(59,130,246,0.5), 0 10px 24px -4px rgba(59,130,246,0.7)"
+          : "0 6px 16px -4px rgba(0,0,0,0.5)",
+        transition: "all 0.2s",
+      }}>
+        <div style={{
+          borderRadius: "999px",
+          background: active ? "linear-gradient(180deg, #60a5fa 0%, #2563eb 50%, #1e40af 100%)" : "linear-gradient(180deg, #3b1fa3 0%, #1e0762 100%)",
+          padding: "9px 18px", textAlign: "center",
+          position: "relative", overflow: "hidden",
+          border: active ? "2px solid rgba(255,255,255,0.5)" : "2px solid rgba(255,255,255,0.12)",
+          boxShadow: active
+            ? "inset 0 6px 14px rgba(255,255,255,0.7), inset 0 -3px 6px rgba(0,0,0,0.35)"
+            : "inset 0 3px 8px rgba(255,255,255,0.06), inset 0 -2px 5px rgba(0,0,0,0.35)",
+          display: "flex", alignItems: "center", gap: "7px",
+        }}>
+          {active && (
+            <div style={{
+              position: "absolute", top: "2px", left: "6%", right: "6%", height: "46%",
+              background: "linear-gradient(180deg, rgba(255,255,255,0.7) 0%, transparent 100%)",
+              borderRadius: "999px", pointerEvents: "none",
+            }} />
+          )}
+          <span style={{ position: "relative", zIndex: 1, fontSize: "13px" }}>{icon}</span>
+          <span style={{
+            position: "relative", zIndex: 1,
+            color: active ? "white" : "rgba(220,200,255,0.6)",
+            fontSize: "11px", fontWeight: 900, letterSpacing: "0.1em",
+            textShadow: active ? "0 2px 4px rgba(0,0,0,0.4)" : "none",
+          }}>{label}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Stat Gem ──────────────────────────────────────────────────────────────────
+function StatGem({ value, label, color, wall }: { value: string; label: string; color: string; wall: string }) {
+  return (
+    <div style={{
+      borderRadius: "16px", background: wall, paddingBottom: "5px",
+      boxShadow: `0 8px 22px -4px ${color}88, 0 0 0 1.5px ${color}88, 0 0 24px ${color}33`,
+    }}>
+      <div style={{
+        borderRadius: "14px 14px 11px 11px",
+        background: "linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(0,0,0,0.3) 100%)",
+        padding: "12px 8px 10px", textAlign: "center",
+        border: `1.5px solid ${color}55`, position: "relative", overflow: "hidden",
+      }}>
+        <div style={{
+          position: "absolute", top: 0, left: "8%", right: "8%", height: "45%",
+          background: "linear-gradient(180deg, rgba(255,255,255,0.18) 0%, transparent 100%)",
+          borderRadius: "14px 14px 60px 60px", pointerEvents: "none",
+        }} />
+        <div style={{
+          position: "relative", zIndex: 1,
+          fontSize: "20px", fontWeight: 900, color, lineHeight: 1,
+          textShadow: `0 0 16px ${color}, 0 2px 4px rgba(0,0,0,0.6)`,
+        }}>{value}</div>
+        <div style={{
+          position: "relative", zIndex: 1,
+          fontSize: "8px", fontWeight: 800, color: "rgba(200,180,255,0.6)",
+          letterSpacing: "0.15em", marginTop: "6px",
+        }}>{label}</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Toggle Switch (juicy) ─────────────────────────────────────────────────────
+function ToggleSwitch({ on, color, onChange }: { on: boolean; color: string; onChange: () => void }) {
+  return (
+    <div role="button" tabIndex={0} onClick={onChange}
+      style={{
+        width: "52px", height: "30px", borderRadius: "999px",
+        background: on ? `linear-gradient(180deg, ${color} 0%, ${color}99 100%)` : "linear-gradient(180deg, #1a0550 0%, #07021a 100%)",
+        border: "2px solid rgba(255,255,255,0.2)",
+        boxShadow: on
+          ? `0 0 14px ${color}88, inset 0 2px 4px rgba(255,255,255,0.4), inset 0 -2px 4px rgba(0,0,0,0.3)`
+          : "inset 0 2px 6px rgba(0,0,0,0.6)",
+        position: "relative", cursor: "pointer", transition: "all 0.2s",
+      }}>
+      <div style={{
+        position: "absolute", top: "2px",
+        left: on ? "24px" : "2px",
+        width: "22px", height: "22px", borderRadius: "50%",
+        background: on ? "linear-gradient(180deg, white 0%, #e5e7eb 100%)" : "linear-gradient(180deg, #6b7280 0%, #374151 100%)",
+        boxShadow: "0 2px 6px rgba(0,0,0,0.4), inset 0 1px 2px rgba(255,255,255,0.6)",
+        transition: "left 0.2s, background 0.2s",
+      }} />
+    </div>
+  );
+}
+
+// ─── Volume Slider (juicy) ─────────────────────────────────────────────────────
+function VolumeSlider({ value, color, onChange }: { value: number; color: string; onChange: (v: number) => void }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1 }}>
+      <div style={{
+        flex: 1, height: "10px", borderRadius: "999px",
+        background: "rgba(0,0,0,0.5)",
+        border: "1.5px solid rgba(160,100,255,0.25)",
+        boxShadow: "inset 0 2px 6px rgba(0,0,0,0.6)",
+        position: "relative", cursor: "pointer", overflow: "hidden",
+      }}
+        onClick={e => {
+          const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+          const pct = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+          onChange(Math.round(pct));
+        }}
+      >
+        <div style={{
+          width: `${value}%`, height: "100%", borderRadius: "999px",
+          background: `linear-gradient(90deg, ${color}aa 0%, ${color} 100%)`,
+          boxShadow: `0 0 10px ${color}88, inset 0 2px 4px rgba(255,255,255,0.4)`,
+          position: "relative", overflow: "hidden",
+        }}>
+          <div style={{
+            position: "absolute", top: 0, left: 0, right: 0, height: "55%",
+            background: "linear-gradient(180deg, rgba(255,255,255,0.45) 0%, transparent 100%)",
+            borderRadius: "999px 999px 0 0", pointerEvents: "none",
+          }} />
+        </div>
+      </div>
+      <div style={{
+        minWidth: "32px", textAlign: "right",
+        color, fontSize: "11px", fontWeight: 900,
+        textShadow: `0 0 8px ${color}88`,
+      }}>{value}%</div>
+    </div>
+  );
+}
+
+// ─── Settings Row ──────────────────────────────────────────────────────────────
+function SettingsRow({ icon, label, color, children }: { icon: string; label: string; color: string; children: React.ReactNode }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: "12px",
+      padding: "12px 14px",
+      borderRadius: "14px",
+      background: "linear-gradient(90deg, rgba(20,10,50,0.7) 0%, rgba(10,5,30,0.6) 100%)",
+      border: `1.5px solid ${color}33`,
+      boxShadow: `0 0 16px ${color}22`,
+    }}>
+      <div style={{
+        width: "38px", height: "38px", borderRadius: "10px", flexShrink: 0,
+        background: `radial-gradient(circle at 35% 30%, ${color}cc, ${color}44)`,
+        border: `1.5px solid ${color}77`,
+        boxShadow: `0 0 10px ${color}66`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: "18px",
+      }}>{icon}</div>
+      <div style={{
+        flex: 1, color: "white", fontSize: "12px", fontWeight: 800,
+        letterSpacing: "0.06em",
+      }}>{label}</div>
+      <div style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>{children}</div>
     </div>
   );
 }
@@ -91,16 +317,31 @@ export default function ProfilePage() {
   const { address } = useAccount();
   const { isVerified, entitlement, claimG$ } = useSelfVerification();
 
+  const [activeTab, setActiveTab] = useState<TabId>("stats");
+
+  // Settings state — TODO: persist to localStorage / settings backend
+  const [musicOn, setMusicOn] = useState(true);
+  const [sfxOn, setSfxOn] = useState(true);
+  const [musicVol, setMusicVol] = useState(70);
+  const [sfxVol, setSfxVol] = useState(85);
+  const [notifOn, setNotifOn] = useState(true);
+  const [hapticsOn, setHapticsOn] = useState(true);
+
   const shortAddr = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Not connected";
-  const initials  = address ? address.slice(2, 4).toUpperCase() : "??";
+  const username = "Player";
+  const playerLevel = 12;
+  const xpCurrent = 740;
+  const xpToNext = 1000;
+  const xpPct = Math.round((xpCurrent / xpToNext) * 100);
+  const playerRank = 7;
+  const { tier, division } = tierFromRank(playerRank);
 
   return (
     <div style={{
       position: "fixed", inset: 0,
-      background: "linear-gradient(160deg, #4c1d95 0%, #3b0a9e 35%, #1e0762 65%, #0d0230 100%)",
+      background: "radial-gradient(ellipse 80% 60% at 50% 15%, #6a18c8 0%, #3b0a9e 30%, #1a044a 60%, #0a0120 100%)",
       display: "flex", flexDirection: "column", overflow: "hidden",
     }}>
-
       {/* Floating bg icons */}
       {LEFT_ICONS.map((ic, i) => (
         <div key={`l${i}`} className="icon-float" style={{
@@ -125,10 +366,10 @@ export default function ProfilePage() {
         </div>
       ))}
 
-      {/* ── Body row: sidebar + center + right panel ── */}
+      {/* Body row: sidebar + center */}
       <div style={{ display: "flex", flex: 1, minHeight: 0, position: "relative", zIndex: 2 }}>
 
-        {/* ── Left nav sidebar ── */}
+        {/* Sidebar */}
         <div style={{
           width: "68px", flexShrink: 0, alignSelf: "stretch",
           background: "rgba(4,1,18,0.7)", borderRight: "1px solid rgba(255,255,255,0.06)",
@@ -144,10 +385,7 @@ export default function ProfilePage() {
                 display: "flex", flexDirection: "column", alignItems: "center", gap: "4px",
                 cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
                 boxShadow: active ? "0 0 0 1px rgba(255,255,255,0.15), 0 4px 12px rgba(0,0,0,0.4)" : "none",
-              }}
-                onMouseEnter={e => { if (!active) (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.7)"; }}
-                onMouseLeave={e => { if (!active) (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.38)"; }}
-              >
+              }}>
                 {item.icon}
                 <span style={{ fontSize: "8px", fontWeight: 700, letterSpacing: "0.04em" }}>{item.label.toUpperCase()}</span>
               </button>
@@ -155,297 +393,469 @@ export default function ProfilePage() {
           })}
         </div>
 
-        {/* ── Center: Player card + game stats ── */}
+        {/* Center */}
         <div style={{ flex: 1, minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
           <div style={{
             flex: 1, display: "flex", flexDirection: "column",
-            alignItems: "center", justifyContent: "center",
-            padding: "16px 14px", gap: "14px", overflowY: "auto",
+            alignItems: "center", padding: "16px 16px 24px",
+            gap: "14px", overflowY: "auto",
           }}>
 
-            {/* ── PLAYER CARD (wall + face pattern) ── */}
+            {/* ── HERO CARD: character portrait + info ── */}
             <div style={{
-              width: "100%", maxWidth: "540px",
+              width: "100%", maxWidth: "640px", flexShrink: 0,
               borderRadius: "26px", background: "#1a0550", paddingBottom: "7px",
               boxShadow: "0 0 0 3px #5b21b6, 0 0 50px rgba(109,40,217,0.55), 0 24px 60px rgba(0,0,0,0.85)",
-              flexShrink: 0,
             }}>
               <div style={{
                 borderRadius: "24px 24px 20px 20px",
                 background: "linear-gradient(180deg, #2a0c6e 0%, #13063a 50%, #07021a 100%)",
                 border: "2px solid rgba(255,255,255,0.12)",
-                overflow: "hidden", padding: "20px 20px 18px", position: "relative",
+                overflow: "hidden", padding: "18px 18px 16px",
+                position: "relative",
               }}>
                 {/* Top gloss */}
                 <div style={{
-                  position: "absolute", top: 0, left: 0, right: 0, height: "80px",
-                  background: "linear-gradient(180deg, rgba(200,160,255,0.14) 0%, transparent 100%)",
+                  position: "absolute", top: 0, left: 0, right: 0, height: "90px",
+                  background: "linear-gradient(180deg, rgba(200,160,255,0.18) 0%, transparent 100%)",
                   pointerEvents: "none",
                 }} />
 
-                {/* Avatar row */}
-                <div style={{ display: "flex", alignItems: "center", gap: "18px", position: "relative", zIndex: 1 }}>
-                  <div style={{ position: "relative", flexShrink: 0 }}>
-                    {/* Avatar gem */}
+                <div style={{ position: "relative", zIndex: 1, display: "flex", gap: "16px", alignItems: "stretch" }}>
+
+                  {/* LEFT — DiceBear avatar with metallic tier ring (Wild Rift / LoL style) */}
+                  <div style={{ flexShrink: 0, position: "relative", width: "138px", display: "flex", justifyContent: "center", alignItems: "center" }}>
+                    {/* Outer metallic tier ring */}
                     <div style={{
-                      width: "82px", height: "82px", borderRadius: "50%",
-                      background: "radial-gradient(circle at 35% 30%, #c084fc, #5b21b6 70%)",
-                      border: "3px solid rgba(192,132,252,0.7)",
-                      boxShadow: "0 0 28px rgba(192,132,252,0.6), 0 0 55px rgba(139,92,246,0.3)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: "28px", fontWeight: 900, color: "white",
-                      textShadow: "0 2px 8px rgba(0,0,0,0.6)",
-                    }}>{initials}</div>
-                    {/* Rank badge */}
+                      width: "138px", height: "138px", borderRadius: "50%",
+                      padding: "5px",
+                      background: tier.ringGrad,
+                      boxShadow: `0 0 28px ${tier.color}88, 0 0 60px ${tier.color}44, 0 12px 30px rgba(0,0,0,0.7)`,
+                    }}>
+                      {/* Inner dark surround */}
+                      <div style={{
+                        width: "100%", height: "100%", borderRadius: "50%",
+                        background: "linear-gradient(180deg, #2a0c6e 0%, #07021a 100%)",
+                        padding: "4px",
+                        boxShadow: "inset 0 0 20px rgba(0,0,0,0.7)",
+                      }}>
+                        {address ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={avatarUrl(address, username)}
+                            alt=""
+                            width={120} height={120}
+                            style={{ width: "100%", height: "100%", borderRadius: "50%", display: "block", objectFit: "cover" }}
+                          />
+                        ) : (
+                          <div style={{
+                            width: "100%", height: "100%", borderRadius: "50%",
+                            background: "linear-gradient(135deg, #4c1d95, #1a0550)",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            color: "rgba(200,180,255,0.4)", fontSize: "32px", fontWeight: 900,
+                          }}>?</div>
+                        )}
+                      </div>
+                    </div>
+                    {/* LV badge — bottom center */}
                     <div style={{
-                      position: "absolute", bottom: "-5px", left: "50%", transform: "translateX(-50%)",
-                      background: "linear-gradient(135deg, #fbbf24, #f59e0b)",
-                      borderRadius: "10px", padding: "2px 8px",
-                      boxShadow: "0 0 12px rgba(251,191,36,0.6)",
-                      border: "1.5px solid rgba(255,255,255,0.4)",
+                      position: "absolute", bottom: "-2px", left: "50%", transform: "translateX(-50%)",
+                      borderRadius: "12px",
+                      background: "linear-gradient(180deg, #fbbf24 0%, #b45309 100%)",
+                      border: "2px solid rgba(255,255,255,0.6)",
+                      padding: "3px 14px",
+                      boxShadow: "0 4px 12px rgba(251,191,36,0.6), inset 0 2px 4px rgba(255,255,255,0.5)",
                       whiteSpace: "nowrap",
                     }}>
-                      <span style={{ fontSize: "8px", fontWeight: 900, color: "white", letterSpacing: "0.06em" }}>🏆 RANK #7</span>
+                      <span style={{ color: "white", fontSize: "11px", fontWeight: 900, letterSpacing: "0.1em", textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}>
+                        LV.{playerLevel}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Name + verified */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  {/* RIGHT — Info */}
+                  <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: "9px" }}>
+                    {/* Tier + global rank pill (metallic, matches avatar ring) */}
                     <div style={{
-                      fontSize: "15px", fontWeight: 900, color: "white", letterSpacing: "0.04em",
-                      textShadow: "0 0 16px rgba(192,132,252,0.6)",
-                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    }}>{shortAddr}</div>
+                      display: "inline-flex", alignItems: "center", gap: "8px",
+                      padding: "4px 4px 4px 12px", borderRadius: "20px",
+                      background: `linear-gradient(180deg, ${tier.color}33 0%, rgba(20,10,50,0.8) 100%)`,
+                      border: `1.5px solid ${tier.color}`,
+                      boxShadow: `0 0 16px ${tier.color}55`,
+                      alignSelf: "flex-start",
+                    }}>
+                      <span style={{
+                        color: tier.color, fontSize: "10px", fontWeight: 900, letterSpacing: "0.12em",
+                        textShadow: `0 0 8px ${tier.color}aa`,
+                      }}>{tier.name} {division}</span>
+                      <div style={{
+                        padding: "1px 8px", borderRadius: "12px",
+                        background: "rgba(0,0,0,0.5)",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                      }}>
+                        <span style={{ color: "rgba(220,200,255,0.8)", fontSize: "9px", fontWeight: 800, letterSpacing: "0.06em" }}>
+                          #{playerRank}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Name */}
+                    <div>
+                      <div style={{
+                        color: "white", fontSize: "20px", fontWeight: 900, letterSpacing: "0.04em", lineHeight: 1.1,
+                        textShadow: "0 0 16px rgba(192,132,252,0.7), 0 2px 6px rgba(0,0,0,0.6)",
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }}>{username.toUpperCase()}</div>
+                      <div style={{
+                        color: "rgba(180,150,255,0.55)", fontSize: "10px", fontWeight: 700,
+                        letterSpacing: "0.06em", marginTop: "3px",
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }}>{shortAddr}</div>
+                    </div>
+
+                    {/* Verified pill */}
                     {isVerified ? (
                       <div style={{
-                        display: "inline-flex", alignItems: "center", gap: "5px", marginTop: "7px",
+                        display: "inline-flex", alignItems: "center", gap: "5px",
                         padding: "3px 10px", borderRadius: "20px",
-                        background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.45)",
+                        background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.5)",
+                        boxShadow: "0 0 12px rgba(34,197,94,0.3)",
+                        alignSelf: "flex-start",
                       }}>
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="#22c55e"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-                        <span style={{ fontSize: "9px", fontWeight: 700, color: "#22c55e", letterSpacing: "0.1em" }}>GOODDOLLAR VERIFIED</span>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="#22c55e"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" /></svg>
+                        <span style={{ fontSize: "9px", fontWeight: 800, color: "#22c55e", letterSpacing: "0.1em" }}>VERIFIED</span>
                       </div>
                     ) : (
-                      <div style={{
-                        display: "inline-flex", alignItems: "center", gap: "5px", marginTop: "7px",
-                        padding: "3px 10px", borderRadius: "20px",
-                        background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.35)",
-                        cursor: "pointer",
-                      }} onClick={() => router.push("/verify")}>
-                        <span style={{ fontSize: "9px", fontWeight: 700, color: "#fbbf24", letterSpacing: "0.1em" }}>⚠ VERIFY TO UNLOCK REWARDS</span>
+                      <div role="button" tabIndex={0} onClick={() => router.push("/verify")}
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: "5px",
+                          padding: "3px 10px", borderRadius: "20px",
+                          background: "rgba(251,191,36,0.15)", border: "1px solid rgba(251,191,36,0.5)",
+                          cursor: "pointer", boxShadow: "0 0 12px rgba(251,191,36,0.3)",
+                          alignSelf: "flex-start",
+                        }}>
+                        <span style={{ fontSize: "9px", fontWeight: 800, color: "#fbbf24", letterSpacing: "0.1em" }}>⚠ VERIFY</span>
                       </div>
                     )}
+
+                    {/* XP bar */}
+                    <div style={{ width: "100%", marginTop: "2px" }}>
+                      <div style={{
+                        display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "4px",
+                      }}>
+                        <span style={{ color: "rgba(200,180,255,0.7)", fontSize: "9px", fontWeight: 800, letterSpacing: "0.12em" }}>
+                          XP TO LV.{playerLevel + 1}
+                        </span>
+                        <span style={{ color: "#fbbf24", fontSize: "10px", fontWeight: 900, textShadow: "0 0 8px rgba(251,191,36,0.6)" }}>
+                          {xpCurrent}/{xpToNext}
+                        </span>
+                      </div>
+                      <div style={{
+                        height: "12px", borderRadius: "999px",
+                        background: "rgba(0,0,0,0.5)",
+                        border: "1.5px solid rgba(160,100,255,0.25)",
+                        boxShadow: "inset 0 2px 6px rgba(0,0,0,0.6)",
+                        overflow: "hidden", position: "relative",
+                      }}>
+                        <div style={{
+                          width: `${xpPct}%`, height: "100%", borderRadius: "999px",
+                          background: "linear-gradient(90deg, #fbbf24 0%, #f97316 50%, #c026d3 100%)",
+                          boxShadow: "0 0 14px rgba(251,191,36,0.7), inset 0 2px 4px rgba(255,255,255,0.4)",
+                          position: "relative", overflow: "hidden",
+                        }}>
+                          <div style={{
+                            position: "absolute", top: 0, left: 0, right: 0, height: "55%",
+                            background: "linear-gradient(180deg, rgba(255,255,255,0.45) 0%, transparent 100%)",
+                            borderRadius: "999px 999px 0 0", pointerEvents: "none",
+                          }} />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
+              </div>
+            </div>
 
-                {/* Stat gems row */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginTop: "18px", position: "relative", zIndex: 1 }}>
-                  {[
-                    { val: "24",    label: "GAMES",    color: "#a78bfa", wall: "#1a0550" },
-                    { val: "17",    label: "WINS",     color: "#22c55e", wall: "#002a10" },
-                    { val: "71%",   label: "WIN RATE", color: "#fbbf24", wall: "#2a1800" },
-                    { val: "22 G$", label: "EARNED",   color: "#e879f9", wall: "#2a0060" },
-                  ].map((s, i) => (
-                    <div key={i} style={{
-                      borderRadius: "14px", background: s.wall, paddingBottom: "4px",
-                      boxShadow: `0 6px 16px -4px ${s.color}66, 0 0 0 1px ${s.color}44`,
+            {/* ── PILL TABS ── */}
+            <div style={{
+              display: "flex", gap: "8px", flexShrink: 0,
+              flexWrap: "wrap", justifyContent: "center",
+            }}>
+              {TABS.map(t => (
+                <PillTab key={t.id} label={t.label} icon={t.icon} active={activeTab === t.id} onClick={() => setActiveTab(t.id)} />
+              ))}
+            </div>
+
+            {/* ── TAB CONTENT ── */}
+            <div style={{ width: "100%", maxWidth: "640px", flexShrink: 0 }}>
+
+              {/* STATS TAB */}
+              {activeTab === "stats" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  {/* Stat gems */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
+                    <StatGem value="24" label="GAMES" color="#a78bfa" wall="#1a0550" />
+                    <StatGem value="17" label="WINS" color="#a78bfa" wall="#1a0550" />
+                    <StatGem value="71%" label="WIN RATE" color="#fbbf24" wall="#2a1800" />
+                    <StatGem value="22 G$" label="EARNED" color="#fbbf24" wall="#2a1800" />
+                  </div>
+
+                  {/* G$ Claim */}
+                  {isVerified && entitlement && Number(entitlement) > 0 && (
+                    <div style={{
+                      borderRadius: "18px", background: "#003a00", paddingBottom: "5px",
+                      boxShadow: "0 0 0 2px #15803d, 0 0 30px rgba(34,197,94,0.4), 0 16px 40px rgba(0,0,0,0.6)",
                     }}>
                       <div style={{
-                        borderRadius: "12px 12px 10px 10px",
-                        background: "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.2) 100%)",
-                        padding: "10px 6px 8px", textAlign: "center",
-                        border: `1px solid ${s.color}44`,
-                        boxShadow: "inset 0 4px 8px rgba(255,255,255,0.06)",
+                        borderRadius: "16px 16px 14px 14px",
+                        background: "linear-gradient(180deg, #064e20 0%, #022010 100%)",
+                        border: "2px solid rgba(134,239,172,0.3)",
+                        padding: "14px 18px",
+                        display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px",
+                        position: "relative", overflow: "hidden",
                       }}>
-                        <div style={{ fontSize: "17px", fontWeight: 900, color: s.color, textShadow: `0 0 14px ${s.color}99`, lineHeight: 1 }}>{s.val}</div>
-                        <div style={{ fontSize: "7px", fontWeight: 800, color: "rgba(180,150,255,0.6)", letterSpacing: "0.12em", marginTop: "4px" }}>{s.label}</div>
+                        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "50%", background: "linear-gradient(180deg, rgba(134,239,172,0.12) 0%, transparent 100%)", pointerEvents: "none" }} />
+                        <div style={{ position: "relative", zIndex: 1 }}>
+                          <div style={{ fontSize: "10px", fontWeight: 800, color: "rgba(134,239,172,0.7)", letterSpacing: "0.14em" }}>WEEKLY REWARD READY</div>
+                          <div style={{ fontSize: "22px", fontWeight: 900, color: "#86efac", textShadow: "0 0 16px rgba(134,239,172,0.7)", marginTop: "3px" }}>
+                            {(Number(entitlement) / 1e18).toFixed(2)} G$
+                          </div>
+                        </div>
+                        <div style={{ position: "relative", zIndex: 1 }}>
+                          <JuicyBtn label="CLAIM" wallColor="#003a00" faceGrad="linear-gradient(160deg, #86efac 0%, #22c55e 50%, #15803d 100%)" glowColor="rgba(34,197,94,0.7)" onClick={() => claimG$()} />
+                        </div>
                       </div>
+                    </div>
+                  )}
+
+                  {/* Game stats cards */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px" }}>
+                    {GAME_STATS.map((g, i) => {
+                      const winPct = Math.round((g.wins / g.played) * 100);
+                      return (
+                        <div key={i} style={{
+                          borderRadius: "18px", padding: "2.5px",
+                          background: `linear-gradient(180deg, ${g.color} 0%, ${g.color}55 100%)`,
+                          boxShadow: `0 0 18px ${g.color}55, 0 12px 26px rgba(0,0,0,0.7)`,
+                        }}>
+                          <div style={{
+                            borderRadius: "16px", background: g.grad,
+                            padding: "12px 8px 10px", textAlign: "center",
+                            display: "flex", flexDirection: "column", gap: "6px",
+                            position: "relative", overflow: "hidden",
+                          }}>
+                            <div style={{
+                              position: "absolute", top: 0, left: "8%", right: "8%", height: "40%",
+                              background: "linear-gradient(180deg, rgba(255,255,255,0.14) 0%, transparent 100%)",
+                              borderRadius: "16px 16px 60px 60px", pointerEvents: "none",
+                            }} />
+                            <div style={{ fontSize: "26px", filter: `drop-shadow(0 0 10px ${g.color})`, position: "relative", zIndex: 1 }}>{g.icon}</div>
+                            <div style={{
+                              position: "relative", zIndex: 1,
+                              fontSize: "9px", fontWeight: 900, color: "white", letterSpacing: "0.06em", lineHeight: 1.2,
+                              textShadow: `0 0 10px ${g.color}cc`,
+                            }}>{g.name}</div>
+                            <div style={{ display: "flex", justifyContent: "space-around", position: "relative", zIndex: 1, marginTop: "2px" }}>
+                              <div>
+                                <div style={{ fontSize: "16px", fontWeight: 900, color: "white" }}>{g.played}</div>
+                                <div style={{ fontSize: "7px", fontWeight: 800, color: "rgba(255,255,255,0.5)", letterSpacing: "0.1em" }}>PLAYED</div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: "16px", fontWeight: 900, color: g.color, textShadow: `0 0 10px ${g.color}` }}>{g.wins}</div>
+                                <div style={{ fontSize: "7px", fontWeight: 800, color: "rgba(255,255,255,0.5)", letterSpacing: "0.1em" }}>WINS</div>
+                              </div>
+                            </div>
+                            <div style={{
+                              position: "relative", zIndex: 1,
+                              height: "5px", borderRadius: "3px",
+                              background: "rgba(0,0,0,0.5)", overflow: "hidden",
+                              border: "1px solid rgba(255,255,255,0.06)",
+                            }}>
+                              <div style={{
+                                height: "100%", borderRadius: "3px",
+                                width: `${winPct}%`, background: g.color,
+                                boxShadow: `0 0 6px ${g.color}`,
+                              }} />
+                            </div>
+                            <div style={{
+                              position: "relative", zIndex: 1,
+                              fontSize: "10px", fontWeight: 900, color: "#fbbf24",
+                              textShadow: "0 0 10px rgba(251,191,36,0.7)",
+                            }}>{winPct}% WIN</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* MATCHES TAB */}
+              {activeTab === "matches" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {RECENT.map((r, i) => (
+                    <div key={i} style={{
+                      display: "flex", gap: "12px", alignItems: "center",
+                      borderRadius: "14px",
+                      background: "linear-gradient(90deg, rgba(20,10,50,0.85) 0%, rgba(10,5,30,0.9) 100%)",
+                      border: `1.5px solid ${r.color}44`,
+                      boxShadow: `0 0 14px ${r.color}22, 0 6px 16px rgba(0,0,0,0.6)`,
+                      padding: "10px 14px",
+                    }}>
+                      <div style={{
+                        width: "42px", height: "42px", borderRadius: "12px", flexShrink: 0,
+                        background: `radial-gradient(circle at 35% 30%, ${r.color}cc, ${r.color}44)`,
+                        border: `1.5px solid ${r.color}77`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: "20px", boxShadow: `0 0 10px ${r.color}77`,
+                      }}>{r.icon}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: "white", fontSize: "13px", fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.game}</div>
+                        <div style={{ color: "rgba(180,150,255,0.55)", fontSize: "10px", fontWeight: 700, marginTop: "2px" }}>{r.time}</div>
+                      </div>
+                      <div style={{
+                        padding: "4px 10px", borderRadius: "10px",
+                        background: r.color === "#22c55e" ? "rgba(34,197,94,0.18)" : "rgba(239,68,68,0.18)",
+                        border: `1.5px solid ${r.color}77`, flexShrink: 0,
+                      }}>
+                        <span style={{ fontSize: "10px", fontWeight: 900, color: r.color, letterSpacing: "0.1em" }}>{r.result}</span>
+                      </div>
+                      <div style={{
+                        color: r.color, fontSize: "13px", fontWeight: 900,
+                        textShadow: `0 0 10px ${r.color}88`, minWidth: "62px", textAlign: "right",
+                      }}>{r.earned}</div>
                     </div>
                   ))}
                 </div>
+              )}
 
-                {/* G$ Claim — only when available */}
-                {isVerified && entitlement && Number(entitlement) > 0 && (
-                  <div style={{
-                    marginTop: "14px", position: "relative", zIndex: 1,
-                    borderRadius: "14px", background: "#022010", paddingBottom: "4px",
-                    boxShadow: "0 0 0 1.5px #15803d, 0 0 20px rgba(34,197,94,0.25)",
-                  }}>
-                    <div style={{
-                      borderRadius: "12px 12px 10px 10px",
-                      background: "linear-gradient(180deg, #064e20 0%, #022010 100%)",
-                      border: "1.5px solid rgba(134,239,172,0.3)",
-                      padding: "12px 16px",
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                      overflow: "hidden", position: "relative",
+              {/* ACHIEVEMENTS TAB */}
+              {activeTab === "achievements" && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px" }}>
+                  {ACHIEVEMENTS.map((a, i) => (
+                    <div key={i} style={{
+                      borderRadius: "16px",
+                      padding: "14px 12px",
+                      background: a.unlocked
+                        ? `linear-gradient(180deg, ${ACHIEVEMENT_COLOR}22 0%, rgba(20,10,50,0.7) 100%)`
+                        : "rgba(20,10,50,0.5)",
+                      border: `1.5px solid ${a.unlocked ? ACHIEVEMENT_COLOR + "77" : "rgba(255,255,255,0.06)"}`,
+                      boxShadow: a.unlocked ? `0 0 16px ${ACHIEVEMENT_COLOR}44, 0 6px 16px rgba(0,0,0,0.6)` : "none",
+                      display: "flex", gap: "12px", alignItems: "center",
+                      opacity: a.unlocked ? 1 : 0.5,
+                      position: "relative", overflow: "hidden",
                     }}>
-                      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "50%", background: "linear-gradient(180deg, rgba(134,239,172,0.1) 0%, transparent 100%)", pointerEvents: "none" }} />
-                      <div style={{ position: "relative", zIndex: 1 }}>
-                        <div style={{ fontSize: "9px", fontWeight: 700, color: "rgba(134,239,172,0.7)", letterSpacing: "0.12em" }}>WEEKLY REWARD READY</div>
-                        <div style={{ fontSize: "20px", fontWeight: 900, color: "#86efac", textShadow: "0 0 16px rgba(134,239,172,0.7)", marginTop: "2px" }}>
-                          {(Number(entitlement) / 1e18).toFixed(2)} G$
-                        </div>
+                      {a.unlocked && (
+                        <div style={{
+                          position: "absolute", top: 0, left: 0, right: 0, height: "40%",
+                          background: `linear-gradient(180deg, ${ACHIEVEMENT_COLOR}22 0%, transparent 100%)`,
+                          pointerEvents: "none",
+                        }} />
+                      )}
+                      <div style={{
+                        width: "44px", height: "44px", borderRadius: "12px", flexShrink: 0,
+                        background: a.unlocked ? `radial-gradient(circle at 35% 30%, ${ACHIEVEMENT_COLOR}cc, ${ACHIEVEMENT_COLOR}55)` : "rgba(255,255,255,0.05)",
+                        border: `1.5px solid ${a.unlocked ? ACHIEVEMENT_COLOR + "aa" : "rgba(255,255,255,0.1)"}`,
+                        boxShadow: a.unlocked ? `0 0 12px ${ACHIEVEMENT_COLOR}77` : "none",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: "22px", position: "relative", zIndex: 1,
+                        filter: a.unlocked ? "none" : "grayscale(1)",
+                      }}>{a.icon}</div>
+                      <div style={{ flex: 1, minWidth: 0, position: "relative", zIndex: 1 }}>
+                        <div style={{
+                          color: a.unlocked ? "white" : "rgba(255,255,255,0.4)",
+                          fontSize: "12px", fontWeight: 900,
+                          letterSpacing: "0.04em",
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                          textShadow: a.unlocked ? `0 0 10px ${ACHIEVEMENT_COLOR}cc` : "none",
+                        }}>{a.label}</div>
+                        <div style={{
+                          color: a.unlocked ? "rgba(200,180,255,0.7)" : "rgba(180,150,255,0.35)",
+                          fontSize: "9px", fontWeight: 700, marginTop: "2px",
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        }}>{a.desc}</div>
                       </div>
-                      <div style={{ position: "relative", zIndex: 1 }}>
-                        <JuicyBtn label="CLAIM" wallColor="#003a00" faceGrad="linear-gradient(160deg, #86efac 0%, #22c55e 50%, #15803d 100%)" glowColor="rgba(34,197,94,0.7)" onClick={() => claimG$()} />
-                      </div>
+                      {a.unlocked && (
+                        <svg style={{ flexShrink: 0, position: "relative", zIndex: 1 }} width="14" height="14" viewBox="0 0 24 24" fill={ACHIEVEMENT_COLOR}><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" /></svg>
+                      )}
                     </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* ── GAME STATS cards ── */}
-            <div style={{ width: "100%", maxWidth: "540px", display: "flex", flexDirection: "column", gap: "8px", flexShrink: 0 }}>
-              <div style={{ fontSize: "9px", fontWeight: 900, letterSpacing: "0.18em", color: "rgba(190,150,255,0.8)", textAlign: "center", textShadow: "0 0 14px rgba(160,100,255,0.8)" }}>
-                ── GAME STATS ──
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px" }}>
-                {GAME_STATS.map((g, i) => (
-                  <div key={i} style={{
-                    borderRadius: "18px", padding: "2.5px",
-                    background: `linear-gradient(180deg, ${g.color} 0%, ${g.color}55 100%)`,
-                    boxShadow: `0 0 20px ${g.color}55, 0 10px 28px rgba(0,0,0,0.7)`,
-                  }}>
-                    <div style={{
-                      borderRadius: "16px", background: g.grad,
-                      padding: "14px 10px 12px", textAlign: "center",
-                      display: "flex", flexDirection: "column", gap: "8px",
-                    }}>
-                      <div style={{ fontSize: "22px" }}>{g.icon}</div>
-                      <div style={{ fontSize: "10px", fontWeight: 900, color: "white", letterSpacing: "0.04em", lineHeight: 1.2, whiteSpace: "pre-line", textShadow: `0 0 10px ${g.color}cc` }}>{g.name}</div>
-                      <div style={{ display: "flex", justifyContent: "space-around" }}>
-                        <div>
-                          <div style={{ fontSize: "18px", fontWeight: 900, color: "white" }}>{g.played}</div>
-                          <div style={{ fontSize: "7px", fontWeight: 800, color: "rgba(255,255,255,0.5)", letterSpacing: "0.1em" }}>PLAYED</div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: "18px", fontWeight: 900, color: g.color, textShadow: `0 0 12px ${g.color}` }}>{g.wins}</div>
-                          <div style={{ fontSize: "7px", fontWeight: 800, color: "rgba(255,255,255,0.5)", letterSpacing: "0.1em" }}>WINS</div>
-                        </div>
-                      </div>
-                      {/* Win bar */}
-                      <div style={{ height: "5px", borderRadius: "3px", background: "rgba(0,0,0,0.4)", overflow: "hidden" }}>
-                        <div style={{ height: "100%", borderRadius: "3px", width: `${Math.round(g.wins / g.played * 100)}%`, background: g.color, boxShadow: `0 0 6px ${g.color}` }} />
-                      </div>
-                      <div style={{ fontSize: "10px", fontWeight: 900, color: "#fbbf24", textShadow: "0 0 10px rgba(251,191,36,0.7)" }}>
-                        {Math.round(g.wins / g.played * 100)}% WIN
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Disconnect */}
-            {authenticated && (
-              <div style={{ width: "100%", maxWidth: "540px", flexShrink: 0 }}>
-                <JuicyBtn
-                  label="DISCONNECT WALLET"
-                  wallColor="#3a0000"
-                  faceGrad="linear-gradient(160deg, #ff6060 0%, #ee1111 50%, #b00000 100%)"
-                  glowColor="rgba(200,0,0,0.5)"
-                  onClick={() => { logout(); router.push("/home"); }}
-                />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── Right: RECENT MATCHES panel ── */}
-        <div style={{
-          width: "clamp(220px, 24vw, 290px)", flexShrink: 0,
-          alignSelf: "center",
-          display: "flex", flexDirection: "column",
-          padding: "0 12px 0 8px",
-        }}>
-          <div style={{
-            borderRadius: "16px",
-            background: "rgba(20,10,50,0.82)",
-            border: "1px solid rgba(255,255,255,0.1)",
-            overflow: "hidden",
-            display: "flex", flexDirection: "column",
-          }}>
-            {/* Header */}
-            <div style={{
-              background: "linear-gradient(135deg, #3b1fa3 0%, #6d28d9 60%, #3b1fa3 100%)",
-              padding: "12px 14px", position: "relative", overflow: "hidden",
-            }}>
-              <div style={{
-                position: "absolute", top: 0, left: 0, right: 0, height: "50%",
-                background: "linear-gradient(180deg, rgba(255,255,255,0.28) 0%, transparent 100%)",
-                pointerEvents: "none",
-              }} />
-              <div style={{ color: "white", fontSize: "13px", fontWeight: 900, letterSpacing: "0.1em", position: "relative", zIndex: 1 }}>
-                RECENT MATCHES
-              </div>
-            </div>
-
-            <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: "8px" }}>
-              <div style={{ fontSize: "9px", fontWeight: 900, letterSpacing: "0.15em", color: "rgba(200,180,255,0.7)" }}>
-                LATEST GAMES
-              </div>
-              {RECENT.map((r, i) => (
-                <div key={i} style={{
-                  display: "flex", gap: "8px", alignItems: "center",
-                  background: "rgba(255,255,255,0.04)",
-                  borderRadius: "10px",
-                  border: "1px solid rgba(255,255,255,0.07)",
-                  padding: "8px",
-                }}>
-                  {/* Icon */}
-                  <div style={{
-                    width: "34px", height: "34px", borderRadius: "8px", flexShrink: 0,
-                    background: `radial-gradient(circle at 35% 30%, ${r.color}cc, ${r.color}44)`,
-                    border: `1px solid ${r.color}66`,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: "16px", boxShadow: `0 0 8px ${r.color}55`,
-                  }}>{r.icon}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ color: "white", fontSize: "9px", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.game}</div>
-                    <div style={{ color: r.color, fontSize: "10px", fontWeight: 900, marginTop: "2px" }}>{r.earned}</div>
-                  </div>
-                  {/* Result badge */}
-                  <div style={{
-                    padding: "3px 8px", borderRadius: "8px",
-                    background: r.color === "#22c55e" ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
-                    border: `1px solid ${r.color}66`, flexShrink: 0,
-                  }}>
-                    <span style={{ fontSize: "9px", fontWeight: 900, color: r.color, letterSpacing: "0.08em" }}>{r.result}</span>
-                  </div>
+                  ))}
                 </div>
-              ))}
+              )}
 
-              <div style={{ fontSize: "9px", fontWeight: 900, letterSpacing: "0.15em", color: "rgba(200,180,255,0.7)", marginTop: "4px" }}>
-                ACHIEVEMENTS
-              </div>
-              {[
-                { icon: "🥇", label: "First Win",     color: "#fbbf24", unlocked: true  },
-                { icon: "🔥", label: "Hot Streak ×5", color: "#f97316", unlocked: true  },
-                { icon: "🤖", label: "AI Slayer",      color: "#3b82f6", unlocked: false },
-                { icon: "💎", label: "Diamond Hand",   color: "#a78bfa", unlocked: false },
-              ].map((a, i) => (
-                <div key={i} style={{
-                  display: "flex", alignItems: "center", gap: "8px",
-                  background: "rgba(255,255,255,0.04)",
-                  borderRadius: "10px",
-                  border: `1px solid ${a.unlocked ? a.color + "44" : "rgba(255,255,255,0.07)"}`,
-                  padding: "7px 10px",
-                  opacity: a.unlocked ? 1 : 0.45,
-                }}>
+              {/* SETTINGS TAB */}
+              {activeTab === "settings" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {/* AUDIO */}
                   <div style={{
-                    width: "28px", height: "28px", borderRadius: "7px", flexShrink: 0,
-                    background: a.unlocked ? `linear-gradient(135deg, ${a.color}cc 0%, ${a.color}55 100%)` : "rgba(255,255,255,0.06)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: "14px", boxShadow: a.unlocked ? `0 0 10px ${a.color}55` : "none",
-                  }}>{a.icon}</div>
-                  <div style={{ color: a.unlocked ? "white" : "rgba(255,255,255,0.4)", fontSize: "10px", fontWeight: 700 }}>{a.label}</div>
-                  {a.unlocked && (
-                    <svg style={{ marginLeft: "auto", flexShrink: 0 }} width="12" height="12" viewBox="0 0 24 24" fill={a.color}><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                    fontSize: "10px", fontWeight: 900, letterSpacing: "0.2em",
+                    color: "rgba(200,180,255,0.8)",
+                    textShadow: "0 0 14px rgba(160,100,255,0.8)",
+                    paddingLeft: "4px",
+                  }}>── AUDIO ──</div>
+                  <SettingsRow icon="🎵" label="Music" color="#a78bfa">
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", width: "180px" }}>
+                      <ToggleSwitch on={musicOn} color="#a78bfa" onChange={() => setMusicOn(!musicOn)} />
+                      <VolumeSlider value={musicOn ? musicVol : 0} color="#a78bfa" onChange={setMusicVol} />
+                    </div>
+                  </SettingsRow>
+                  <SettingsRow icon="🔊" label="Sound FX" color="#a78bfa">
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", width: "180px" }}>
+                      <ToggleSwitch on={sfxOn} color="#a78bfa" onChange={() => setSfxOn(!sfxOn)} />
+                      <VolumeSlider value={sfxOn ? sfxVol : 0} color="#a78bfa" onChange={setSfxVol} />
+                    </div>
+                  </SettingsRow>
+
+                  {/* GAMEPLAY */}
+                  <div style={{
+                    fontSize: "10px", fontWeight: 900, letterSpacing: "0.2em",
+                    color: "rgba(200,180,255,0.8)",
+                    textShadow: "0 0 14px rgba(160,100,255,0.8)",
+                    paddingLeft: "4px", marginTop: "4px",
+                  }}>── GAMEPLAY ──</div>
+                  <SettingsRow icon="📳" label="Haptic Feedback" color="#a78bfa">
+                    <ToggleSwitch on={hapticsOn} color="#a78bfa" onChange={() => setHapticsOn(!hapticsOn)} />
+                  </SettingsRow>
+                  <SettingsRow icon="🔔" label="Push Notifications" color="#a78bfa">
+                    <ToggleSwitch on={notifOn} color="#a78bfa" onChange={() => setNotifOn(!notifOn)} />
+                  </SettingsRow>
+
+                  {/* ACCOUNT */}
+                  <div style={{
+                    fontSize: "10px", fontWeight: 900, letterSpacing: "0.2em",
+                    color: "rgba(200,180,255,0.8)",
+                    textShadow: "0 0 14px rgba(160,100,255,0.8)",
+                    paddingLeft: "4px", marginTop: "4px",
+                  }}>── ACCOUNT ──</div>
+                  <SettingsRow icon="📋" label="Copy Wallet Address" color="#a78bfa">
+                    <JuicyBtn
+                      label="COPY"
+                      wallColor="#1a0550"
+                      faceGrad="linear-gradient(160deg, #c084fc 0%, #a78bfa 50%, #6b21a8 100%)"
+                      glowColor="rgba(167,139,250,0.6)"
+                      fontSize={10}
+                      padding="7px 14px"
+                      onClick={() => { if (address) navigator.clipboard.writeText(address); }}
+                    />
+                  </SettingsRow>
+                  {authenticated && (
+                    <SettingsRow icon="🚪" label="Disconnect Wallet" color="#ef4444">
+                      <JuicyBtn
+                        label="LOGOUT"
+                        wallColor="#3a0000"
+                        faceGrad="linear-gradient(160deg, #ff6060 0%, #ee1111 50%, #b00000 100%)"
+                        glowColor="rgba(200,0,0,0.5)"
+                        fontSize={10}
+                        padding="7px 14px"
+                        onClick={() => { logout(); router.push("/home"); }}
+                      />
+                    </SettingsRow>
                   )}
                 </div>
-              ))}
+              )}
+
             </div>
+
           </div>
         </div>
       </div>

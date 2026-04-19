@@ -47,8 +47,20 @@ const GAME_TABS = [
   { id: "simon", label: "SIMON_MEMORY", accent: "#06b6d4" },
 ];
 
-// Row neon border colors cycling — matches reference
-const ROW_COLORS = ["#22d3ee", "#c026d3", "#f97316", "#22c55e", "#f472b6", "#fbbf24", "#a78bfa", "#ef4444"];
+// Tier-based row colors — same metallic system as the profile page.
+// Color carries MEANING (tier) instead of being arbitrary rainbow.
+//   1     → MASTER  (pink)
+//   2-5   → DIAMOND (violet)
+//   6-15  → PLATINUM (cyan)
+//   16-50 → GOLD    (amber)
+//   51+   → SILVER  (cool grey)
+function rowColorByRank(rank: number): string {
+  if (rank === 1)   return "#f472b6"; // MASTER
+  if (rank <= 5)    return "#a78bfa"; // DIAMOND
+  if (rank <= 15)   return "#67e8f9"; // PLATINUM
+  if (rank <= 50)   return "#fbbf24"; // GOLD
+  return "#c0c0c0";                    // SILVER
+}
 
 type Entry = { player: string; username?: string; score: number; timestamp: number };
 
@@ -75,18 +87,10 @@ function fmtName(addr: string, username?: string | null) {
   if (username) return username;
   return `${addr.slice(0, 4)}...${addr.slice(-3)}`;
 }
-function avatarGrad(seed: string) {
-  const palettes = [
-    "radial-gradient(circle at 35% 30%, #fbbf24, #b45309 70%)",
-    "radial-gradient(circle at 35% 30%, #f472b6, #9d174d 70%)",
-    "radial-gradient(circle at 35% 30%, #60a5fa, #1e3a8a 70%)",
-    "radial-gradient(circle at 35% 30%, #4ade80, #14532d 70%)",
-    "radial-gradient(circle at 35% 30%, #c084fc, #6b21a8 70%)",
-    "radial-gradient(circle at 35% 30%, #fb923c, #7c2d12 70%)",
-  ];
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-  return palettes[hash % palettes.length];
+function avatarUrl(address: string, username?: string | null) {
+  // Always seed with BOTH username and address — guarantees uniqueness per wallet.
+  const seed = `${username || ""}-${address}`;
+  return `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(seed)}&backgroundType=gradientLinear&backgroundColor=ffdfbf,ffd5dc,c0aede,b6e3f4,d1d4f9,fbbf24,f97316,c026d3`;
 }
 
 // ─── Juicy Pill Tab ────────────────────────────────────────────────────────────
@@ -304,17 +308,23 @@ function PlayerRow({
           color: color, fontSize: "15px", fontWeight: 900,
           textShadow: `0 0 10px ${color}`,
         }}>{rank}</div>
-        {/* Avatar */}
+        {/* Avatar — DiceBear personas face */}
         <div style={{
           width: "34px", height: "34px", borderRadius: "50%",
-          background: avatarGrad(entry.player),
           border: `2px solid ${color}aa`,
           boxShadow: `0 0 8px ${color}77`,
-          flexShrink: 0,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          color: "white", fontSize: "11px", fontWeight: 900,
-          textShadow: "0 1px 3px rgba(0,0,0,0.6)",
-        }}>{entry.player.slice(2, 4).toUpperCase()}</div>
+          flexShrink: 0, overflow: "hidden",
+          background: "#1a0550",
+        }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={avatarUrl(entry.player, entry.username)}
+            alt=""
+            width={34}
+            height={34}
+            style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }}
+          />
+        </div>
         {/* Name */}
         <div style={{
           flex: 1, minWidth: 0,
@@ -492,7 +502,7 @@ export default function LeaderboardPage() {
                     }}>
                       {rest.map((e, i) => {
                         const rank = i + 4;
-                        const color = ROW_COLORS[i % ROW_COLORS.length];
+                        const color = rowColorByRank(rank);
                         const isMe = !!address && e.player.toLowerCase() === address.toLowerCase();
                         return <PlayerRow key={e.player} entry={e} rank={rank} color={color} isMe={isMe} />;
                       })}

@@ -368,29 +368,11 @@ export default function RhythmGamePage() {
       scheduleBass(ctx, audioStartTime + t, f, 0.44);
     }
 
-    // ═══ LEAD MELODY — derived DIRECTLY from the chart ═══
-    // Every tile's pitch gets a scheduled lead note at the tile's time. This
-    // guarantees when you tap perfectly, your bell and the flute are the SAME
-    // pitch, not fighting each other. Volume ramps per section so the music
-    // still feels like it's building (intro quiet → drop loud).
-    const chart = buildChart();
-    for (let i = 0; i < chart.length; i++) {
-      const n = chart[i];
-      const next = chart[i + 1];
-      // Shorten duration on fast runs so leads don't drone together
-      const gap = next ? next.time - n.time : 0.5;
-      const duration = Math.min(0.45, Math.max(0.18, gap * 0.95));
-      // Volume ramps with section energy (intro → verse → build → drop → drop2)
-      let vol = 0.11;
-      if (n.time >= 37.0) vol = 0.16;      // final drop (loudest)
-      else if (n.time >= 35.0) vol = 0.14; // build 2
-      else if (n.time >= 30.0) vol = 0.13; // verse 2
-      else if (n.time >= 21.0) vol = 0.15; // drop 1
-      else if (n.time >= 15.0) vol = 0.13; // build 1
-      else if (n.time >= 9.0)  vol = 0.11; // verse 1
-      else                      vol = 0.09; // intro
-      scheduleLead(ctx, audioStartTime + n.time, n.freq, duration, vol);
-    }
+    // ═══ No ghost melody — pure Piano Tiles feel ═══
+    // Tiles ONLY make sound when the player taps them. Bass + hats carry the
+    // song's rhythm underneath; bells (played from hitLane) carry the melody.
+    // Missing a tile = silence on that note. That's the whole point of the
+    // genre: the player IS playing the melody.
 
     // HATS — the tempo spine underneath everything
     for (let h = 2; h < total; h += eighth) {
@@ -502,6 +484,11 @@ export default function RhythmGamePage() {
   const encoreLoopAtRef    = useRef(0);                  // next audio loop reschedule time
   const [encoreLives, setEncoreLives] = useState(3);     // UI display
 
+  // Snapshot of hit counters at the moment the main 45s track ends. Encore
+  // misses/goods shouldn't disqualify FC/AP — those achievements reward
+  // completing the chart cleanly, not surviving encore perfectly.
+  const mainTrackStatsRef = useRef<{ misses: number; goods: number }>({ misses: 0, goods: 0 });
+
   // ═══ Score submission (via server actions) ═══
   // Writes go through @/app/actions/game so the games-backend URL and
   // INTERNAL_SECRET are never shipped to the browser. Verification of the
@@ -514,6 +501,8 @@ export default function RhythmGamePage() {
     xp?: number;
     level?: number;
     leveledUp?: boolean;
+    isNewPb?: boolean;
+    prevBest?: number;
     newAchievements?: { id: string; name: string; icon?: string; desc?: string }[];
   };
   const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
@@ -549,6 +538,7 @@ export default function RhythmGamePage() {
     encorePoolIdxRef.current = 0;
     encoreIdRef.current = 100000;
     encoreLoopAtRef.current = 0;
+    mainTrackStatsRef.current = { misses: 0, goods: 0 };
     setEncoreLives(3);
     setScore(0); setCombo(0); setMaxCombo(0);
     setHits({ perfect: 0, good: 0, miss: 0 });
@@ -575,6 +565,8 @@ export default function RhythmGamePage() {
   useEffect(() => {
     if (phase !== "countdown") return;
     if (countdown <= 0) {
+      // GO! — bright higher-octave bell to signal play starts
+      playBell(783.99, 0.28);  // G5
       startRef.current = performance.now();
       gameStartMsRef.current = Date.now();  // wall-clock start for gameTime calculation
       setPhase("playing");
@@ -584,9 +576,11 @@ export default function RhythmGamePage() {
       if (ctx) scheduleDrumTrack(ctx.currentTime);
       return;
     }
+    // 3 / 2 / 1 — steady bell tick on each count (same pitch, builds anticipation)
+    playBell(523.25, 0.22);  // C5
     const t = setTimeout(() => setCountdown(c => c - 1), 750);
     return () => clearTimeout(t);
-  }, [phase, countdown, getAudioCtx, scheduleDrumTrack]);
+  }, [phase, countdown, getAudioCtx, scheduleDrumTrack, playBell]);
 
   // ═══ Submit score — mirrors v1's three-step gated flow ═══
   // 1. signScore           — server action returns the backend's EIP-712 voucher
@@ -608,7 +602,30 @@ export default function RhythmGamePage() {
     // because the submission path requires two independent auth factors (internal
     // secret + Privy/MiniPay verification) before a voucher is signed.
     const scoreToSubmit = Math.min(1_000_000, Math.max(0, Math.round(score)));
-    const baseScoreData = { game: "rhythm" as const, score: scoreToSubmit, gameTime };
+
+    // FC/AP computed from the main-track snapshot captured at t=TRACK_DURATION.
+    // Encore misses don't disqualify the achievement — reaching the end of the
+    // song without missing any of its notes is what unlocks it. If the player
+    // never reached main-end (died before, e.g. pressed X), both stay false.
+    const reachedMainEnd = mainTrackStatsRef.current.misses > 0 || mainTrackStatsRef.current.goods > 0 || phase === "finished";
+    const mainChartLen   = chartRef.current.filter(n => n.id < 100000).length;
+    const mainHits       = hits.perfect + hits.good; // cumulative, including encore
+    // Conservative FC check: main-track snapshot had zero misses AND we
+    // actually made it through the whole main chart (total hits - encore hits
+    // ≥ main chart length).
+    const mainPlusEncoreHits = mainHits; // setHits was monotonic with taps
+    const fullCombo  = reachedMainEnd
+      && mainTrackStatsRef.current.misses === 0
+      && mainPlusEncoreHits >= mainChartLen;
+    const allPerfect = fullCombo && mainTrackStatsRef.current.goods === 0;
+
+    const baseScoreData = {
+      game: "rhythm" as const,
+      score: scoreToSubmit,
+      gameTime,
+      fullCombo,
+      allPerfect,
+    };
 
     (async () => {
       setSubmitting(true);
@@ -703,6 +720,8 @@ export default function RhythmGamePage() {
             xp: result.xp,
             level: result.level,
             leveledUp: result.leveledUp,
+            isNewPb: result.isNewPb,
+            prevBest: result.prevBest,
             newAchievements: result.newAchievements || [],
           });
         } else {
@@ -833,23 +852,18 @@ export default function RhythmGamePage() {
         });
         encoreNextSpawnRef.current = now + nextGap;
 
-        // Reschedule the backing loop every 8 seconds so drums never stop
+        // Reschedule the backing loop every 8 seconds so the rhythm never
+        // drops. Bass + hats only — no lead melody, same Piano Tiles rule as
+        // the main track: only player taps produce melodic notes.
         const ctx = getAudioCtx();
         if (ctx && ctx.currentTime >= encoreLoopAtRef.current) {
           const loopStart = ctx.currentTime;
           const C2 = 65.41, G2 = 98.00;
-          const hook: [number, number][] = [
-            [0,   P_C6],  [0.5, P_Bb5], [1.0, P_G5],  [1.5, P_Eb5],
-            [2.0, P_C5],  [2.5, P_Eb5], [3.0, P_G5],  [3.5, P_Bb5],
-          ];
           for (let i = 0; i < 16; i++) {
             scheduleBass(ctx, loopStart + i * BEAT, i % 4 < 2 ? C2 : G2, 0.46);
           }
           for (let h = 0; h < 8; h += BEAT / 2) {
             scheduleHihat(ctx, loopStart + h, 0.14);
-          }
-          for (const [t, f] of hook) {
-            scheduleLead(ctx, loopStart + t, f, 0.45, 0.13);
           }
           encoreLoopAtRef.current = loopStart + 7.8; // slight overlap to avoid gaps
         }
@@ -872,7 +886,9 @@ export default function RhythmGamePage() {
           setCombo(0);
           setHits(h => ({ ...h, miss: h.miss + 1 }));
           setFeedback({ lane: n.lane, type: "miss", ts: performance.now() });
-          playTone(165, 0.18, "sawtooth", 0.15);
+          // No sound on miss — silence IS the feedback. The player should feel
+          // the absence of a note they should have played. Visual cues (MISS
+          // text + combo break + red lives in encore) carry the signal instead.
 
           // Encore: track lives, end on 3 misses
           if (phase === "encore") {
@@ -889,8 +905,17 @@ export default function RhythmGamePage() {
       // Clean up old particles
       setBursts(bs => bs.filter(b => performance.now() - b.born < 600));
 
-      // End of scripted track: if combo alive → ENCORE, else → finished
+      // End of scripted track: if combo alive → ENCORE, else → finished.
+      // Either way, snapshot the main-track hit stats so FC/AP achievements
+      // reward clearing the chart cleanly, regardless of how encore plays out.
+      // The setState callback is the safe way to read the latest `hits` from
+      // inside a RAF closure without adding it to the effect's dep array
+      // (which would tear down the RAF every time a hit registers).
       if (phase === "playing" && now >= TRACK_DURATION) {
+        setHits(h => {
+          mainTrackStatsRef.current = { misses: h.miss, goods: h.good };
+          return h;
+        });
         if (combo > 0) {
           setPhase("encore");
           setComboToast("ENCORE!");
@@ -961,7 +986,17 @@ export default function RhythmGamePage() {
           activeNotes={activeNotes} bursts={bursts}
           comboToast={comboToast} flashLane={flashLane} feedback={feedback}
           onTapLane={hitLane}
-          onExit={() => setPhase("idle")}
+          // QUIT ends the run with the current score. Transitions to "finished"
+          // which triggers the normal submit flow — player sees their grade
+          // and whatever XP/achievements they earned.
+          onQuit={() => {
+            // Snapshot main-track stats if they quit before reaching the end,
+            // so FC/AP flags stay accurate (they quit → they didn't FC).
+            if (phase === "playing") {
+              mainTrackStatsRef.current = { misses: hits.miss + 1, goods: hits.good };
+            }
+            setPhase("finished");
+          }}
           startRef={startRef}
           pet={pet}
           isEncore={phase === "encore"}
@@ -1204,7 +1239,7 @@ function PetCenter({
 function PlayingView({
   score, combo, timeLeft, activeNotes, bursts,
   comboToast, flashLane, feedback,
-  onTapLane, onExit, startRef,
+  onTapLane, onQuit, startRef,
   pet,
   isEncore, encoreLives,
 }: {
@@ -1213,7 +1248,7 @@ function PlayingView({
   comboToast: string | null; flashLane: number | null;
   feedback: { lane: number; type: "perfect" | "good" | "miss"; ts: number } | null;
   onTapLane: (lane: number) => void;
-  onExit: () => void;
+  onQuit: () => void;
   startRef: React.MutableRefObject<number>;
   pet: PetStage;
   isEncore: boolean;
@@ -1231,13 +1266,25 @@ function PlayingView({
         padding: "14px 16px 10px",
         display: "flex", alignItems: "center", gap: "10px",
       }}>
-        {/* Exit */}
-        <button onClick={onExit} style={{
-          flexShrink: 0, width: "36px", height: "36px", borderRadius: "10px",
-          background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.15)",
-          color: "rgba(200,180,255,0.7)", fontSize: "18px", cursor: "pointer", fontFamily: "inherit",
-          lineHeight: 1,
-        }}>×</button>
+        {/* QUIT — ends the run, submits what the player has, shows finish screen */}
+        <button onClick={onQuit} aria-label="Quit run"
+          style={{
+            flexShrink: 0,
+            borderRadius: "10px",
+            background: "linear-gradient(180deg, #3a0a0a 0%, #2a0606 100%)",
+            border: "1.5px solid rgba(255,80,80,0.45)",
+            color: "#fca5a5",
+            fontSize: "10px", fontWeight: 900, letterSpacing: "0.14em",
+            cursor: "pointer", fontFamily: "inherit",
+            padding: "8px 12px",
+            boxShadow: "0 0 14px rgba(239,68,68,0.3), 0 4px 10px rgba(0,0,0,0.4)",
+            display: "flex", alignItems: "center", gap: "6px",
+          }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+          QUIT
+        </button>
 
         {/* Timer bar during song, LIVES display during encore */}
         {!isEncore ? (
@@ -1594,6 +1641,8 @@ type FinishedSubmit = {
   xp?: number;
   level?: number;
   leveledUp?: boolean;
+  isNewPb?: boolean;
+  prevBest?: number;
   newAchievements?: { id: string; name: string; icon?: string; desc?: string }[];
 };
 
@@ -1734,6 +1783,7 @@ function FinishedView({
             result={submitResult}
             error={submitError}
             txError={txError}
+            score={score}
           />
 
           {/* CTAs */}
@@ -1759,13 +1809,14 @@ function FinishedView({
 //   error          → generic red error line (off-chain save failed)
 //   result         → rank + XP + level-up + new achievements
 function RewardPanel({
-  submitting, signingOnChain, result, error, txError,
+  submitting, signingOnChain, result, error, txError, score,
 }: {
   submitting: boolean;
   signingOnChain: boolean;
   result: FinishedSubmit | null;
   error: string | null;
   txError: string | null;
+  score: number;
 }) {
   // Wallet popup is open — highest priority state
   if (signingOnChain) {
@@ -1845,7 +1896,13 @@ function RewardPanel({
 
   if (!result) return null;
 
-  const { rank, xpEarned, level, leveledUp, newAchievements = [] } = result;
+  const { rank, xpEarned, level, leveledUp, isNewPb, prevBest, newAchievements = [] } = result;
+  // "You beat your best by X" only makes sense when the player HAS a previous
+  // score to beat (prevBest > 0) and the server flagged this run as a PB. A
+  // fresh player's first PB gets a different callout so the number isn't just
+  // "+whateverYouScored from 0", which is confusing.
+  const showPbDelta  = isNewPb && typeof prevBest === "number" && prevBest > 0;
+  const showFirstPb  = isNewPb && !showPbDelta;
 
   return (
     <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -1880,6 +1937,44 @@ function RewardPanel({
           </div>
         ) : <div />}
       </div>
+
+      {/* Personal-best callout — beat your previous high score */}
+      {showPbDelta && typeof prevBest === "number" && (
+        <div style={{
+          padding: "10px 12px", borderRadius: "10px",
+          background: "linear-gradient(90deg, rgba(6,182,212,0.15) 0%, rgba(34,197,94,0.15) 100%)",
+          border: "1px solid rgba(6,182,212,0.4)",
+          textAlign: "center",
+          boxShadow: "0 0 20px rgba(6,182,212,0.25)",
+          animation: "bounce-scale-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both",
+        }}>
+          <div style={{ color: "#67e8f9", fontSize: "12px", fontWeight: 900, letterSpacing: "0.2em" }}>
+            ★ NEW PERSONAL BEST ★
+          </div>
+          <div style={{ color: "rgba(255,255,255,0.85)", fontSize: "12px", fontWeight: 800, marginTop: "3px" }}>
+            Beat your previous {prevBest} by{" "}
+            <span style={{ color: "#86efac", fontWeight: 900 }}>
+              +{Math.max(0, score - prevBest)}
+            </span>
+          </div>
+        </div>
+      )}
+      {showFirstPb && (
+        <div style={{
+          padding: "10px 12px", borderRadius: "10px",
+          background: "rgba(6,182,212,0.1)",
+          border: "1px solid rgba(6,182,212,0.35)",
+          textAlign: "center",
+          animation: "bounce-scale-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both",
+        }}>
+          <div style={{ color: "#67e8f9", fontSize: "12px", fontWeight: 900, letterSpacing: "0.2em" }}>
+            ★ FIRST PERSONAL BEST ★
+          </div>
+          <div style={{ color: "rgba(255,255,255,0.75)", fontSize: "11px", fontWeight: 700, marginTop: "3px" }}>
+            Your score is now on the leaderboard
+          </div>
+        </div>
+      )}
 
       {/* Level-up callout */}
       {leveledUp && level && (

@@ -1,10 +1,19 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useAccount } from "wagmi";
 import { useSelfVerification } from "@/contexts/SelfVerificationContext";
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
+
+// Badge from backend /api/badges/:address
+type ApiBadge = { season: number; game: string; rank: number; type: "gold" | "silver" | "bronze"; awardedAt: number };
+type BadgeData = {
+  badges: ApiBadge[];
+  summary: { totalGold: number; totalSilver: number; totalBronze: number; streakLabel: string | null };
+};
 
 // ─── Splash icons ──────────────────────────────────────────────────────────────
 const D = "/splash_screen_icons/dice.png";
@@ -336,6 +345,16 @@ export default function ProfilePage() {
   const playerRank = 7;
   const { tier, division } = tierFromRank(playerRank);
 
+  // Fetch real championship badges from backend
+  const [badgeData, setBadgeData] = useState<BadgeData | null>(null);
+  useEffect(() => {
+    if (!address) { setBadgeData(null); return; }
+    fetch(`${BACKEND_URL}/api/badges/${address}`)
+      .then(r => r.json())
+      .then(data => setBadgeData({ badges: data.badges || [], summary: data.summary || {} }))
+      .catch(() => setBadgeData(null));
+  }, [address]);
+
   return (
     <div style={{
       position: "fixed", inset: 0,
@@ -616,7 +635,7 @@ export default function ProfilePage() {
                       }}>
                         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "50%", background: "linear-gradient(180deg, rgba(134,239,172,0.12) 0%, transparent 100%)", pointerEvents: "none" }} />
                         <div style={{ position: "relative", zIndex: 1 }}>
-                          <div style={{ fontSize: "10px", fontWeight: 800, color: "rgba(134,239,172,0.7)", letterSpacing: "0.14em" }}>WEEKLY REWARD READY</div>
+                          <div style={{ fontSize: "10px", fontWeight: 800, color: "rgba(134,239,172,0.7)", letterSpacing: "0.14em" }}>DAILY REWARD READY</div>
                           <div style={{ fontSize: "22px", fontWeight: 900, color: "#86efac", textShadow: "0 0 16px rgba(134,239,172,0.7)", marginTop: "3px" }}>
                             {(Number(entitlement) / 1e18).toFixed(2)} G$
                           </div>
@@ -731,7 +750,120 @@ export default function ProfilePage() {
 
               {/* ACHIEVEMENTS TAB */}
               {activeTab === "achievements" && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+
+                  {/* CHAMPIONSHIP BADGES (real data from backend) */}
+                  <div>
+                    <div style={{
+                      fontSize: "10px", fontWeight: 900, letterSpacing: "0.2em",
+                      color: "rgba(200,180,255,0.8)", textAlign: "center",
+                      textShadow: "0 0 14px rgba(160,100,255,0.8)", marginBottom: "10px",
+                    }}>── CHAMPIONSHIP BADGES ──</div>
+
+                    {badgeData && badgeData.badges.length > 0 ? (
+                      <>
+                        {/* Summary chips */}
+                        <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginBottom: "12px", flexWrap: "wrap" }}>
+                          {badgeData.summary.totalGold > 0 && (
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "4px 12px", borderRadius: "999px", background: "rgba(251,191,36,0.15)", border: "1.5px solid #fbbf24", boxShadow: "0 0 10px rgba(251,191,36,0.4)" }}>
+                              <span style={{ fontSize: "14px" }}>🥇</span>
+                              <span style={{ color: "#fbbf24", fontSize: "11px", fontWeight: 900 }}>{badgeData.summary.totalGold}</span>
+                            </div>
+                          )}
+                          {badgeData.summary.totalSilver > 0 && (
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "4px 12px", borderRadius: "999px", background: "rgba(226,232,240,0.15)", border: "1.5px solid #e2e8f0", boxShadow: "0 0 10px rgba(226,232,240,0.4)" }}>
+                              <span style={{ fontSize: "14px" }}>🥈</span>
+                              <span style={{ color: "#e2e8f0", fontSize: "11px", fontWeight: 900 }}>{badgeData.summary.totalSilver}</span>
+                            </div>
+                          )}
+                          {badgeData.summary.totalBronze > 0 && (
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "4px 12px", borderRadius: "999px", background: "rgba(249,115,22,0.15)", border: "1.5px solid #f97316", boxShadow: "0 0 10px rgba(249,115,22,0.4)" }}>
+                              <span style={{ fontSize: "14px" }}>🥉</span>
+                              <span style={{ color: "#f97316", fontSize: "11px", fontWeight: 900 }}>{badgeData.summary.totalBronze}</span>
+                            </div>
+                          )}
+                          {badgeData.summary.streakLabel && (
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "4px 12px", borderRadius: "999px", background: "rgba(192,38,211,0.15)", border: "1.5px solid #c026d3", boxShadow: "0 0 10px rgba(192,38,211,0.4)" }}>
+                              <span style={{ fontSize: "14px" }}>👑</span>
+                              <span style={{ color: "#c026d3", fontSize: "10px", fontWeight: 900, letterSpacing: "0.06em" }}>{badgeData.summary.streakLabel}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Badge grid */}
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px" }}>
+                          {badgeData.badges.slice(0, 8).map((b, i) => {
+                            const color = b.type === "gold" ? "#fbbf24" : b.type === "silver" ? "#e2e8f0" : "#f97316";
+                            const medal = b.type === "gold" ? "🥇" : b.type === "silver" ? "🥈" : "🥉";
+                            const gameName = b.game === "rhythm" ? "Rhythm Rush" : b.game === "simon" ? "Simon Memory" : b.game.toUpperCase();
+                            return (
+                              <div key={i} style={{
+                                borderRadius: "16px", padding: "14px 12px",
+                                background: `linear-gradient(180deg, ${color}22 0%, rgba(20,10,50,0.7) 100%)`,
+                                border: `1.5px solid ${color}77`,
+                                boxShadow: `0 0 16px ${color}44, 0 6px 16px rgba(0,0,0,0.6)`,
+                                display: "flex", gap: "12px", alignItems: "center",
+                                position: "relative", overflow: "hidden",
+                              }}>
+                                <div style={{
+                                  position: "absolute", top: 0, left: 0, right: 0, height: "40%",
+                                  background: `linear-gradient(180deg, ${color}22 0%, transparent 100%)`,
+                                  pointerEvents: "none",
+                                }} />
+                                <div style={{
+                                  width: "44px", height: "44px", borderRadius: "12px", flexShrink: 0,
+                                  background: `radial-gradient(circle at 35% 30%, ${color}cc, ${color}55)`,
+                                  border: `1.5px solid ${color}aa`,
+                                  boxShadow: `0 0 12px ${color}77`,
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  fontSize: "22px", position: "relative", zIndex: 1,
+                                }}>{medal}</div>
+                                <div style={{ flex: 1, minWidth: 0, position: "relative", zIndex: 1 }}>
+                                  <div style={{
+                                    color: "white", fontSize: "12px", fontWeight: 900,
+                                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                                    textShadow: `0 0 10px ${color}cc`,
+                                  }}>WEEK {b.season}</div>
+                                  <div style={{ color: "rgba(200,180,255,0.7)", fontSize: "9px", fontWeight: 700, marginTop: "2px" }}>
+                                    {gameName} · #{b.rank}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{
+                        padding: "20px 16px", textAlign: "center",
+                        borderRadius: "14px",
+                        background: "rgba(20,10,50,0.5)",
+                        border: "1px dashed rgba(255,255,255,0.12)",
+                      }}>
+                        <div style={{ fontSize: "30px", marginBottom: "6px" }}>🏆</div>
+                        <div style={{ color: "rgba(200,180,255,0.55)", fontSize: "11px", fontWeight: 700, letterSpacing: "0.1em" }}>
+                          NO CHAMPIONSHIP BADGES YET
+                        </div>
+                        <div style={{ color: "rgba(180,150,255,0.35)", fontSize: "9px", marginTop: "4px" }}>
+                          Finish in the top 3 of any weekly leaderboard to earn one
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* MILESTONE ACHIEVEMENTS (coming soon — will mint as NFTs) */}
+                  <div>
+                    <div style={{
+                      fontSize: "10px", fontWeight: 900, letterSpacing: "0.2em",
+                      color: "rgba(200,180,255,0.8)", textAlign: "center",
+                      textShadow: "0 0 14px rgba(160,100,255,0.8)", marginBottom: "10px",
+                    }}>── MILESTONE ACHIEVEMENTS ──</div>
+                    <div style={{
+                      textAlign: "center", padding: "8px",
+                      color: "rgba(200,180,255,0.5)", fontSize: "9px", fontWeight: 700,
+                      letterSpacing: "0.12em", marginBottom: "8px",
+                    }}>NFT BADGES — COMING SOON</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px" }}>
                   {ACHIEVEMENTS.map((a, i) => (
                     <div key={i} style={{
                       borderRadius: "16px",
@@ -780,6 +912,8 @@ export default function ProfilePage() {
                       )}
                     </div>
                   ))}
+                    </div>
+                  </div>
                 </div>
               )}
 

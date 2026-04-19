@@ -1,6 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useAccount } from "wagmi";
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 
 // ─── Splash icons ─────────────────────────────────────────────────────────────
 const D = "/splash_screen_icons/dice.png";
@@ -195,6 +199,16 @@ const STATS = [
 export default function GamesPage() {
   const router = useRouter();
   const activePath = "/games";
+  const { address } = useAccount();
+  const [streak, setStreak] = useState<{ streak: number; playedToday: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!address) { setStreak(null); return; }
+    fetch(`${BACKEND_URL}/api/streak/${address}`)
+      .then(r => r.json())
+      .then(data => setStreak({ streak: data.streak || 0, playedToday: !!data.playedToday }))
+      .catch(() => setStreak(null));
+  }, [address]);
 
   return (
     <div style={{
@@ -313,6 +327,29 @@ export default function GamesPage() {
           gap: "12px",
           overflowY: "auto",
         }}>
+
+          {/* Streak banner — only when connected and player has any streak */}
+          {address && streak && streak.streak > 0 && (
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: "10px",
+              padding: "9px 18px",
+              borderRadius: "999px",
+              background: "linear-gradient(90deg, rgba(249,115,22,0.18) 0%, rgba(251,191,36,0.18) 100%)",
+              border: "2px solid #fbbf24",
+              boxShadow: "0 0 24px rgba(251,191,36,0.45), 0 0 48px rgba(249,115,22,0.25), inset 0 1px 0 rgba(255,255,255,0.1)",
+              flexShrink: 0,
+            }}>
+              <span style={{ fontSize: "20px", filter: "drop-shadow(0 0 8px rgba(249,115,22,0.9))" }}>🔥</span>
+              <div>
+                <span style={{ color: "white", fontSize: "14px", fontWeight: 900, letterSpacing: "0.06em", textShadow: "0 0 10px rgba(251,191,36,0.7)" }}>
+                  {streak.streak} DAY{streak.streak === 1 ? "" : ""} STREAK
+                </span>
+                <span style={{ color: "rgba(254,215,170,0.85)", fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", marginLeft: "10px" }}>
+                  {streak.playedToday ? "✓ KEPT ALIVE TODAY" : "Play today to keep it"}
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Stats pills */}
           <div style={{

@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useAccount, useReadContract } from "wagmi";
 import { useSelfVerification } from "@/contexts/SelfVerificationContext";
+import { useAudioSettings } from "@/hooks/useAudioSettings";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 
@@ -651,13 +652,16 @@ export default function ProfilePage() {
 
   const [activeTab, setActiveTab] = useState<TabId>("stats");
 
-  // Settings state — TODO: persist to localStorage / settings backend
-  const [musicOn, setMusicOn] = useState(true);
-  const [sfxOn, setSfxOn] = useState(true);
-  const [musicVol, setMusicVol] = useState(70);
-  const [sfxVol, setSfxVol] = useState(85);
-  const [notifOn, setNotifOn] = useState(true);
-  const [hapticsOn, setHapticsOn] = useState(true);
+  // Settings — persisted in localStorage via useAudioSettings hook.
+  // Every game on the platform reads from the same source, so changes here
+  // take effect immediately the next time the player starts a round.
+  const { musicOn, sfxOn, musicVol, sfxVol, notifOn, hapticsOn, update: updateSettings } = useAudioSettings();
+  const setMusicOn   = (v: boolean) => updateSettings({ musicOn: v });
+  const setSfxOn     = (v: boolean) => updateSettings({ sfxOn: v });
+  const setMusicVol  = (v: number)  => updateSettings({ musicVol: v });
+  const setSfxVol    = (v: number)  => updateSettings({ sfxVol: v });
+  const setNotifOn   = (v: boolean) => updateSettings({ notifOn: v });
+  const setHapticsOn = (v: boolean) => updateSettings({ hapticsOn: v });
 
   const shortAddr = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Not connected";
 
@@ -745,17 +749,21 @@ export default function ProfilePage() {
       .catch(() => setStreak(null));
   }, [address]);
 
-  // Fetch real recent matches from /api/activity (filter to current user)
+  // Fetch this player's recent matches. Passes ?player=... so the backend
+  // scopes the query server-side — no client-side filtering, no risk of
+  // showing other players' rows if the list is mis-shaped. We also keep a
+  // defensive client-side filter in case the backend hasn't been redeployed
+  // with the new query param yet (old backend ignores ?player= and returns
+  // global rows, which without this filter would show other players).
   const [matches, setMatches] = useState<ActivityRow[]>([]);
   useEffect(() => {
     if (!address) { setMatches([]); return; }
-    fetch(`${BACKEND_URL}/api/activity`)
+    const lower = address.toLowerCase();
+    fetch(`${BACKEND_URL}/api/activity?player=${address}`)
       .then(r => r.json())
       .then(d => {
-        const all: ActivityRow[] = d.activity || [];
-        const mine = all
-          .filter(a => a.player.toLowerCase() === address.toLowerCase())
-          .slice(0, 8);
+        const list: ActivityRow[] = d.activity || [];
+        const mine = list.filter(a => (a.player || "").toLowerCase() === lower).slice(0, 8);
         setMatches(mine);
       })
       .catch(() => setMatches([]));

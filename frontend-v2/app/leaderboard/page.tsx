@@ -62,7 +62,7 @@ function rowColorByRank(rank: number): string {
   return "#c0c0c0";                    // SILVER
 }
 
-type Entry = { player: string; username?: string; score: number; timestamp: number };
+type Entry = { player: string; username?: string; score: number; timestamp: number; streak?: number };
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 
@@ -334,6 +334,20 @@ function PlayerRow({
         }}>
           {isMe ? "YOU" : fmtName(entry.player, entry.username)}
         </div>
+        {/* Streak flex chip — only shown for serious grinders (>= 3 days) */}
+        {entry.streak && entry.streak >= 3 && (
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: "3px",
+            padding: "2px 7px", borderRadius: "999px",
+            background: "rgba(249,115,22,0.15)",
+            border: "1px solid rgba(249,115,22,0.5)",
+            boxShadow: "0 0 8px rgba(249,115,22,0.35)",
+            flexShrink: 0,
+          }}>
+            <span style={{ fontSize: "10px" }}>🔥</span>
+            <span style={{ color: "#fbbf24", fontSize: "10px", fontWeight: 900, textShadow: "0 0 6px rgba(251,191,36,0.6)" }}>{entry.streak}</span>
+          </div>
+        )}
         {/* Score */}
         <div style={{
           color: "#fbbf24", fontSize: "11px", fontWeight: 900,
@@ -356,6 +370,15 @@ export default function LeaderboardPage() {
   const [gameTab, setGameTab] = useState<"rhythm" | "simon">("rhythm");
   const [entries, setEntries] = useState<Entry[]>(DUMMY_ENTRIES);
   const [loading, setLoading] = useState(false);
+  const [streak, setStreak] = useState<{ streak: number; playedToday: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!address) { setStreak(null); return; }
+    fetch(`${BACKEND_URL}/api/streak/${address}`)
+      .then(r => r.json())
+      .then(d => setStreak({ streak: d.streak || 0, playedToday: !!d.playedToday }))
+      .catch(() => setStreak(null));
+  }, [address]);
 
   const fetchEntries = useCallback(async () => {
     setLoading(true);
@@ -413,8 +436,32 @@ export default function LeaderboardPage() {
         <div style={{
           width: "68px", flexShrink: 0, alignSelf: "stretch",
           background: "rgba(4,1,18,0.7)", borderRight: "1px solid rgba(255,255,255,0.06)",
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6px",
+          display: "flex", flexDirection: "column", alignItems: "center",
+          padding: "16px 0", gap: "6px",
         }}>
+          {/* Streak chip */}
+          {address && streak && streak.streak > 0 && (
+            <div style={{
+              display: "flex", flexDirection: "column", alignItems: "center", gap: "1px",
+              padding: "7px 6px", borderRadius: "12px",
+              background: streak.playedToday
+                ? "linear-gradient(180deg, rgba(249,115,22,0.25) 0%, rgba(249,115,22,0.1) 100%)"
+                : "linear-gradient(180deg, rgba(107,114,128,0.2) 0%, rgba(31,41,55,0.1) 100%)",
+              border: `1.5px solid ${streak.playedToday ? "#f97316" : "rgba(107,114,128,0.5)"}`,
+              boxShadow: streak.playedToday ? "0 0 16px rgba(249,115,22,0.6), 0 0 30px rgba(249,115,22,0.25)" : "none",
+              minWidth: "44px",
+            }}>
+              <span style={{ fontSize: "16px", lineHeight: 1, filter: streak.playedToday ? "drop-shadow(0 0 6px rgba(249,115,22,0.9))" : "grayscale(0.5)" }}>🔥</span>
+              <span style={{
+                color: streak.playedToday ? "#fbbf24" : "rgba(200,180,255,0.5)",
+                fontSize: "13px", fontWeight: 900, lineHeight: 1.1,
+                textShadow: streak.playedToday ? "0 0 8px rgba(251,191,36,0.7)" : "none",
+              }}>{streak.streak}</span>
+            </div>
+          )}
+
+          <div style={{ flex: 1 }} />
+
           {NAV_ITEMS.map(item => {
             const active = item.path === "/leaderboard";
             return (
@@ -434,6 +481,8 @@ export default function LeaderboardPage() {
               </button>
             );
           })}
+
+          <div style={{ flex: 1 }} />
         </div>
 
         {/* Center */}

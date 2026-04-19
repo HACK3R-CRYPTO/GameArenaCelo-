@@ -276,9 +276,39 @@ export default function GamesPage() {
           background: "rgba(4,1,18,0.7)",
           borderRight: "1px solid rgba(255,255,255,0.06)",
           display: "flex", flexDirection: "column", alignItems: "center",
-          justifyContent: "center",
+          padding: "16px 0",
           gap: "6px",
         }}>
+          {/* Streak chip — Duolingo style, persistent across pages */}
+          {address && streak && streak.streak > 0 && (
+            <div style={{
+              display: "flex", flexDirection: "column", alignItems: "center", gap: "1px",
+              padding: "7px 6px", borderRadius: "12px",
+              background: streak.playedToday
+                ? "linear-gradient(180deg, rgba(249,115,22,0.25) 0%, rgba(249,115,22,0.1) 100%)"
+                : "linear-gradient(180deg, rgba(107,114,128,0.2) 0%, rgba(31,41,55,0.1) 100%)",
+              border: `1.5px solid ${streak.playedToday ? "#f97316" : "rgba(107,114,128,0.5)"}`,
+              boxShadow: streak.playedToday
+                ? "0 0 16px rgba(249,115,22,0.6), 0 0 30px rgba(249,115,22,0.25)"
+                : "none",
+              minWidth: "44px",
+              cursor: "default",
+            }}>
+              <span style={{
+                fontSize: "16px", lineHeight: 1,
+                filter: streak.playedToday ? "drop-shadow(0 0 6px rgba(249,115,22,0.9))" : "grayscale(0.5)",
+              }}>🔥</span>
+              <span style={{
+                color: streak.playedToday ? "#fbbf24" : "rgba(200,180,255,0.5)",
+                fontSize: "13px", fontWeight: 900, lineHeight: 1.1,
+                textShadow: streak.playedToday ? "0 0 8px rgba(251,191,36,0.7)" : "none",
+              }}>{streak.streak}</span>
+            </div>
+          )}
+
+          {/* Spacer to vertically center the nav */}
+          <div style={{ flex: 1 }} />
+
           {NAV_ITEMS.map(item => {
             const isActive = item.path === activePath;
             return (
@@ -310,6 +340,9 @@ export default function GamesPage() {
               </button>
             );
           })}
+
+          {/* Bottom spacer to keep nav centered */}
+          <div style={{ flex: 1 }} />
         </div>
 
         {/* ── Center: stats + logo + game cards ── */}
@@ -327,29 +360,6 @@ export default function GamesPage() {
           gap: "12px",
           overflowY: "auto",
         }}>
-
-          {/* Streak banner — only when connected and player has any streak */}
-          {address && streak && streak.streak > 0 && (
-            <div style={{
-              display: "inline-flex", alignItems: "center", gap: "10px",
-              padding: "9px 18px",
-              borderRadius: "999px",
-              background: "linear-gradient(90deg, rgba(249,115,22,0.18) 0%, rgba(251,191,36,0.18) 100%)",
-              border: "2px solid #fbbf24",
-              boxShadow: "0 0 24px rgba(251,191,36,0.45), 0 0 48px rgba(249,115,22,0.25), inset 0 1px 0 rgba(255,255,255,0.1)",
-              flexShrink: 0,
-            }}>
-              <span style={{ fontSize: "20px", filter: "drop-shadow(0 0 8px rgba(249,115,22,0.9))" }}>🔥</span>
-              <div>
-                <span style={{ color: "white", fontSize: "14px", fontWeight: 900, letterSpacing: "0.06em", textShadow: "0 0 10px rgba(251,191,36,0.7)" }}>
-                  {streak.streak} DAY{streak.streak === 1 ? "" : ""} STREAK
-                </span>
-                <span style={{ color: "rgba(254,215,170,0.85)", fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", marginLeft: "10px" }}>
-                  {streak.playedToday ? "✓ KEPT ALIVE TODAY" : "Play today to keep it"}
-                </span>
-              </div>
-            </div>
-          )}
 
           {/* Stats pills */}
           <div style={{

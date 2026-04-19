@@ -238,6 +238,66 @@ async function getUserCount() {
   return count || 0;
 }
 
+// ─── XP / Level system ──────────────────────────────────────────────────────
+// Standard triangular curve used by Clash Royale, Pokémon GO, RuneScape variants.
+//   totalXp(N)   = 50 * N * (N + 1)          ← cumulative XP to REACH level N
+//   xpForLevel(N) = 100 * N                  ← XP needed within level N to advance
+//
+//   LV 2  needs 100 cumulative   (+100 from LV 1)
+//   LV 3  needs 300 cumulative   (+200)
+//   LV 5  needs 1,000 cumulative (+400)
+//   LV 10 needs 5,500 cumulative (+1,000)
+//   LV 50 needs 127,500          (+5,000)
+const XP_PLAYED  = 10;  // base XP for finishing a game
+const XP_WIN     = 25;  // bonus when you beat the win threshold
+const XP_NEW_PB  = 25;  // bonus when you set a new personal best
+
+const WIN_THRESHOLD = { rhythm: 350, simon: 7 };
+
+// Cumulative XP required to reach a given level (LV 1 = 0).
+//   LV 1: 0     LV 2: 100    LV 3: 300    LV 4: 600    LV 5: 1,000
+//   LV 10: 4,500   LV 20: 19,000   LV 50: 122,500
+function totalXpForLevel(level) {
+  return 50 * level * (level - 1);
+}
+
+// Returns the highest level fully reached for a given cumulative XP.
+function levelFromXp(xp) {
+  // Solve 50*N*(N+1) - 100 <= xp  →  N = floor((-1 + sqrt(1 + (xp + 100)/12.5)) / 2) + 1
+  // Use a safe iterative approach for clarity
+  let lvl = 1;
+  while (totalXpForLevel(lvl + 1) <= (xp || 0)) lvl++;
+  return Math.max(1, lvl);
+}
+
+// XP within current level + XP required to advance.
+function xpProgress(xp) {
+  const level     = levelFromXp(xp);
+  const xpAtLevel = totalXpForLevel(level);
+  const xpToNext  = 100 * level; // gap between this level and the next
+  const xpInLevel = (xp || 0) - xpAtLevel;
+  return { level, xpInLevel, xpToNext };
+}
+
+async function awardXp(addr, amount, reason = '') {
+  if (!amount) return null;
+  const lower = addr.toLowerCase();
+  const { data: rows } = await supabase
+    .from('users')
+    .select('xp')
+    .eq('wallet_address', lower)
+    .limit(1);
+  const before = rows && rows.length > 0 ? (rows[0].xp || 0) : 0;
+  const after  = before + amount;
+  const beforeLevel = levelFromXp(before);
+  const afterLevel  = levelFromXp(after);
+  await supabase.from('users').update({ xp: after }).eq('wallet_address', lower);
+  if (afterLevel > beforeLevel) {
+    console.log(`✨ ${lower.slice(0, 8)}... LV ${beforeLevel} → ${afterLevel} (+${amount} XP ${reason})`);
+  }
+  return { xp: after, level: afterLevel, leveledUp: afterLevel > beforeLevel };
+}
+
 async function saveScore(entry) {
   // Upsert: keep best score per wallet per game
   const { data: rows } = await supabase
@@ -580,9 +640,20 @@ app.post('/api/submit-score', requireSecret, strictLimiter, async (req, res) => 
   const scoreTxHash = scoreData.txHash || null;
   const txHash = wagerTxHash || scoreTxHash;
 
+  // Read previous best for this game so we can detect a new personal best after saving
+  const lower = playerAddress.toLowerCase();
+  const { data: prevRows } = await supabase
+    .from('scores')
+    .select('score')
+    .eq('wallet_address', lower)
+    .eq('game', game)
+    .order('score', { ascending: false })
+    .limit(1);
+  const prevBest = (prevRows && prevRows.length > 0) ? (prevRows[0].score || 0) : 0;
+
   // Save actual game score to Supabase (per-season, not all-time best)
   await saveScore({
-    wallet_address: playerAddress.toLowerCase(),
+    wallet_address: lower,
     game,
     score,
     game_time: gameTime,
@@ -592,13 +663,24 @@ app.post('/api/submit-score', requireSecret, strictLimiter, async (req, res) => 
     tx_hash: txHash,
   });
 
+  // Award XP — base for playing + bonuses for win and new personal best
+  const winThreshold = WIN_THRESHOLD[game] || Infinity;
+  const isWin    = score >= winThreshold;
+  const isNewPb  = score > prevBest;
+  const xpEarned = XP_PLAYED + (isWin ? XP_WIN : 0) + (isNewPb ? XP_NEW_PB : 0);
+  const xpResult = await awardXp(lower, xpEarned, [
+    'played',
+    isWin   && 'win',
+    isNewPb && 'new PB',
+  ].filter(Boolean).join(' + '));
+
   // Get rank
   const leaderboard = await getLeaderboard(game);
-  const rank = leaderboard.findIndex(e => e.wallet_address === playerAddress.toLowerCase()) + 1;
+  const rank = leaderboard.findIndex(e => e.wallet_address === lower) + 1;
 
-  console.log(`✅ [${game}] ${playerAddress.slice(0, 8)}... → ${score} pts (rank #${rank}) ${txHash ? `tx: ${txHash.slice(0, 10)}...` : ''}`);
+  console.log(`✅ [${game}] ${lower.slice(0, 8)}... → ${score} pts (rank #${rank}) +${xpEarned} XP ${txHash ? `tx: ${txHash.slice(0, 10)}...` : ''}`);
 
-  res.json({ success: true, score, rank, txHash, streak });
+  res.json({ success: true, score, rank, txHash, streak, xpEarned, xp: xpResult?.xp, level: xpResult?.level, leveledUp: !!xpResult?.leveledUp });
 });
 
 // ─── GET /api/leaderboard?game=rhythm|simon ─────────────────────────────────
@@ -863,6 +945,39 @@ app.get('/api/badges/:address', async (req, res) => {
       totalBronze: bronzeCount,
       streakLabel,
     },
+  });
+});
+
+// ─── GET /api/user/:address — XP / level / streak in one shot ───────────────
+app.get('/api/user/:address', async (req, res) => {
+  const addr = req.params.address.toLowerCase();
+  const { data: rows } = await supabase
+    .from('users')
+    .select('xp, play_streak, last_play_date')
+    .eq('wallet_address', addr)
+    .limit(1);
+
+  if (!rows || rows.length === 0) {
+    const p = xpProgress(0);
+    return res.json({
+      address: addr,
+      xp: 0, level: p.level, xpInLevel: p.xpInLevel, xpToNext: p.xpToNext,
+      streak: 0, playedToday: false,
+    });
+  }
+
+  const u = rows[0];
+  const xp = u.xp || 0;
+  const p = xpProgress(xp);
+  const today = new Date().toISOString().split('T')[0];
+  res.json({
+    address: addr,
+    xp,
+    level: p.level,
+    xpInLevel: p.xpInLevel,
+    xpToNext: p.xpToNext,
+    streak: u.play_streak || 0,
+    playedToday: u.last_play_date === today,
   });
 });
 

@@ -3,10 +3,20 @@
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { usePrivy } from "@privy-io/react-auth";
-import { useAccount } from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
 import { useSelfVerification } from "@/contexts/SelfVerificationContext";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
+
+// GamePass NFT — source of truth for username, games played, best score
+const GAME_PASS_ADDRESS = (process.env.NEXT_PUBLIC_GAME_PASS || "0xBB044d6780885A4cDb7E6F40FCc92FF7b051DAdE") as `0x${string}`;
+const GAME_PASS_ABI = [
+  { name: "getUsername",  inputs: [{ type: "address" }], outputs: [{ type: "string"  }], stateMutability: "view", type: "function" },
+  { name: "gamesPlayed",  inputs: [{ type: "address" }], outputs: [{ type: "uint256" }], stateMutability: "view", type: "function" },
+  { name: "bestScore",    inputs: [{ type: "address" }, { type: "uint8" }], outputs: [{ type: "uint256" }], stateMutability: "view", type: "function" },
+  { name: "weeklyBest",   inputs: [{ type: "address" }, { type: "uint8" }], outputs: [{ type: "uint256" }], stateMutability: "view", type: "function" },
+  { name: "hasMinted",    inputs: [{ type: "address" }], outputs: [{ type: "bool"    }], stateMutability: "view", type: "function" },
+] as const;
 
 // Badge from backend /api/badges/:address
 type ApiBadge = { season: number; game: string; rank: number; type: "gold" | "silver" | "bronze"; awardedAt: number };
@@ -81,21 +91,24 @@ const TABS = [
 ] as const;
 type TabId = typeof TABS[number]["id"];
 
-// ─── Data ──────────────────────────────────────────────────────────────────────
-const GAME_STATS = [
-  { name: "RHYTHM RUSH", played: 10, wins: 8, color: "#f59e0b", grad: "linear-gradient(160deg,#7e22ce 0%,#a21caf 100%)", icon: "🥁" },
-  { name: "SIMON MEMORY", played: 9, wins: 6, color: "#22c55e", grad: "linear-gradient(160deg,#0e4f6b 0%,#075985 100%)", icon: "🧠" },
-  { name: "CHALLENGE AI", played: 5, wins: 3, color: "#3b82f6", grad: "linear-gradient(160deg,#1e3a5f 0%,#1e4080 100%)", icon: "🤖" },
-];
+// ─── Match types & helpers ────────────────────────────────────────────────────
+type ActivityRow = { player: string; game: string; score: number; tx_hash: string; timestamp: number; username?: string | null };
 
-const RECENT = [
-  { game: "Rhythm Rush", result: "WIN", earned: "+1.3 G$", color: "#22c55e", icon: "🥁", time: "2h ago" },
-  { game: "Simon Memory", result: "WIN", earned: "+1.3 G$", color: "#22c55e", icon: "🧠", time: "5h ago" },
-  { game: "Challenge AI", result: "LOSS", earned: "-1 G$", color: "#ef4444", icon: "🤖", time: "1d ago" },
-  { game: "Rhythm Rush", result: "WIN", earned: "+1.3 G$", color: "#22c55e", icon: "🥁", time: "1d ago" },
-  { game: "Simon Memory", result: "LOSS", earned: "-1 G$", color: "#ef4444", icon: "🧠", time: "2d ago" },
-  { game: "Rhythm Rush", result: "WIN", earned: "+1.3 G$", color: "#22c55e", icon: "🥁", time: "3d ago" },
-];
+// Win threshold per game (matches the wager contract logic)
+const WIN_THRESHOLD: Record<string, number> = { rhythm: 350, simon: 7 };
+
+function timeAgo(ts: number) {
+  const diff = Date.now() / 1000 - ts;
+  if (diff < 60)    return "just now";
+  if (diff < 3600)  return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+const GAME_DISPLAY: Record<string, { name: string; icon: string }> = {
+  rhythm: { name: "Rhythm Rush",  icon: "🥁" },
+  simon:  { name: "Simon Memory", icon: "🧠" },
+};
 
 // All achievements use the gold reward color. Locked = grayscale.
 const ACHIEVEMENT_COLOR = "#fbbf24";
@@ -337,10 +350,41 @@ export default function ProfilePage() {
   const [hapticsOn, setHapticsOn] = useState(true);
 
   const shortAddr = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Not connected";
-  const username = "Player";
-  const playerLevel = 12;
-  const xpCurrent = 740;
-  const xpToNext = 1000;
+
+  // Read real on-chain stats from GamePass NFT
+  const { data: onchainUsername } = useReadContract({
+    address: GAME_PASS_ADDRESS, abi: GAME_PASS_ABI, functionName: "getUsername",
+    args: address ? [address] : undefined, query: { enabled: !!address },
+  });
+  const { data: gamesPlayedRaw } = useReadContract({
+    address: GAME_PASS_ADDRESS, abi: GAME_PASS_ABI, functionName: "gamesPlayed",
+    args: address ? [address] : undefined, query: { enabled: !!address },
+  });
+  const { data: rhythmBest } = useReadContract({
+    address: GAME_PASS_ADDRESS, abi: GAME_PASS_ABI, functionName: "bestScore",
+    args: address ? [address, 0] : undefined, query: { enabled: !!address },
+  });
+  const { data: simonBest } = useReadContract({
+    address: GAME_PASS_ADDRESS, abi: GAME_PASS_ABI, functionName: "bestScore",
+    args: address ? [address, 1] : undefined, query: { enabled: !!address },
+  });
+
+  const username = (onchainUsername as string) || "Player";
+  const totalGames = Number(gamesPlayedRaw || 0);
+
+  // Real XP / Level from backend (Phase 2). Falls back to derived value while loading.
+  const [userMeta, setUserMeta] = useState<{ xp: number; level: number; xpInLevel: number; xpToNext: number } | null>(null);
+  useEffect(() => {
+    if (!address) { setUserMeta(null); return; }
+    fetch(`${BACKEND_URL}/api/user/${address}`)
+      .then(r => r.json())
+      .then(d => setUserMeta({ xp: d.xp || 0, level: d.level || 1, xpInLevel: d.xpInLevel || 0, xpToNext: d.xpToNext || 100 }))
+      .catch(() => setUserMeta(null));
+  }, [address]);
+
+  const playerLevel = userMeta?.level ?? 1;
+  const xpCurrent = userMeta?.xpInLevel ?? 0;
+  const xpToNext = userMeta?.xpToNext ?? 100;
   const xpPct = Math.round((xpCurrent / xpToNext) * 100);
   const playerRank = 7;
   const { tier, division } = tierFromRank(playerRank);
@@ -353,6 +397,32 @@ export default function ProfilePage() {
       .then(r => r.json())
       .then(data => setBadgeData({ badges: data.badges || [], summary: data.summary || {} }))
       .catch(() => setBadgeData(null));
+  }, [address]);
+
+  // Fetch streak (for sidebar chip)
+  const [streak, setStreak] = useState<{ streak: number; playedToday: boolean } | null>(null);
+  useEffect(() => {
+    if (!address) { setStreak(null); return; }
+    fetch(`${BACKEND_URL}/api/streak/${address}`)
+      .then(r => r.json())
+      .then(d => setStreak({ streak: d.streak || 0, playedToday: !!d.playedToday }))
+      .catch(() => setStreak(null));
+  }, [address]);
+
+  // Fetch real recent matches from /api/activity (filter to current user)
+  const [matches, setMatches] = useState<ActivityRow[]>([]);
+  useEffect(() => {
+    if (!address) { setMatches([]); return; }
+    fetch(`${BACKEND_URL}/api/activity`)
+      .then(r => r.json())
+      .then(d => {
+        const all: ActivityRow[] = d.activity || [];
+        const mine = all
+          .filter(a => a.player.toLowerCase() === address.toLowerCase())
+          .slice(0, 8);
+        setMatches(mine);
+      })
+      .catch(() => setMatches([]));
   }, [address]);
 
   return (
@@ -392,8 +462,32 @@ export default function ProfilePage() {
         <div style={{
           width: "68px", flexShrink: 0, alignSelf: "stretch",
           background: "rgba(4,1,18,0.7)", borderRight: "1px solid rgba(255,255,255,0.06)",
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6px",
+          display: "flex", flexDirection: "column", alignItems: "center",
+          padding: "16px 0", gap: "6px",
         }}>
+          {/* Streak chip */}
+          {address && streak && streak.streak > 0 && (
+            <div style={{
+              display: "flex", flexDirection: "column", alignItems: "center", gap: "1px",
+              padding: "7px 6px", borderRadius: "12px",
+              background: streak.playedToday
+                ? "linear-gradient(180deg, rgba(249,115,22,0.25) 0%, rgba(249,115,22,0.1) 100%)"
+                : "linear-gradient(180deg, rgba(107,114,128,0.2) 0%, rgba(31,41,55,0.1) 100%)",
+              border: `1.5px solid ${streak.playedToday ? "#f97316" : "rgba(107,114,128,0.5)"}`,
+              boxShadow: streak.playedToday ? "0 0 16px rgba(249,115,22,0.6), 0 0 30px rgba(249,115,22,0.25)" : "none",
+              minWidth: "44px",
+            }}>
+              <span style={{ fontSize: "16px", lineHeight: 1, filter: streak.playedToday ? "drop-shadow(0 0 6px rgba(249,115,22,0.9))" : "grayscale(0.5)" }}>🔥</span>
+              <span style={{
+                color: streak.playedToday ? "#fbbf24" : "rgba(200,180,255,0.5)",
+                fontSize: "13px", fontWeight: 900, lineHeight: 1.1,
+                textShadow: streak.playedToday ? "0 0 8px rgba(251,191,36,0.7)" : "none",
+              }}>{streak.streak}</span>
+            </div>
+          )}
+
+          <div style={{ flex: 1 }} />
+
           {NAV_ITEMS.map(item => {
             const active = item.path === "/profile";
             return (
@@ -410,6 +504,8 @@ export default function ProfilePage() {
               </button>
             );
           })}
+
+          <div style={{ flex: 1 }} />
         </div>
 
         {/* Center */}
@@ -613,10 +709,10 @@ export default function ProfilePage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                   {/* Stat gems */}
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
-                    <StatGem value="24" label="GAMES" color="#a78bfa" wall="#1a0550" />
-                    <StatGem value="17" label="WINS" color="#a78bfa" wall="#1a0550" />
-                    <StatGem value="71%" label="WIN RATE" color="#fbbf24" wall="#2a1800" />
-                    <StatGem value="22 G$" label="EARNED" color="#fbbf24" wall="#2a1800" />
+                    <StatGem value={String(totalGames)}                            label="GAMES"      color="#a78bfa" wall="#1a0550" />
+                    <StatGem value={String(Math.max(Number(rhythmBest || 0), Number(simonBest || 0)))} label="BEST SCORE" color="#a78bfa" wall="#1a0550" />
+                    <StatGem value={badgeData ? String(badgeData.summary.totalGold + badgeData.summary.totalSilver + badgeData.summary.totalBronze) : "0"} label="BADGES" color="#fbbf24" wall="#2a1800" />
+                    <StatGem value={`LV.${playerLevel}`}                          label="LEVEL"      color="#fbbf24" wall="#2a1800" />
                   </div>
 
                   {/* G$ Claim */}
@@ -647,64 +743,44 @@ export default function ProfilePage() {
                     </div>
                   )}
 
-                  {/* Game stats cards */}
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px" }}>
-                    {GAME_STATS.map((g, i) => {
-                      const winPct = Math.round((g.wins / g.played) * 100);
-                      return (
-                        <div key={i} style={{
-                          borderRadius: "18px", padding: "2.5px",
-                          background: `linear-gradient(180deg, ${g.color} 0%, ${g.color}55 100%)`,
-                          boxShadow: `0 0 18px ${g.color}55, 0 12px 26px rgba(0,0,0,0.7)`,
+                  {/* Game stats cards — best score per game from on-chain GamePass */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px" }}>
+                    {[
+                      { name: "RHYTHM RUSH",  best: Number(rhythmBest || 0), color: "#c026d3", grad: "linear-gradient(160deg,#7e22ce 0%,#a21caf 100%)", icon: "🥁" },
+                      { name: "SIMON MEMORY", best: Number(simonBest || 0),  color: "#06b6d4", grad: "linear-gradient(160deg,#0e4f6b 0%,#075985 100%)", icon: "🧠" },
+                    ].map((g, i) => (
+                      <div key={i} style={{
+                        borderRadius: "18px", padding: "2.5px",
+                        background: `linear-gradient(180deg, ${g.color} 0%, ${g.color}55 100%)`,
+                        boxShadow: `0 0 18px ${g.color}55, 0 12px 26px rgba(0,0,0,0.7)`,
+                      }}>
+                        <div style={{
+                          borderRadius: "16px", background: g.grad,
+                          padding: "14px 12px 12px", textAlign: "center",
+                          display: "flex", flexDirection: "column", gap: "6px",
+                          position: "relative", overflow: "hidden",
                         }}>
                           <div style={{
-                            borderRadius: "16px", background: g.grad,
-                            padding: "12px 8px 10px", textAlign: "center",
-                            display: "flex", flexDirection: "column", gap: "6px",
-                            position: "relative", overflow: "hidden",
-                          }}>
+                            position: "absolute", top: 0, left: "8%", right: "8%", height: "40%",
+                            background: "linear-gradient(180deg, rgba(255,255,255,0.14) 0%, transparent 100%)",
+                            borderRadius: "16px 16px 60px 60px", pointerEvents: "none",
+                          }} />
+                          <div style={{ fontSize: "30px", filter: `drop-shadow(0 0 10px ${g.color})`, position: "relative", zIndex: 1 }}>{g.icon}</div>
+                          <div style={{
+                            position: "relative", zIndex: 1,
+                            fontSize: "10px", fontWeight: 900, color: "white", letterSpacing: "0.08em",
+                            textShadow: `0 0 10px ${g.color}cc`,
+                          }}>{g.name}</div>
+                          <div style={{ position: "relative", zIndex: 1, marginTop: "2px" }}>
                             <div style={{
-                              position: "absolute", top: 0, left: "8%", right: "8%", height: "40%",
-                              background: "linear-gradient(180deg, rgba(255,255,255,0.14) 0%, transparent 100%)",
-                              borderRadius: "16px 16px 60px 60px", pointerEvents: "none",
-                            }} />
-                            <div style={{ fontSize: "26px", filter: `drop-shadow(0 0 10px ${g.color})`, position: "relative", zIndex: 1 }}>{g.icon}</div>
-                            <div style={{
-                              position: "relative", zIndex: 1,
-                              fontSize: "9px", fontWeight: 900, color: "white", letterSpacing: "0.06em", lineHeight: 1.2,
-                              textShadow: `0 0 10px ${g.color}cc`,
-                            }}>{g.name}</div>
-                            <div style={{ display: "flex", justifyContent: "space-around", position: "relative", zIndex: 1, marginTop: "2px" }}>
-                              <div>
-                                <div style={{ fontSize: "16px", fontWeight: 900, color: "white" }}>{g.played}</div>
-                                <div style={{ fontSize: "7px", fontWeight: 800, color: "rgba(255,255,255,0.5)", letterSpacing: "0.1em" }}>PLAYED</div>
-                              </div>
-                              <div>
-                                <div style={{ fontSize: "16px", fontWeight: 900, color: g.color, textShadow: `0 0 10px ${g.color}` }}>{g.wins}</div>
-                                <div style={{ fontSize: "7px", fontWeight: 800, color: "rgba(255,255,255,0.5)", letterSpacing: "0.1em" }}>WINS</div>
-                              </div>
-                            </div>
-                            <div style={{
-                              position: "relative", zIndex: 1,
-                              height: "5px", borderRadius: "3px",
-                              background: "rgba(0,0,0,0.5)", overflow: "hidden",
-                              border: "1px solid rgba(255,255,255,0.06)",
-                            }}>
-                              <div style={{
-                                height: "100%", borderRadius: "3px",
-                                width: `${winPct}%`, background: g.color,
-                                boxShadow: `0 0 6px ${g.color}`,
-                              }} />
-                            </div>
-                            <div style={{
-                              position: "relative", zIndex: 1,
-                              fontSize: "10px", fontWeight: 900, color: "#fbbf24",
-                              textShadow: "0 0 10px rgba(251,191,36,0.7)",
-                            }}>{winPct}% WIN</div>
+                              fontSize: "26px", fontWeight: 900, color: g.color,
+                              textShadow: `0 0 14px ${g.color}, 0 2px 6px rgba(0,0,0,0.6)`, lineHeight: 1,
+                            }}>{g.best}</div>
+                            <div style={{ fontSize: "8px", fontWeight: 800, color: "rgba(255,255,255,0.5)", letterSpacing: "0.16em", marginTop: "5px" }}>BEST SCORE</div>
                           </div>
                         </div>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -712,39 +788,63 @@ export default function ProfilePage() {
               {/* MATCHES TAB */}
               {activeTab === "matches" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  {RECENT.map((r, i) => (
-                    <div key={i} style={{
-                      display: "flex", gap: "12px", alignItems: "center",
+                  {matches.length === 0 ? (
+                    <div style={{
+                      padding: "30px 20px", textAlign: "center",
                       borderRadius: "14px",
-                      background: "linear-gradient(90deg, rgba(20,10,50,0.85) 0%, rgba(10,5,30,0.9) 100%)",
-                      border: `1.5px solid ${r.color}44`,
-                      boxShadow: `0 0 14px ${r.color}22, 0 6px 16px rgba(0,0,0,0.6)`,
-                      padding: "10px 14px",
+                      background: "rgba(20,10,50,0.5)",
+                      border: "1px dashed rgba(255,255,255,0.12)",
                     }}>
-                      <div style={{
-                        width: "42px", height: "42px", borderRadius: "12px", flexShrink: 0,
-                        background: `radial-gradient(circle at 35% 30%, ${r.color}cc, ${r.color}44)`,
-                        border: `1.5px solid ${r.color}77`,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: "20px", boxShadow: `0 0 10px ${r.color}77`,
-                      }}>{r.icon}</div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ color: "white", fontSize: "13px", fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.game}</div>
-                        <div style={{ color: "rgba(180,150,255,0.55)", fontSize: "10px", fontWeight: 700, marginTop: "2px" }}>{r.time}</div>
+                      <div style={{ fontSize: "30px", marginBottom: "6px" }}>🎮</div>
+                      <div style={{ color: "rgba(200,180,255,0.55)", fontSize: "11px", fontWeight: 700, letterSpacing: "0.1em" }}>
+                        NO MATCHES YET
                       </div>
-                      <div style={{
-                        padding: "4px 10px", borderRadius: "10px",
-                        background: r.color === "#22c55e" ? "rgba(34,197,94,0.18)" : "rgba(239,68,68,0.18)",
-                        border: `1.5px solid ${r.color}77`, flexShrink: 0,
-                      }}>
-                        <span style={{ fontSize: "10px", fontWeight: 900, color: r.color, letterSpacing: "0.1em" }}>{r.result}</span>
+                      <div style={{ color: "rgba(180,150,255,0.35)", fontSize: "9px", marginTop: "4px" }}>
+                        Play a game to see your match history here
                       </div>
-                      <div style={{
-                        color: r.color, fontSize: "13px", fontWeight: 900,
-                        textShadow: `0 0 10px ${r.color}88`, minWidth: "62px", textAlign: "right",
-                      }}>{r.earned}</div>
                     </div>
-                  ))}
+                  ) : (
+                    matches.map((m, i) => {
+                      const display = GAME_DISPLAY[m.game] || { name: m.game.toUpperCase(), icon: "🎮" };
+                      const threshold = WIN_THRESHOLD[m.game] ?? 0;
+                      const isWin = m.score >= threshold;
+                      const color = isWin ? "#22c55e" : "#ef4444";
+                      const result = isWin ? "WIN" : "LOSS";
+                      return (
+                        <div key={`${m.tx_hash}-${i}`} style={{
+                          display: "flex", gap: "12px", alignItems: "center",
+                          borderRadius: "14px",
+                          background: "linear-gradient(90deg, rgba(20,10,50,0.85) 0%, rgba(10,5,30,0.9) 100%)",
+                          border: `1.5px solid ${color}44`,
+                          boxShadow: `0 0 14px ${color}22, 0 6px 16px rgba(0,0,0,0.6)`,
+                          padding: "10px 14px",
+                        }}>
+                          <div style={{
+                            width: "42px", height: "42px", borderRadius: "12px", flexShrink: 0,
+                            background: `radial-gradient(circle at 35% 30%, ${color}cc, ${color}44)`,
+                            border: `1.5px solid ${color}77`,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: "20px", boxShadow: `0 0 10px ${color}77`,
+                          }}>{display.icon}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ color: "white", fontSize: "13px", fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{display.name}</div>
+                            <div style={{ color: "rgba(180,150,255,0.55)", fontSize: "10px", fontWeight: 700, marginTop: "2px" }}>{timeAgo(m.timestamp)}</div>
+                          </div>
+                          <div style={{
+                            padding: "4px 10px", borderRadius: "10px",
+                            background: isWin ? "rgba(34,197,94,0.18)" : "rgba(239,68,68,0.18)",
+                            border: `1.5px solid ${color}77`, flexShrink: 0,
+                          }}>
+                            <span style={{ fontSize: "10px", fontWeight: 900, color, letterSpacing: "0.1em" }}>{result}</span>
+                          </div>
+                          <div style={{
+                            color: "#fbbf24", fontSize: "14px", fontWeight: 900,
+                            textShadow: "0 0 10px rgba(251,191,36,0.7)", minWidth: "44px", textAlign: "right",
+                          }}>{m.score}</div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               )}
 

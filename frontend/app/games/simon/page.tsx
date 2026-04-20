@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useAccount, useSignMessage, useWriteContract } from "wagmi";
 import { usePrivy } from "@privy-io/react-auth";
 import { useIsMiniPay } from "@/hooks/useMiniPay";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import { useAudioSettings, effectiveGains } from "@/hooks/useAudioSettings";
 import { playRankReveal, playSaveSuccess, playLevelUp, playAchievementChime } from "@/hooks/useAppAudio";
 import { signScore, signScoreMiniPay, submitScore, submitScoreMiniPay } from "@/app/actions/game";
@@ -96,6 +97,11 @@ type PetEvent = { type: "correct" | "wrong" | "clear" | "bonus"; ts: number };
 export default function SimonGamePage() {
   const router = useRouter();
   const { address } = useAccount();
+  // Mobile flag drives lighter-weight GPU effects on the Simon device.
+  // Stacked 80/160/240px box-shadow blurs + triple drop-shadow filters
+  // cause "Aww, snap!" renderer OOMs on low-end Android and the MiniPay
+  // webview. Mobile gets slimmer shadows; desktop keeps the full drama.
+  const isMobile = useIsMobile();
   const [phase, setPhase] = useState<Phase>("idle");
 
   // User audio preferences (same pattern as rhythm page)
@@ -580,6 +586,7 @@ export default function SimonGamePage() {
           petEvent={petEvent}
           tappedCount={tappedCount}
           totalInRound={Math.max(1, sequences + 1)}
+          isMobile={isMobile}
           onButtonClick={handleButtonClick}
           onQuit={() => handleGameOver(scoreRef.current, Date.now() - startTimeRef.current)}
         />
@@ -837,7 +844,7 @@ function PetCompanion({ pet, event }: { pet: PetStage; event: PetEvent | null })
 // Bottom: SCORE chip + progress dots showing taps remaining this round.
 function PlayingView({
   score, round, bonusUnlocked, activeBtn, isShowingSequence, roundFlash,
-  pet, petEvent, tappedCount, totalInRound, onButtonClick, onQuit,
+  pet, petEvent, tappedCount, totalInRound, isMobile, onButtonClick, onQuit,
 }: {
   score: number;
   round: number;
@@ -849,6 +856,7 @@ function PlayingView({
   petEvent: PetEvent | null;
   tappedCount: number;
   totalInRound: number;
+  isMobile: boolean;
   onButtonClick: (id: string) => void;
   onQuit: () => void;
 }) {
@@ -934,6 +942,7 @@ function PlayingView({
           bonusUnlocked={bonusUnlocked}
           activeBtn={activeBtn}
           disabled={isShowingSequence}
+          isMobile={isMobile}
           onTap={onButtonClick}
         />
 
@@ -998,13 +1007,14 @@ function PlayingView({
 // nothing. Slices dim when the sequence is being revealed (to discourage
 // premature taps) and pop with a full-bright glow when the active one fires.
 function SimonCircle({
-  round, statusLabel, bonusUnlocked, activeBtn, disabled, onTap,
+  round, statusLabel, bonusUnlocked, activeBtn, disabled, isMobile, onTap,
 }: {
   round: number;
   statusLabel: string;
   bonusUnlocked: boolean;
   activeBtn: string | null;
   disabled: boolean;
+  isMobile: boolean;
   onTap: (id: string) => void;
 }) {
   // Halo color is ALWAYS neutral magenta — out of Simon's button palette
@@ -1022,8 +1032,14 @@ function SimonCircle({
       position: "relative",
       width: "min(380px, 88vw)",
       aspectRatio: "1",
-      // Triple drop-shadow: deep black (depth), colored (bleed), wide ambient
-      filter: `drop-shadow(0 40px 50px rgba(0,0,0,0.9)) drop-shadow(0 0 80px ${haloColor}) drop-shadow(0 0 200px ${haloColor}${haloActive ? "" : "44"})`,
+      // Desktop: triple drop-shadow for depth + colored bleed + wide ambient.
+      // Mobile: single modest shadow — the 200px blur filter was causing
+      // renderer OOMs ("Aww, snap!" / "Can't open this page") on low-end
+      // phones and the MiniPay webview. Each filter creates a full-screen
+      // composite layer; a 200px blur radius paints ~160,000px² per frame.
+      filter: isMobile
+        ? `drop-shadow(0 18px 24px rgba(0,0,0,0.85))`
+        : `drop-shadow(0 40px 50px rgba(0,0,0,0.9)) drop-shadow(0 0 80px ${haloColor}) drop-shadow(0 0 200px ${haloColor}${haloActive ? "" : "44"})`,
       transition: "filter 0.12s ease-out",
     }}>
       {/* Floor glow pool — device reads as floating above a surface */}
@@ -1063,10 +1079,10 @@ function SimonCircle({
       }} />
 
       {/* 4 pie-slice buttons around the circle */}
-      <Slice pos="tl" theme={BASE_COLORS[0]} active={activeBtn === BASE_COLORS[0].id} disabled={disabled} onTap={() => onTap(BASE_COLORS[0].id)} />
-      <Slice pos="tr" theme={BASE_COLORS[1]} active={activeBtn === BASE_COLORS[1].id} disabled={disabled} onTap={() => onTap(BASE_COLORS[1].id)} />
-      <Slice pos="bl" theme={BASE_COLORS[2]} active={activeBtn === BASE_COLORS[2].id} disabled={disabled} onTap={() => onTap(BASE_COLORS[2].id)} />
-      <Slice pos="br" theme={BASE_COLORS[3]} active={activeBtn === BASE_COLORS[3].id} disabled={disabled} onTap={() => onTap(BASE_COLORS[3].id)} />
+      <Slice pos="tl" theme={BASE_COLORS[0]} active={activeBtn === BASE_COLORS[0].id} disabled={disabled} isMobile={isMobile} onTap={() => onTap(BASE_COLORS[0].id)} />
+      <Slice pos="tr" theme={BASE_COLORS[1]} active={activeBtn === BASE_COLORS[1].id} disabled={disabled} isMobile={isMobile} onTap={() => onTap(BASE_COLORS[1].id)} />
+      <Slice pos="bl" theme={BASE_COLORS[2]} active={activeBtn === BASE_COLORS[2].id} disabled={disabled} isMobile={isMobile} onTap={() => onTap(BASE_COLORS[2].id)} />
+      <Slice pos="br" theme={BASE_COLORS[3]} active={activeBtn === BASE_COLORS[3].id} disabled={disabled} isMobile={isMobile} onTap={() => onTap(BASE_COLORS[3].id)} />
 
       {/* Center dome — round number + bonus purple button */}
       <CenterDome
@@ -1086,11 +1102,12 @@ function SimonCircle({
 // rounded to 100%, which carves a quarter-circle shape. Insetting from center
 // creates a visible gap between neighbours.
 type SlicePos = "tl" | "tr" | "bl" | "br";
-function Slice({ pos, theme, active, disabled, onTap }: {
+function Slice({ pos, theme, active, disabled, isMobile, onTap }: {
   pos: SlicePos;
   theme: BtnTheme;
   active: boolean;
   disabled: boolean;
+  isMobile: boolean;
   onTap: () => void;
 }) {
   const posStyle: Record<SlicePos, React.CSSProperties> = {
@@ -1136,7 +1153,13 @@ function Slice({ pos, theme, active, disabled, onTap }: {
           ? "brightness(2.0) saturate(1.5)"
           : (disabled ? "brightness(0.45) saturate(0.65)" : "brightness(0.75) saturate(0.9)"),
         boxShadow: active
-          ? `0 0 80px ${theme.glow}, 0 0 160px ${theme.glow}88, 0 0 240px ${theme.glow}55, inset 0 0 60px rgba(255,255,255,0.7), inset 0 0 0 2px rgba(255,255,255,0.8)`
+          // Mobile: single 30px glow. Desktop: the original stacked
+          // 80/160/240px bleed. Stacking three large blur radii forces
+          // the renderer to paint giant offscreen buffers — on low-end
+          // phones and the MiniPay webview this crashed the tab.
+          ? (isMobile
+              ? `0 0 30px ${theme.glow}, inset 0 0 40px rgba(255,255,255,0.65), inset 0 0 0 2px rgba(255,255,255,0.8)`
+              : `0 0 80px ${theme.glow}, 0 0 160px ${theme.glow}88, 0 0 240px ${theme.glow}55, inset 0 0 60px rgba(255,255,255,0.7), inset 0 0 0 2px rgba(255,255,255,0.8)`)
           : `inset 0 2px 22px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(0,0,0,0.4), 0 0 14px ${theme.glow}22`,
         transform: active ? "scale(1.015)" : "scale(1)",
         transformOrigin: "center",

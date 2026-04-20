@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 const D = "/splash_screen_icons/dice.png";
 const G = "/splash_screen_icons/gamepad.png";
@@ -8,27 +9,55 @@ const J = "/splash_screen_icons/joystick.png";
 const M = "/splash_screen_icons/golden_music.png";
 const V = "/splash_screen_icons/vending.png";
 
+// Desktop decoratives — the full rich set (7 left + 6 right) that frames
+// the hero on wider screens. Hidden on mobile via `.icon-float--desktop`.
 const LEFT_ICONS = [
-  { src: D, top: "1%", left: "-18px", size: 120, delay: 0.0, dur: 5.2, glow: "#cc44ff", rotate: -18 },
-  { src: M, top: "8%", left: "34px", size: 80, delay: 0.7, dur: 4.3, glow: "#ffaa00", rotate: 12 },
-  { src: G, top: "24%", left: "6px", size: 110, delay: 1.4, dur: 6.0, glow: "#aa88ff", rotate: -6 },
-  { src: D, top: "36%", left: "72px", size: 140, delay: 0.3, dur: 4.8, glow: "#cc44ff", rotate: 16 },
-  { src: J, top: "54%", left: "-10px", size: 105, delay: 2.1, dur: 5.5, glow: "#22aaff", rotate: -8 },
-  { src: G, top: "72%", left: "4px", size: 108, delay: 2.8, dur: 5.0, glow: "#aa88ff", rotate: -14 },
-  { src: D, top: "88%", left: "60px", size: 95, delay: 1.9, dur: 4.6, glow: "#cc44ff", rotate: 10 },
+  { src: D, top: "1%",  left: "-18px", size: 120, delay: 0.0, dur: 5.2, glow: "#cc44ff", rotate: -18 },
+  { src: M, top: "8%",  left: "34px",  size: 80,  delay: 0.7, dur: 4.3, glow: "#ffaa00", rotate: 12  },
+  { src: G, top: "24%", left: "6px",   size: 110, delay: 1.4, dur: 6.0, glow: "#aa88ff", rotate: -6  },
+  { src: D, top: "36%", left: "72px",  size: 140, delay: 0.3, dur: 4.8, glow: "#cc44ff", rotate: 16  },
+  { src: J, top: "54%", left: "-10px", size: 105, delay: 2.1, dur: 5.5, glow: "#22aaff", rotate: -8  },
+  { src: G, top: "72%", left: "4px",   size: 108, delay: 2.8, dur: 5.0, glow: "#aa88ff", rotate: -14 },
+  { src: D, top: "88%", left: "60px",  size: 95,  delay: 1.9, dur: 4.6, glow: "#cc44ff", rotate: 10  },
 ];
 
 const RIGHT_ICONS = [
-  { src: D, top: "0%", right: "-22px", size: 115, delay: 0.4, dur: 5.0, glow: "#cc44ff", rotate: 20 },
-  { src: J, top: "16%", right: "54px", size: 100, delay: 1.2, dur: 4.8, glow: "#22aaff", rotate: 8 },
-  { src: V, top: "30%", right: "0px", size: 120, delay: 2.0, dur: 6.2, glow: "#ff44cc", rotate: -4 },
-  { src: M, top: "50%", right: "44px", size: 82, delay: 0.6, dur: 4.0, glow: "#ffaa00", rotate: -16 },
-  { src: D, top: "65%", right: "-8px", size: 100, delay: 2.4, dur: 5.2, glow: "#cc44ff", rotate: 10 },
-  { src: G, top: "80%", right: "58px", size: 108, delay: 1.8, dur: 5.8, glow: "#aa88ff", rotate: -10 },
+  { src: D, top: "0%",  right: "-22px", size: 115, delay: 0.4, dur: 5.0, glow: "#cc44ff", rotate: 20  },
+  { src: J, top: "16%", right: "54px",  size: 100, delay: 1.2, dur: 4.8, glow: "#22aaff", rotate: 8   },
+  { src: V, top: "30%", right: "0px",   size: 120, delay: 2.0, dur: 6.2, glow: "#ff44cc", rotate: -4  },
+  { src: M, top: "50%", right: "44px",  size: 82,  delay: 0.6, dur: 4.0, glow: "#ffaa00", rotate: -16 },
+  { src: D, top: "65%", right: "-8px",  size: 100, delay: 2.4, dur: 5.2, glow: "#cc44ff", rotate: 10  },
+  { src: G, top: "80%", right: "58px",  size: 108, delay: 1.8, dur: 5.8, glow: "#aa88ff", rotate: -10 },
 ];
 
-const GamepadIcon = () => (
-  <svg width="76" height="76" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ filter: "drop-shadow(0px 2px 0px rgba(255,255,255,0.45))" }}>
+// Mobile-only decoratives — 3 + 3 at the edges. Smaller, dimmer, tucked
+// past the viewport edge so they frame the hero without crowding a 390px
+// phone. Hidden on desktop via `.icon-float--mobile`.
+type MobileIcon = {
+  src: string;
+  top: string;
+  left?: string;
+  right?: string;
+  size: number;
+  delay: number;
+  dur: number;
+  glow: string;
+  rotate: number;
+  opacity: number;
+};
+const MOBILE_LEFT_ICONS: MobileIcon[] = [
+  { src: D, top: "6%",  left: "-24px", size: 68, delay: 0.0, dur: 5.2, glow: "#cc44ff", rotate: -18, opacity: 0.55 },
+  { src: J, top: "46%", left: "-22px", size: 58, delay: 2.1, dur: 5.5, glow: "#22aaff", rotate: -8,  opacity: 0.45 },
+  { src: G, top: "82%", left: "-18px", size: 62, delay: 2.8, dur: 5.0, glow: "#aa88ff", rotate: -14, opacity: 0.5  },
+];
+const MOBILE_RIGHT_ICONS: MobileIcon[] = [
+  { src: D, top: "10%", right: "-26px", size: 64, delay: 0.4, dur: 5.0, glow: "#cc44ff", rotate: 20,  opacity: 0.55 },
+  { src: V, top: "50%", right: "-20px", size: 66, delay: 2.0, dur: 6.2, glow: "#ff44cc", rotate: -4,  opacity: 0.45 },
+  { src: M, top: "86%", right: "-18px", size: 54, delay: 0.6, dur: 4.0, glow: "#ffaa00", rotate: -16, opacity: 0.5  },
+];
+
+const GamepadIcon = ({ size = 76 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ filter: "drop-shadow(0px 2px 0px rgba(255,255,255,0.45))" }}>
     <mask id="gamepadMask">
       <rect width="100" height="100" fill="white" />
       <rect x="23" y="40" width="8" height="24" rx="2" fill="black" />
@@ -44,8 +73,8 @@ const GamepadIcon = () => (
   </svg>
 );
 
-const RobotIcon = () => (
-  <svg width="80" height="80" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ filter: "drop-shadow(0px 2px 0px rgba(255,255,255,0.45))" }}>
+const RobotIcon = ({ size = 80 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ filter: "drop-shadow(0px 2px 0px rgba(255,255,255,0.45))" }}>
     <mask id="robotMask">
       <rect width="100" height="100" fill="white" />
       <circle cx="35" cy="55" r="5" fill="black" />
@@ -427,6 +456,7 @@ function SupportModal({ onClose }: { onClose: () => void }) {
 
 export default function HomePage() {
   const router = useRouter();
+  const isMobile = useIsMobile();
   const [showAbout, setShowAbout] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
 
@@ -451,11 +481,11 @@ export default function HomePage() {
         }}
       />
 
-      {/* Left icons */}
+      {/* Left icons — desktop-only; hidden under 768px via CSS. */}
       {LEFT_ICONS.map((icon, i) => (
         <div
           key={`l-${i}`}
-          className="icon-float"
+          className="icon-float icon-float--desktop"
           style={{
             position: "absolute",
             top: icon.top,
@@ -475,11 +505,11 @@ export default function HomePage() {
         </div>
       ))}
 
-      {/* Right icons */}
+      {/* Right icons — desktop-only; see LEFT_ICONS comment. */}
       {RIGHT_ICONS.map((icon, i) => (
         <div
           key={`r-${i}`}
-          className="icon-float"
+          className="icon-float icon-float--desktop"
           style={{
             position: "absolute",
             top: icon.top,
@@ -499,7 +529,61 @@ export default function HomePage() {
         </div>
       ))}
 
-      {/* Top nav */}
+      {/* Mobile-only decoratives — 3 left + 3 right, tucked to the edges
+          and dimmed so the hero still dominates on a 390px viewport.
+          Hidden on desktop via `.icon-float--mobile`. */}
+      {MOBILE_LEFT_ICONS.map((icon, i) => (
+        <div
+          key={`ml-${i}`}
+          className="icon-float icon-float--mobile"
+          style={{
+            position: "absolute",
+            top: icon.top,
+            left: icon.left,
+            width: icon.size,
+            height: icon.size,
+            transform: `rotate(${icon.rotate}deg)`,
+            filter: `drop-shadow(0 0 6px ${icon.glow}66)`,
+            opacity: icon.opacity,
+            ["--dur" as string]: `${icon.dur}s`,
+            ["--delay" as string]: `${icon.delay}s`,
+            userSelect: "none",
+            pointerEvents: "none",
+            zIndex: 0,
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={icon.src} alt="" width={icon.size} height={icon.size} style={{ objectFit: "contain", display: "block" }} />
+        </div>
+      ))}
+      {MOBILE_RIGHT_ICONS.map((icon, i) => (
+        <div
+          key={`mr-${i}`}
+          className="icon-float icon-float--mobile"
+          style={{
+            position: "absolute",
+            top: icon.top,
+            right: icon.right,
+            width: icon.size,
+            height: icon.size,
+            transform: `rotate(${icon.rotate}deg)`,
+            filter: `drop-shadow(0 0 6px ${icon.glow}66)`,
+            opacity: icon.opacity,
+            ["--dur" as string]: `${icon.dur}s`,
+            ["--delay" as string]: `${icon.delay}s`,
+            userSelect: "none",
+            pointerEvents: "none",
+            zIndex: 0,
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={icon.src} alt="" width={icon.size} height={icon.size} style={{ objectFit: "contain", display: "block" }} />
+        </div>
+      ))}
+
+      {/* Top nav — on mobile, drop LEADERBOARD (it's already in the bottom
+          tab bar on inner pages, and reachable from the CTAs too). Keep
+          ABOUT + SUPPORT so the landing page is self-contained. */}
       <nav
         style={{
           position: "absolute",
@@ -509,8 +593,8 @@ export default function HomePage() {
           display: "flex",
           justifyContent: "flex-end",
           alignItems: "center",
-          padding: "20px 32px",
-          gap: "24px",
+          padding: isMobile ? "14px 16px" : "20px 32px",
+          gap: isMobile ? "14px" : "24px",
           zIndex: 10,
         }}
       >
@@ -518,14 +602,14 @@ export default function HomePage() {
         <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
           <a href="https://t.me/+oY4inbBoglViNmE0" target="_blank" rel="noopener noreferrer"
             style={{ color: "white", opacity: 0.85, display: "flex", alignItems: "center" }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <svg width={isMobile ? 20 : 24} height={isMobile ? 20 : 24} viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.19 13.367l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.958.192z"/>
             </svg>
           </a>
         </div>
 
         {/* Nav links */}
-        {["ABOUT", "LEADERBOARD", "SUPPORT"].map((label) => (
+        {(isMobile ? ["ABOUT", "SUPPORT"] : ["ABOUT", "LEADERBOARD", "SUPPORT"]).map((label) => (
           <button
             key={label}
             onClick={() => {
@@ -537,7 +621,7 @@ export default function HomePage() {
               background: "none",
               border: "none",
               color: "white",
-              fontSize: "13px",
+              fontSize: isMobile ? "11px" : "13px",
               fontWeight: 700,
               letterSpacing: "0.08em",
               cursor: "pointer",
@@ -559,7 +643,8 @@ export default function HomePage() {
           flexDirection: "column",
           justifyContent: "center",
           alignItems: "center",
-          gap: "40px",
+          gap: isMobile ? "28px" : "40px",
+          padding: isMobile ? "64px 0 40px" : "0",
         }}
       >
         {/* Logo */}
@@ -568,27 +653,38 @@ export default function HomePage() {
           src="/components/game_arena_text.png"
           alt="Game Arena"
           style={{
-            width: "clamp(280px, 45vw, 600px)",
+            width: "clamp(240px, 62vw, 600px)",
             height: "auto",
             animation: "bounce-scale-in 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) both",
           }}
         />
 
-        {/* Buttons */}
-        <div style={{ display: "flex", gap: "50px", alignItems: "center" }}>
+        {/* Buttons — side-by-side from 360px up. On a 360px phone the
+            two CTAs + 16px gap fit in a 344px content area: 2×150 + 16 + 28
+            padding margin = 344 (just). We shrink text and icon too, since
+            "CHALLENGE" (9 chars at 28px) overflows a 150px pill. */}
+        <div style={{
+          display: "flex",
+          gap: "clamp(12px, 5vw, 50px)",
+          alignItems: "center",
+          justifyContent: "center",
+          maxWidth: "100%",
+          padding: "0 12px",
+          boxSizing: "border-box",
+        }}>
           {[
             {
               label: "PLAY\nGAMES",
-              icon: <GamepadIcon />,
+              icon: <GamepadIcon size={isMobile ? 52 : 76} />,
               iconDark: "#005572", // Deep cyan/teal inset color
               path: "/connect?next=/games",
               gradient: "linear-gradient(160deg, #a4f480 0%, #2bd0b9 55%, #05a0cd 100%)",
               wall: "#006282", // Extremely dark heavy bottom base
               shadowGlow: "rgba(5, 160, 205, 0.6)"
             },
-            { 
-              label: "CHALLENGE\nAI", 
-              icon: <RobotIcon />, 
+            {
+              label: "CHALLENGE\nAI",
+              icon: <RobotIcon size={isMobile ? 54 : 80} />,
               iconDark: "#6b0000", // Deep red inset color
               path: "/connect?next=/games/coinflip",
               gradient: "linear-gradient(160deg, #ffc76b 0%, #ff5232 50%, #cc0c0c 100%)",
@@ -607,18 +703,22 @@ export default function HomePage() {
               onMouseDown={e => (e.currentTarget as HTMLDivElement).style.transform = "scale(0.92) translateY(12px)"}
               onMouseUp={e => (e.currentTarget as HTMLDivElement).style.transform = "scale(1.08) translateY(-6px)"}
             >
-              {/* Outer container provides the 3D base (wall/lip) */}
+              {/* Outer container provides the 3D base (wall/lip). Size clamps
+                  to the viewport — ~150px on 360px phones, up to 240px on
+                  tablets+ — so the two CTAs always fit side by side with
+                  the long "CHALLENGE" label legible. */}
               <div style={{
-                width: "240px", height: "240px",
-                borderRadius: "50px",
+                width: "clamp(150px, 42vw, 240px)",
+                height: "clamp(150px, 42vw, 240px)",
+                borderRadius: isMobile ? "36px" : "50px",
                 background: btn.wall,
-                paddingBottom: "22px", // Much chunkier bottom lip for that heavy jelly weight
+                paddingBottom: isMobile ? "14px" : "22px", // Lip shrinks on mobile — keeps proportions tight
                 boxShadow: `0 24px 45px -8px ${btn.shadowGlow}, inset 0 -5px 10px rgba(0,0,0,0.4)`
               }}>
                 {/* Surface of the button */}
                 <div style={{
                   width: "100%", height: "100%",
-                  borderRadius: "50px 50px 42px 42px",
+                  borderRadius: isMobile ? "36px 36px 30px 30px" : "50px 50px 42px 42px",
                   background: btn.gradient,
                   position: "relative", overflow: "hidden",
                   display: "flex", flexDirection: "column",
@@ -641,22 +741,33 @@ export default function HomePage() {
                     transform: "rotate(-18deg)"
                   }} />
 
-                  {/* Main content (Icon + Text) */}
-                  <div style={{ zIndex: 2, display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", marginTop: "14px" }}>
+                  {/* Main content (Icon + Text) — gap and margin shrink
+                      proportionally on mobile so the label never clips. */}
+                  <div style={{
+                    zIndex: 2,
+                    display: "flex", flexDirection: "column", alignItems: "center",
+                    gap: isMobile ? "6px" : "12px",
+                    marginTop: isMobile ? "6px" : "14px",
+                    padding: "0 6px",
+                    width: "100%",
+                  }}>
                     {/* The Icon container receives the specific dark inset color */}
-                    <div style={{ color: btn.iconDark }}>
+                    <div style={{ color: btn.iconDark, lineHeight: 0 }}>
                       {btn.icon}
                     </div>
                     <span style={{
                       color: "white",
                       fontFamily: "'Arial Rounded MT Bold', 'Fredoka One', 'Nunito', 'Varela Round', sans-serif",
                       fontWeight: 900,
-                      fontSize: "28px", // Juicier big text
+                      // Fluid text — "CHALLENGE" is 9 chars, must fit the
+                      // button's inner width at the smallest clamp floor.
+                      fontSize: "clamp(16px, 4.6vw, 28px)",
                       lineHeight: "1.05",
                       textAlign: "center",
                       letterSpacing: "0.02em",
                       textShadow: "0px 4px 0px rgba(0,0,0,0.2), 0px 6px 12px rgba(0,0,0,0.45)",
-                      whiteSpace: "pre-line"
+                      whiteSpace: "pre-line",
+                      width: "100%",
                     }}>
                       {btn.label}
                     </span>

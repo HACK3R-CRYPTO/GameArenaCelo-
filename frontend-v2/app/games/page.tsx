@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 import { useSelfVerification } from "@/contexts/SelfVerificationContext";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import BottomNav from "@/components/BottomNav";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 
@@ -14,6 +16,8 @@ const J = "/splash_screen_icons/joystick.png";
 const M = "/splash_screen_icons/golden_music.png";
 const V = "/splash_screen_icons/vending.png";
 
+// Desktop decoratives — full rich 7+6 set. Hidden on mobile via
+// `.icon-float--desktop`.
 const LEFT_ICONS = [
   { src: D, top: "1%",  left: "-18px", size: 120, delay: 0.0, dur: 5.2, glow: "#cc44ff", rotate: -18 },
   { src: M, top: "8%",  left: "34px",  size: 80,  delay: 0.7, dur: 4.3, glow: "#ffaa00", rotate: 12  },
@@ -31,6 +35,32 @@ const RIGHT_ICONS = [
   { src: M, top: "50%", right: "44px",  size: 82,  delay: 0.6, dur: 4.0, glow: "#ffaa00", rotate: -16 },
   { src: D, top: "65%", right: "-8px",  size: 100, delay: 2.4, dur: 5.2, glow: "#cc44ff", rotate: 10  },
   { src: G, top: "80%", right: "58px",  size: 108, delay: 1.8, dur: 5.8, glow: "#aa88ff", rotate: -10 },
+];
+
+// Mobile decoratives — 3+3 at viewport edges, matches home/leaderboard.
+// Small + translucent, tucked past the edge so half bleeds off-screen —
+// atmosphere without competing with the game cards. Hidden on desktop.
+type MobileIcon = {
+  src: string;
+  top: string;
+  left?: string;
+  right?: string;
+  size: number;
+  delay: number;
+  dur: number;
+  glow: string;
+  rotate: number;
+  opacity: number;
+};
+const MOBILE_LEFT_ICONS: MobileIcon[] = [
+  { src: D, top: "6%",  left: "-24px", size: 60, delay: 0.0, dur: 5.2, glow: "#cc44ff", rotate: -18, opacity: 0.45 },
+  { src: J, top: "48%", left: "-22px", size: 54, delay: 2.1, dur: 5.5, glow: "#22aaff", rotate: -8,  opacity: 0.4  },
+  { src: G, top: "84%", left: "-18px", size: 58, delay: 2.8, dur: 5.0, glow: "#aa88ff", rotate: -14, opacity: 0.4  },
+];
+const MOBILE_RIGHT_ICONS: MobileIcon[] = [
+  { src: D, top: "10%", right: "-26px", size: 58, delay: 0.4, dur: 5.0, glow: "#cc44ff", rotate: 20,  opacity: 0.45 },
+  { src: V, top: "52%", right: "-20px", size: 62, delay: 2.0, dur: 6.2, glow: "#ff44cc", rotate: -4,  opacity: 0.4  },
+  { src: M, top: "86%", right: "-18px", size: 52, delay: 0.6, dur: 4.0, glow: "#ffaa00", rotate: -16, opacity: 0.45 },
 ];
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
@@ -158,6 +188,8 @@ export default function GamesPage() {
   const router = useRouter();
   const activePath = "/games";
   const { address } = useAccount();
+  // Mobile swaps the 68px left sidebar for a fixed bottom tab bar.
+  const isMobile = useIsMobile();
   const [streak, setStreak] = useState<{ streak: number; playedToday: boolean } | null>(null);
 
   useEffect(() => {
@@ -302,17 +334,251 @@ export default function GamesPage() {
     refetchMissions();
   }
 
+  // Activity card — missions + events + highlights. Rendered on the desktop
+  // right sidebar AND below the game cards on mobile (fills what was dead
+  // viewport below the cards — top games always have live content there).
+  const activityCard = (
+    <div style={{
+      borderRadius: "16px",
+      background: "rgba(20,10,50,0.82)",
+      border: "1px solid rgba(255,255,255,0.1)",
+      overflow: "hidden",
+      display: "flex", flexDirection: "column",
+    }}>
+      <div style={{
+        background: "linear-gradient(135deg, #3b1fa3 0%, #6d28d9 60%, #3b1fa3 100%)",
+        padding: "12px 14px",
+        position: "relative", overflow: "hidden",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+      }}>
+        <div style={{
+          position: "absolute", top: 0, left: 0, right: 0, height: "50%",
+          background: "linear-gradient(180deg,rgba(255,255,255,0.28) 0%,transparent 100%)",
+          pointerEvents: "none",
+        }}/>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", position: "relative", zIndex: 1 }}>
+          <span style={{ fontSize: "14px" }}>🎯</span>
+          <span style={{ color: "white", fontSize: "13px", fontWeight: 900, letterSpacing: "0.1em" }}>DAILY MISSIONS</span>
+        </div>
+        {address && missions.length > 0 && (
+          <div style={{ position: "relative", zIndex: 1, color: "#fbbf24", fontSize: "10px", fontWeight: 900, fontFamily: "monospace", textShadow: "0 0 8px rgba(251,191,36,0.6)" }}>
+            {fmtCountdown(missionResetSec)}
+          </div>
+        )}
+      </div>
+
+      {/* Body — desktop sidebar has fixed height, so inner scroll makes
+          sense there. On mobile the card sits inside the page's own
+          scroll column, so nesting another scroll is disorienting — use
+          natural height instead. */}
+      <div style={{
+        padding: "10px 12px",
+        display: "flex", flexDirection: "column", gap: "10px",
+        overflowY: isMobile ? "visible" : "auto",
+        flex: isMobile ? "0 0 auto" : 1,
+      }}>
+        {/* MISSIONS */}
+        {!address ? (
+          <div style={{ padding: "20px 8px", textAlign: "center", color: "rgba(200,180,255,0.5)", fontSize: "10px", fontWeight: 700 }}>
+            Connect wallet to see daily missions
+          </div>
+        ) : missions.length === 0 ? (
+          <div style={{ padding: "20px 8px", textAlign: "center", color: "rgba(200,180,255,0.5)", fontSize: "10px", fontWeight: 700 }}>
+            Loading missions...
+          </div>
+        ) : (
+          missions.map(m => {
+            const pct = Math.round((m.progress / m.target) * 100);
+            const ready = m.completed && !m.claimed;
+            const done  = m.claimed;
+            return (
+              <div key={m.id} style={{
+                borderRadius: "12px",
+                background: done
+                  ? "linear-gradient(180deg, rgba(34,197,94,0.08) 0%, rgba(0,0,0,0.2) 100%)"
+                  : ready
+                    ? "linear-gradient(180deg, rgba(251,191,36,0.18) 0%, rgba(0,0,0,0.2) 100%)"
+                    : "rgba(255,255,255,0.04)",
+                border: `1.5px solid ${done ? "rgba(34,197,94,0.45)" : ready ? "#fbbf24" : "rgba(167,139,250,0.22)"}`,
+                boxShadow: ready ? "0 0 12px rgba(251,191,36,0.4)" : "none",
+                padding: "9px 10px",
+                display: "flex", flexDirection: "column", gap: "6px",
+                opacity: done ? 0.6 : 1,
+              }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "6px" }}>
+                  <div style={{ color: "white", fontSize: "10px", fontWeight: 700, lineHeight: 1.3, flex: 1 }}>{m.label}</div>
+                  <div style={{ color: "#fbbf24", fontSize: "9px", fontWeight: 900, whiteSpace: "nowrap", flexShrink: 0 }}>+{m.rewardXp} XP</div>
+                </div>
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
+                    <span style={{ color: "rgba(200,180,255,0.55)", fontSize: "8px", fontWeight: 700 }}>{m.progress} / {m.target}</span>
+                    <span style={{ color: "rgba(200,180,255,0.55)", fontSize: "8px", fontWeight: 700 }}>{pct}%</span>
+                  </div>
+                  <div style={{ height: "5px", borderRadius: "999px", background: "rgba(0,0,0,0.5)", overflow: "hidden", border: "1px solid rgba(167,139,250,0.12)" }}>
+                    <div style={{
+                      width: `${pct}%`, height: "100%", borderRadius: "999px",
+                      background: done ? "#22c55e" : ready ? "#fbbf24" : "#a78bfa",
+                      boxShadow: ready ? "0 0 6px rgba(251,191,36,0.6)" : "none",
+                      transition: "width 0.3s",
+                    }} />
+                  </div>
+                </div>
+                {done ? (
+                  <div style={{ textAlign: "center", color: "#22c55e", fontSize: "9px", fontWeight: 900, letterSpacing: "0.1em" }}>✓ CLAIMED</div>
+                ) : ready ? (
+                  <div role="button" tabIndex={0} onClick={() => claimMission(m.id)} style={{ cursor: "pointer", userSelect: "none" }}>
+                    <div style={{
+                      borderRadius: "8px",
+                      background: "linear-gradient(180deg, #fbbf24 0%, #b45309 100%)",
+                      padding: "5px", textAlign: "center",
+                      border: "1.5px solid rgba(255,255,255,0.45)",
+                      boxShadow: "inset 0 3px 6px rgba(255,255,255,0.4), inset 0 -2px 4px rgba(0,0,0,0.3)",
+                    }}>
+                      <span style={{ color: "white", fontSize: "10px", fontWeight: 900, letterSpacing: "0.14em", textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}>CLAIM</span>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })
+        )}
+
+        {/* EVENTS */}
+        <div style={{ fontSize: "9px", fontWeight: 900, letterSpacing: "0.15em", color: "rgba(200,180,255,0.7)", marginTop: "6px" }}>EVENTS</div>
+        {(() => {
+          const events: EventCard[] = [];
+          if (seasonInfo && seasonInfo.endsAt > 0) {
+            events.push({
+              icon: "🗓️", color: "#a78bfa",
+              title: `Season ${seasonInfo.season} — ends in ${fmtShortCountdown(seasonInfo.endsAt - now)}`,
+              subtitle: "50 G$ pool · Top 3 win · View →",
+              onClick: () => router.push("/leaderboard"),
+            });
+          }
+          if (compInfo) {
+            events.push({
+              icon: "🏆", color: "#fbbf24",
+              title: `3-Week Cup — ${compInfo.weeksLeft} week${compInfo.weeksLeft !== 1 ? "s" : ""} left`,
+              subtitle: `$${compInfo.total} pool · Cumulative · View →`,
+              onClick: () => router.push("/leaderboard"),
+            });
+          }
+          if (isVerified && claimableG) {
+            events.push({
+              icon: "💰", color: "#22c55e",
+              title: "Daily G$ ready to claim",
+              subtitle: `${(Number(entitlement) / 1e18).toFixed(2)} G$ · Tap to claim`,
+              onClick: () => claimG$(),
+            });
+          }
+          if (events.length === 0) {
+            return <div style={{ padding: "10px 4px", textAlign: "center", color: "rgba(200,180,255,0.4)", fontSize: "9px", fontWeight: 700 }}>No active events</div>;
+          }
+          return events.map((e, i) => {
+            const interactive = !!e.onClick;
+            return (
+              <div key={i}
+                role={interactive ? "button" : undefined}
+                tabIndex={interactive ? 0 : undefined}
+                onClick={e.onClick}
+                style={{
+                  display: "flex", alignItems: "center", gap: "8px",
+                  background: "rgba(255,255,255,0.04)",
+                  borderRadius: "10px",
+                  border: `1px solid ${e.color}33`,
+                  padding: "7px 9px",
+                  cursor: interactive ? "pointer" : "default",
+                  userSelect: "none",
+                  transition: "transform 0.15s, border-color 0.15s, background 0.15s",
+                }}
+                onMouseEnter={el => {
+                  if (!interactive) return;
+                  const t = el.currentTarget as HTMLDivElement;
+                  t.style.transform = "translateY(-1px)";
+                  t.style.background = "rgba(255,255,255,0.07)";
+                  t.style.borderColor = `${e.color}88`;
+                }}
+                onMouseLeave={el => {
+                  const t = el.currentTarget as HTMLDivElement;
+                  t.style.transform = "";
+                  t.style.background = "rgba(255,255,255,0.04)";
+                  t.style.borderColor = `${e.color}33`;
+                }}
+              >
+                <div style={{
+                  width: "28px", height: "28px", borderRadius: "8px", flexShrink: 0,
+                  background: `radial-gradient(circle at 35% 30%, ${e.color}cc, ${e.color}44)`,
+                  border: `1px solid ${e.color}66`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: "14px", boxShadow: `0 0 8px ${e.color}33`,
+                }}>{e.icon}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ color: "white", fontSize: "10px", fontWeight: 700, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.title}</div>
+                  <div style={{ color: "rgba(200,180,255,0.55)", fontSize: "8px", fontWeight: 700, marginTop: "1px" }}>{e.subtitle}</div>
+                </div>
+              </div>
+            );
+          });
+        })()}
+
+        {/* HIGHLIGHTS */}
+        <div style={{ fontSize: "9px", fontWeight: 900, letterSpacing: "0.15em", color: "rgba(200,180,255,0.7)", marginTop: "6px" }}>HIGHLIGHTS</div>
+        {news.length === 0 ? (
+          <div style={{ padding: "10px 4px", textAlign: "center", color: "rgba(200,180,255,0.4)", fontSize: "9px", fontWeight: 700 }}>Loading highlights...</div>
+        ) : news.map((n, i) => (
+          <div key={i}
+            role="button" tabIndex={0}
+            onClick={() => router.push("/leaderboard")}
+            style={{
+              display: "flex", alignItems: "center", gap: "8px",
+              background: "rgba(255,255,255,0.04)",
+              borderRadius: "10px",
+              border: `1px solid ${n.color}33`,
+              padding: "7px 9px",
+              cursor: "pointer", userSelect: "none",
+              transition: "transform 0.15s, border-color 0.15s, background 0.15s",
+            }}
+            onMouseEnter={el => {
+              const t = el.currentTarget as HTMLDivElement;
+              t.style.transform = "translateY(-1px)";
+              t.style.background = "rgba(255,255,255,0.07)";
+              t.style.borderColor = `${n.color}88`;
+            }}
+            onMouseLeave={el => {
+              const t = el.currentTarget as HTMLDivElement;
+              t.style.transform = "";
+              t.style.background = "rgba(255,255,255,0.04)";
+              t.style.borderColor = `${n.color}33`;
+            }}
+          >
+            <div style={{
+              width: "28px", height: "28px", borderRadius: "8px", flexShrink: 0,
+              background: `radial-gradient(circle at 35% 30%, ${n.color}cc, ${n.color}44)`,
+              border: `1px solid ${n.color}66`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: "14px", boxShadow: `0 0 8px ${n.color}33`,
+            }}>{n.icon}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ color: "white", fontSize: "10px", fontWeight: 700, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.title}</div>
+              <div style={{ color: "rgba(200,180,255,0.55)", fontSize: "8px", fontWeight: 700, marginTop: "1px" }}>{n.subtitle}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <div style={{
       position: "fixed", inset: 0,
       background: "linear-gradient(160deg, #4c1d95 0%, #3b0a9e 35%, #1e0762 65%, #0d0230 100%)",
       display: "flex", flexDirection: "column", overflow: "hidden",
     }}>
-      {/* Left icons */}
+      {/* Left icons — desktop only (hidden on mobile via CSS) */}
       {LEFT_ICONS.map((icon, i) => (
         <div
           key={`l-${i}`}
-          className="icon-float"
+          className="icon-float icon-float--desktop"
           style={{
             position: "absolute",
             top: icon.top,
@@ -333,11 +599,11 @@ export default function GamesPage() {
         </div>
       ))}
 
-      {/* Right icons */}
+      {/* Right icons — desktop only */}
       {RIGHT_ICONS.map((icon, i) => (
         <div
           key={`r-${i}`}
-          className="icon-float"
+          className="icon-float icon-float--desktop"
           style={{
             position: "absolute",
             top: icon.top,
@@ -358,11 +624,62 @@ export default function GamesPage() {
         </div>
       ))}
 
-      {/* ── Body (sidebar + center + news) ── */}
+      {/* Mobile decoratives — 3+3 hidden on desktop via CSS */}
+      {MOBILE_LEFT_ICONS.map((icon, i) => (
+        <div
+          key={`ml-${i}`}
+          className="icon-float icon-float--mobile"
+          style={{
+            position: "absolute",
+            top: icon.top,
+            left: icon.left,
+            width: icon.size,
+            height: icon.size,
+            transform: `rotate(${icon.rotate}deg)`,
+            filter: `drop-shadow(0 0 6px ${icon.glow}55)`,
+            opacity: icon.opacity,
+            ["--dur" as string]: `${icon.dur}s`,
+            ["--delay" as string]: `${icon.delay}s`,
+            userSelect: "none",
+            pointerEvents: "none",
+            zIndex: 0,
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={icon.src} alt="" width={icon.size} height={icon.size} style={{ objectFit: "contain", display: "block" }} />
+        </div>
+      ))}
+      {MOBILE_RIGHT_ICONS.map((icon, i) => (
+        <div
+          key={`mr-${i}`}
+          className="icon-float icon-float--mobile"
+          style={{
+            position: "absolute",
+            top: icon.top,
+            right: icon.right,
+            width: icon.size,
+            height: icon.size,
+            transform: `rotate(${icon.rotate}deg)`,
+            filter: `drop-shadow(0 0 6px ${icon.glow}55)`,
+            opacity: icon.opacity,
+            ["--dur" as string]: `${icon.dur}s`,
+            ["--delay" as string]: `${icon.delay}s`,
+            userSelect: "none",
+            pointerEvents: "none",
+            zIndex: 0,
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={icon.src} alt="" width={icon.size} height={icon.size} style={{ objectFit: "contain", display: "block" }} />
+        </div>
+      ))}
+
+      {/* ── Body (sidebar + center + news). Sidebar hides on mobile; a
+              fixed BottomNav renders at the bottom of the page instead. ── */}
       <div style={{ display: "flex", flex: 1, minHeight: 0, position: "relative", zIndex: 2 }}>
 
-        {/* ── Left nav sidebar ── */}
-        <div style={{
+        {/* ── Left nav sidebar — desktop only ── */}
+        {!isMobile && <div style={{
           width: "68px", flexShrink: 0,
           alignSelf: "stretch",
           background: "rgba(4,1,18,0.95)",
@@ -442,7 +759,7 @@ export default function GamesPage() {
 
           {/* Bottom spacer to keep nav centered */}
           <div style={{ flex: 1 }} />
-        </div>
+        </div>}
 
         {/* ── Center: stats + logo + game cards ── */}
         <div style={{
@@ -454,35 +771,98 @@ export default function GamesPage() {
           flex: 1,
           display: "flex", flexDirection: "column",
           alignItems: "center",
-          justifyContent: "center",
-          padding: "14px 12px 16px",
-          gap: "12px",
+          justifyContent: isMobile ? "flex-start" : "center",
+          // Extra bottom padding on mobile so game cards clear the 64px
+          // fixed BottomNav instead of scrolling behind it.
+          padding: isMobile ? "14px 14px 96px" : "14px 12px 16px",
+          gap: isMobile ? "14px" : "12px",
           overflowY: "auto",
         }}>
 
-          {/* Stats pills */}
+          {/* Stats pills — compact on mobile. On mobile we also append a
+              STREAK pill as the 4th member when the user is connected
+              with a non-zero streak, instead of floating a separate chip
+              that overlaps the POT pill edge. */}
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "center",
-            gap: "10px", flexWrap: "wrap", flexShrink: 0,
+            gap: isMobile ? "6px" : "10px",
+            flexWrap: isMobile ? "nowrap" : "wrap",
+            flexShrink: 0,
+            width: "100%",
           }}>
-            {[
-              { icon: STAT_ICONS.players, label: "PLAYERS", value: fmtNumber(stats.totalUsers), borderColor: "#a78bfa", textColor: "#c4b5fd" },
-              { icon: STAT_ICONS.games,   label: "GAMES",   value: fmtNumber(stats.totalGames), borderColor: "#a78bfa", textColor: "#c4b5fd" },
-              { icon: STAT_ICONS.pot,     label: "POT",     value: `${Number(stats.estimatedPrizePot).toFixed(2)} G$`, borderColor: "#fbbf24", textColor: "#fde68a" },
-            ].map((s, i) => (
-              <div key={i} style={{
-                display: "flex", alignItems: "center", gap: "7px",
-                padding: "7px 16px",
-                borderRadius: "24px",
-                background: "rgba(8,2,28,0.65)",
-                border: `2px solid ${s.borderColor}`,
-                boxShadow: `0 0 16px ${s.borderColor}55, inset 0 1px 0 rgba(255,255,255,0.06)`,
-              }}>
-                <span style={{ color: s.textColor, display: "flex" }}>{s.icon}</span>
-                <span style={{ color: s.textColor, fontSize: "10px", fontWeight: 700, letterSpacing: "0.12em" }}>{s.label}:</span>
-                <span style={{ color: "white", fontSize: "13px", fontWeight: 900, letterSpacing: "0.04em" }}>{s.value}</span>
-              </div>
-            ))}
+            {(() => {
+              type Pill = {
+                icon: React.ReactNode; label: string; value: string;
+                borderColor: string; textColor: string;
+                // Streak pill uses a hot/frozen visual to mirror the
+                // desktop sidebar; regular stats pills just have one color.
+                streakMode?: "hot" | "frozen";
+              };
+              const pills: Pill[] = [
+                { icon: STAT_ICONS.players, label: "PLAYERS", value: fmtNumber(stats.totalUsers), borderColor: "#a78bfa", textColor: "#c4b5fd" },
+                { icon: STAT_ICONS.games,   label: "GAMES",   value: fmtNumber(stats.totalGames), borderColor: "#a78bfa", textColor: "#c4b5fd" },
+                { icon: STAT_ICONS.pot,     label: "POT",     value: isMobile ? `${Number(stats.estimatedPrizePot).toFixed(0)}` : `${Number(stats.estimatedPrizePot).toFixed(2)} G$`, borderColor: "#fbbf24", textColor: "#fde68a" },
+              ];
+              if (isMobile && address && streak && streak.streak > 0) {
+                const hot = streak.playedToday;
+                pills.push({
+                  icon: <span style={{
+                    fontSize: "13px", lineHeight: 1,
+                    filter: hot
+                      ? "drop-shadow(0 0 4px rgba(249,115,22,0.9))"
+                      : "hue-rotate(190deg) saturate(1.3) brightness(0.95) drop-shadow(0 0 3px rgba(56,189,248,0.7))",
+                  }}>🔥</span>,
+                  label: "STREAK",
+                  value: String(streak.streak),
+                  borderColor: hot ? "#f97316" : "#38bdf8",
+                  textColor: hot ? "#fbbf24" : "#bae6fd",
+                  streakMode: hot ? "hot" : "frozen",
+                });
+              }
+              return pills.map((s, i) => (
+                <div key={i} style={{
+                  display: "flex", alignItems: "center",
+                  gap: isMobile ? "4px" : "7px",
+                  padding: isMobile ? "5px 9px" : "7px 16px",
+                  borderRadius: "24px",
+                  background: "rgba(8,2,28,0.65)",
+                  border: `${isMobile ? 1.5 : 2}px solid ${s.borderColor}`,
+                  boxShadow: `0 0 ${isMobile ? 10 : 16}px ${s.borderColor}55, inset 0 1px 0 rgba(255,255,255,0.06)`,
+                  minWidth: 0,
+                }}>
+                  <span style={{ color: s.textColor, display: "flex" }}>
+                    {s.streakMode
+                      ? s.icon
+                      : isMobile
+                        ? <span style={{ width: 14, height: 14, display: "inline-flex" }}>{s.icon}</span>
+                        : s.icon}
+                  </span>
+                  {/* Label — tiny on mobile, standard on desktop. Streak
+                      pill drops the label on mobile (the 🔥 is self-explanatory
+                      and the pill is already the 4th one in a tight row). */}
+                  {!(isMobile && s.streakMode) && (
+                    <span style={{
+                      color: s.textColor,
+                      fontSize: isMobile ? "8px" : "10px",
+                      fontWeight: 700,
+                      letterSpacing: isMobile ? "0.1em" : "0.12em",
+                    }}>{s.label}{isMobile ? "" : ":"}</span>
+                  )}
+                  <span style={{
+                    color: s.streakMode ? s.textColor : "white",
+                    fontSize: isMobile ? "11px" : "13px",
+                    fontWeight: 900,
+                    letterSpacing: "0.04em",
+                    whiteSpace: "nowrap",
+                    textShadow: s.streakMode === "hot"
+                      ? "0 0 6px rgba(251,191,36,0.7)"
+                      : s.streakMode === "frozen"
+                        ? "0 0 5px rgba(56,189,248,0.6)"
+                        : undefined,
+                  }}>{s.value}{isMobile && s.label === "POT" ? " G$" : ""}</span>
+                </div>
+              ));
+            })()}
           </div>
 
           {/* Logo */}
@@ -491,298 +871,221 @@ export default function GamesPage() {
             src="/components/game_arena_text.png"
             alt="Game Arena"
             style={{
-              width: "clamp(180px, 32vw, 420px)", height: "auto",
+              width: isMobile ? "clamp(180px, 55vw, 280px)" : "clamp(180px, 32vw, 420px)",
+              height: "auto",
               filter: "drop-shadow(0 0 24px rgba(160,100,255,0.6))",
               flexShrink: 0,
             }}
           />
 
-          {/* Game cards row */}
+          {/* Game cards — desktop shows a 3-column row with fixed height,
+              mobile stacks horizontal cards (art left, info right) so each
+              game gets real estate and all three fit without cramping. */}
           <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
-            gap: "14px",
+            display: isMobile ? "flex" : "grid",
+            flexDirection: isMobile ? "column" : undefined,
+            gridTemplateColumns: isMobile ? undefined : "repeat(3, 1fr)",
+            gap: isMobile ? "12px" : "14px",
             width: "100%",
             maxWidth: "680px",
-            height: "clamp(280px, 48vh, 420px)",
+            height: isMobile ? "auto" : "clamp(280px, 48vh, 420px)",
           }}>
             {GAMES.map(g => (
               <GameCard
                 key={g.id}
                 game={g}
+                isMobile={isMobile}
                 onStart={() => g.path && router.push(g.path)}
               />
             ))}
           </div>
+
+          {/* Mobile activity panel — same card as the desktop sidebar,
+              rendered inside the scrollable center so it fills what was
+              dead space below the cards. Top-game menus keep users in the
+              app with live missions/events/highlights. */}
+          {isMobile && (
+            <div style={{ width: "100%", maxWidth: "680px", marginTop: "4px" }}>
+              {activityCard}
+            </div>
+          )}
         </div>
         </div>
 
-        {/* ── Right: NEWS / EVENTS panel ── */}
-        <div style={{
+        {/* ── Right: NEWS / EVENTS panel — desktop only. On mobile the
+              same panel is rendered below the game cards (inside the
+              center scrollable area) so that dead viewport is filled
+              with live content. ── */}
+        {!isMobile && <div style={{
           width: "clamp(220px, 24vw, 290px)", flexShrink: 0,
           alignSelf: "center",
           display: "flex", flexDirection: "column",
           padding: "0 12px 0 8px",
         }}>
-          {/* Card — natural height */}
-          <div style={{
-            borderRadius: "16px",
-            background: "rgba(20,10,50,0.82)",
-            border: "1px solid rgba(255,255,255,0.1)",
-            overflow: "hidden",
-            display: "flex", flexDirection: "column",
-          }}>
-
-            {/* ── Header ── */}
-            <div style={{
-              background: "linear-gradient(135deg, #3b1fa3 0%, #6d28d9 60%, #3b1fa3 100%)",
-              padding: "12px 14px",
-              position: "relative", overflow: "hidden",
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-            }}>
-              <div style={{
-                position: "absolute", top: 0, left: 0, right: 0, height: "50%",
-                background: "linear-gradient(180deg,rgba(255,255,255,0.28) 0%,transparent 100%)",
-                pointerEvents: "none",
-              }}/>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", position: "relative", zIndex: 1 }}>
-                <span style={{ fontSize: "14px" }}>🎯</span>
-                <span style={{ color: "white", fontSize: "13px", fontWeight: 900, letterSpacing: "0.1em" }}>DAILY MISSIONS</span>
-              </div>
-              {address && missions.length > 0 && (
-                <div style={{ position: "relative", zIndex: 1, color: "#fbbf24", fontSize: "10px", fontWeight: 900, fontFamily: "monospace", textShadow: "0 0 8px rgba(251,191,36,0.6)" }}>
-                  {fmtCountdown(missionResetSec)}
-                </div>
-              )}
-            </div>
-
-            <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: "10px", overflowY: "auto", flex: 1 }}>
-
-              {/* MISSIONS — primary content */}
-              {!address ? (
-                <div style={{ padding: "20px 8px", textAlign: "center", color: "rgba(200,180,255,0.5)", fontSize: "10px", fontWeight: 700 }}>
-                  Connect wallet to see daily missions
-                </div>
-              ) : missions.length === 0 ? (
-                <div style={{ padding: "20px 8px", textAlign: "center", color: "rgba(200,180,255,0.5)", fontSize: "10px", fontWeight: 700 }}>
-                  Loading missions...
-                </div>
-              ) : (
-                missions.map(m => {
-                  const pct = Math.round((m.progress / m.target) * 100);
-                  const ready = m.completed && !m.claimed;
-                  const done  = m.claimed;
-                  return (
-                    <div key={m.id} style={{
-                      borderRadius: "12px",
-                      background: done
-                        ? "linear-gradient(180deg, rgba(34,197,94,0.08) 0%, rgba(0,0,0,0.2) 100%)"
-                        : ready
-                          ? "linear-gradient(180deg, rgba(251,191,36,0.18) 0%, rgba(0,0,0,0.2) 100%)"
-                          : "rgba(255,255,255,0.04)",
-                      border: `1.5px solid ${done ? "rgba(34,197,94,0.45)" : ready ? "#fbbf24" : "rgba(167,139,250,0.22)"}`,
-                      boxShadow: ready ? "0 0 12px rgba(251,191,36,0.4)" : "none",
-                      padding: "9px 10px",
-                      display: "flex", flexDirection: "column", gap: "6px",
-                      opacity: done ? 0.6 : 1,
-                    }}>
-                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "6px" }}>
-                        <div style={{ color: "white", fontSize: "10px", fontWeight: 700, lineHeight: 1.3, flex: 1 }}>
-                          {m.label}
-                        </div>
-                        <div style={{ color: "#fbbf24", fontSize: "9px", fontWeight: 900, whiteSpace: "nowrap", flexShrink: 0 }}>+{m.rewardXp} XP</div>
-                      </div>
-                      <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
-                          <span style={{ color: "rgba(200,180,255,0.55)", fontSize: "8px", fontWeight: 700 }}>{m.progress} / {m.target}</span>
-                          <span style={{ color: "rgba(200,180,255,0.55)", fontSize: "8px", fontWeight: 700 }}>{pct}%</span>
-                        </div>
-                        <div style={{ height: "5px", borderRadius: "999px", background: "rgba(0,0,0,0.5)", overflow: "hidden", border: "1px solid rgba(167,139,250,0.12)" }}>
-                          <div style={{
-                            width: `${pct}%`, height: "100%", borderRadius: "999px",
-                            background: done ? "#22c55e" : ready ? "#fbbf24" : "#a78bfa",
-                            boxShadow: ready ? "0 0 6px rgba(251,191,36,0.6)" : "none",
-                            transition: "width 0.3s",
-                          }} />
-                        </div>
-                      </div>
-                      {done ? (
-                        <div style={{ textAlign: "center", color: "#22c55e", fontSize: "9px", fontWeight: 900, letterSpacing: "0.1em" }}>✓ CLAIMED</div>
-                      ) : ready ? (
-                        <div role="button" tabIndex={0} onClick={() => claimMission(m.id)}
-                          style={{ cursor: "pointer", userSelect: "none" }}>
-                          <div style={{
-                            borderRadius: "8px",
-                            background: "linear-gradient(180deg, #fbbf24 0%, #b45309 100%)",
-                            padding: "5px", textAlign: "center",
-                            border: "1.5px solid rgba(255,255,255,0.45)",
-                            boxShadow: "inset 0 3px 6px rgba(255,255,255,0.4), inset 0 -2px 4px rgba(0,0,0,0.3)",
-                          }}>
-                            <span style={{ color: "white", fontSize: "10px", fontWeight: 900, letterSpacing: "0.14em", textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}>CLAIM</span>
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })
-              )}
-
-              {/* EVENTS — real-time countdowns + actionable reminders */}
-              <div style={{ fontSize: "9px", fontWeight: 900, letterSpacing: "0.15em", color: "rgba(200,180,255,0.7)", marginTop: "6px" }}>
-                EVENTS
-              </div>
-              {(() => {
-                const events: EventCard[] = [];
-                if (seasonInfo && seasonInfo.endsAt > 0) {
-                  const left = seasonInfo.endsAt - now;
-                  events.push({
-                    icon: "🗓️", color: "#a78bfa",
-                    title: `Season ${seasonInfo.season} — ends in ${fmtShortCountdown(left)}`,
-                    subtitle: "50 G$ pool · Top 3 win · View →",
-                    onClick: () => router.push("/leaderboard"),
-                  });
-                }
-                if (compInfo) {
-                  events.push({
-                    icon: "🏆", color: "#fbbf24",
-                    title: `3-Week Cup — ${compInfo.weeksLeft} week${compInfo.weeksLeft !== 1 ? "s" : ""} left`,
-                    subtitle: `$${compInfo.total} pool · Cumulative · View →`,
-                    onClick: () => router.push("/leaderboard"),
-                  });
-                }
-                if (isVerified && claimableG) {
-                  events.push({
-                    icon: "💰", color: "#22c55e",
-                    title: "Daily G$ ready to claim",
-                    subtitle: `${(Number(entitlement) / 1e18).toFixed(2)} G$ · Tap to claim`,
-                    onClick: () => claimG$(),
-                  });
-                }
-                if (events.length === 0) {
-                  return (
-                    <div style={{ padding: "10px 4px", textAlign: "center", color: "rgba(200,180,255,0.4)", fontSize: "9px", fontWeight: 700 }}>
-                      No active events
-                    </div>
-                  );
-                }
-                return events.map((e, i) => {
-                  const interactive = !!e.onClick;
-                  return (
-                    <div key={i}
-                      role={interactive ? "button" : undefined}
-                      tabIndex={interactive ? 0 : undefined}
-                      onClick={e.onClick}
-                      style={{
-                        display: "flex", alignItems: "center", gap: "8px",
-                        background: "rgba(255,255,255,0.04)",
-                        borderRadius: "10px",
-                        border: `1px solid ${e.color}33`,
-                        padding: "7px 9px",
-                        cursor: interactive ? "pointer" : "default",
-                        userSelect: "none",
-                        transition: "transform 0.15s, border-color 0.15s, background 0.15s",
-                      }}
-                      onMouseEnter={el => {
-                        if (!interactive) return;
-                        const t = el.currentTarget as HTMLDivElement;
-                        t.style.transform = "translateY(-1px)";
-                        t.style.background = "rgba(255,255,255,0.07)";
-                        t.style.borderColor = `${e.color}88`;
-                      }}
-                      onMouseLeave={el => {
-                        const t = el.currentTarget as HTMLDivElement;
-                        t.style.transform = "";
-                        t.style.background = "rgba(255,255,255,0.04)";
-                        t.style.borderColor = `${e.color}33`;
-                      }}
-                    >
-                      <div style={{
-                        width: "28px", height: "28px", borderRadius: "8px", flexShrink: 0,
-                        background: `radial-gradient(circle at 35% 30%, ${e.color}cc, ${e.color}44)`,
-                        border: `1px solid ${e.color}66`,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: "14px", boxShadow: `0 0 8px ${e.color}33`,
-                      }}>{e.icon}</div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ color: "white", fontSize: "10px", fontWeight: 700, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {e.title}
-                        </div>
-                        <div style={{ color: "rgba(200,180,255,0.55)", fontSize: "8px", fontWeight: 700, marginTop: "1px" }}>
-                          {e.subtitle}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                });
-              })()}
-
-              {/* HIGHLIGHTS — curated news from real backend data */}
-              <div style={{ fontSize: "9px", fontWeight: 900, letterSpacing: "0.15em", color: "rgba(200,180,255,0.7)", marginTop: "6px" }}>
-                HIGHLIGHTS
-              </div>
-              {news.length === 0 ? (
-                <div style={{ padding: "10px 4px", textAlign: "center", color: "rgba(200,180,255,0.4)", fontSize: "9px", fontWeight: 700 }}>
-                  Loading highlights...
-                </div>
-              ) : news.map((n, i) => (
-                <div key={i}
-                  role="button" tabIndex={0}
-                  onClick={() => router.push("/leaderboard")}
-                  style={{
-                    display: "flex", alignItems: "center", gap: "8px",
-                    background: "rgba(255,255,255,0.04)",
-                    borderRadius: "10px",
-                    border: `1px solid ${n.color}33`,
-                    padding: "7px 9px",
-                    cursor: "pointer", userSelect: "none",
-                    transition: "transform 0.15s, border-color 0.15s, background 0.15s",
-                  }}
-                  onMouseEnter={el => {
-                    const t = el.currentTarget as HTMLDivElement;
-                    t.style.transform = "translateY(-1px)";
-                    t.style.background = "rgba(255,255,255,0.07)";
-                    t.style.borderColor = `${n.color}88`;
-                  }}
-                  onMouseLeave={el => {
-                    const t = el.currentTarget as HTMLDivElement;
-                    t.style.transform = "";
-                    t.style.background = "rgba(255,255,255,0.04)";
-                    t.style.borderColor = `${n.color}33`;
-                  }}
-                >
-                  <div style={{
-                    width: "28px", height: "28px", borderRadius: "8px", flexShrink: 0,
-                    background: `radial-gradient(circle at 35% 30%, ${n.color}cc, ${n.color}44)`,
-                    border: `1px solid ${n.color}66`,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: "14px", boxShadow: `0 0 8px ${n.color}33`,
-                  }}>{n.icon}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ color: "white", fontSize: "10px", fontWeight: 700, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {n.title}
-                    </div>
-                    <div style={{ color: "rgba(200,180,255,0.55)", fontSize: "8px", fontWeight: 700, marginTop: "1px" }}>
-                      {n.subtitle}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+          {activityCard}
+        </div>}
       </div>
+
+      {/* Mobile bottom tab nav — replaces the desktop sidebar when < 768px */}
+      {isMobile && <BottomNav />}
+      {/* Streak is rendered inline as the 4th stats pill on mobile (see
+          the pills array above), not as a floating chip — avoids the
+          edge collision with the POT pill. */}
     </div>
   );
 }
 
+
 // ─── GameCard ─────────────────────────────────────────────────────────────────
 function GameCard({
   game,
+  isMobile,
   onStart,
 }: {
   game: typeof GAMES[number];
+  isMobile: boolean;
   onStart: () => void;
 }) {
+  // Mobile: horizontal layout — art left (fixed), info column right.
+  // Keeps each card compact (~120px tall) so all 3 games fit without
+  // forcing long scrolls, and each one reads as a clean list item.
+  if (isMobile) {
+    return (
+      <div
+        onClick={() => game.active && onStart()}
+        style={{
+          cursor: game.active ? "pointer" : "default",
+          borderRadius: "18px",
+          padding: "2px",
+          background: `linear-gradient(135deg, ${game.borderColor} 0%, ${game.borderColor}66 100%)`,
+          boxShadow: `0 10px 26px -6px ${game.glow}77, 0 0 0 1px ${game.borderColor}33`,
+        }}
+      >
+        <div style={{
+          borderRadius: "16px",
+          background: "linear-gradient(135deg, #230d6b 0%, #0e0535 70%, #060118 100%)",
+          display: "flex",
+          alignItems: "stretch",
+          overflow: "hidden",
+          minHeight: "104px",
+        }}>
+          {/* Art tile — left side, fixed square */}
+          <div style={{
+            width: "104px", flexShrink: 0,
+            background: game.artGrad,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            position: "relative", overflow: "hidden",
+          }}>
+            <div style={{
+              position: "absolute", top: 0, left: 0, right: 0, height: "45%",
+              background: "linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)",
+              pointerEvents: "none",
+            }} />
+            <div style={{
+              width: "82%", height: "82%",
+              filter: !game.active ? "opacity(0.4) grayscale(0.7)" : "drop-shadow(0 4px 10px rgba(0,0,0,0.7))",
+            }}>
+              {game.art}
+            </div>
+          </div>
+
+          {/* Info column — title on top, wager + START on bottom row.
+              Card is tappable as a whole; START is a juicy accent, not a
+              full-width slab. ~140px button reads as a call-to-action,
+              not "this whole thing is one giant button". */}
+          <div style={{
+            flex: 1, minWidth: 0,
+            padding: "12px 12px 12px 14px",
+            display: "flex", flexDirection: "column", gap: "10px",
+            justifyContent: "space-between",
+          }}>
+            <div>
+              <div style={{
+                color: "white",
+                fontSize: "15px", fontWeight: 900,
+                letterSpacing: "0.04em", lineHeight: 1.15,
+                textShadow: `0 0 12px ${game.borderColor}cc, 0 2px 4px rgba(0,0,0,0.9)`,
+              }}>
+                {game.title}
+              </div>
+              {/* Wager pill sits under the title — more prominent than a
+                  tiny corner chip, and balances the START button below. */}
+              {game.active && (
+                <div style={{
+                  display: "inline-flex", alignItems: "baseline", gap: "5px",
+                  padding: "2px 9px",
+                  marginTop: "6px",
+                  borderRadius: "999px",
+                  background: "rgba(0,0,0,0.45)",
+                  border: `1px solid ${game.borderColor}55`,
+                }}>
+                  <span style={{ color: "rgba(200,170,255,0.8)", fontSize: "9px", fontWeight: 800, letterSpacing: "0.08em" }}>
+                    BET {game.wager}
+                  </span>
+                  <span style={{ color: game.borderColor, fontSize: "10px", fontWeight: 900 }}>
+                    · {game.payout}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Bottom action — compact START, right-aligned. */}
+            {game.active ? (
+              <div
+                role="button" tabIndex={0}
+                onClick={e => { e.stopPropagation(); onStart(); }}
+                style={{
+                  cursor: "pointer", userSelect: "none",
+                  alignSelf: "flex-end",
+                  minWidth: "128px",
+                  transition: "transform 0.12s",
+                }}
+                onMouseDown={e => { (e.currentTarget as HTMLDivElement).style.transform = "scale(0.96) translateY(2px)"; }}
+                onMouseUp={e => { (e.currentTarget as HTMLDivElement).style.transform = ""; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = ""; }}
+              >
+                <div style={{
+                  borderRadius: "12px",
+                  background: game.startWall,
+                  paddingBottom: "4px",
+                  boxShadow: `0 6px 14px -2px ${game.startGlow}`,
+                }}>
+                  <div style={{
+                    borderRadius: "10px 10px 8px 8px",
+                    background: game.startGrad,
+                    padding: "8px 18px",
+                    textAlign: "center",
+                    border: "2px solid rgba(255,255,255,0.5)",
+                    boxShadow: "inset 0 4px 10px rgba(255,255,255,0.6), inset 0 -2px 6px rgba(0,0,0,0.3)",
+                  }}>
+                    <span style={{
+                      color: "white", fontSize: "12px", fontWeight: 900,
+                      letterSpacing: "0.18em",
+                      textShadow: "0 1px 3px rgba(0,0,0,0.5)",
+                    }}>START ▸</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              // LOCKED — right-aligned + compact, mirroring START's width
+              // so the three cards feel visually consistent.
+              <div style={{
+                alignSelf: "flex-end",
+                minWidth: "128px",
+                borderRadius: "12px", padding: "10px 18px",
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                textAlign: "center", color: "rgba(180,150,255,0.35)",
+                fontSize: "11px", fontWeight: 800, letterSpacing: "0.18em",
+              }}>LOCKED</div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop: unchanged 3-column tall cards.
   return (
     <div
       style={{

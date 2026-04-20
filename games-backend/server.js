@@ -390,6 +390,12 @@ const ACHIEVEMENT_CATALOG = [
     check: async ({ game, score }) => game === 'rhythm' && score >= 500 },
   { id: 'rhythm_700',   icon: '👑', name: 'Rhythm Legend',      desc: 'Score 700+ in Rhythm Rush',
     check: async ({ game, score }) => game === 'rhythm' && score >= 700 },
+  // Skill unlocks — tracked per-run via fullCombo / allPerfect flags in the
+  // submit-score scoreData payload. Rhythm-specific bragging rights.
+  { id: 'rhythm_fc',    icon: '✨', name: 'Full Combo',         desc: 'Clear the rhythm chart without missing a note',
+    check: async ({ game, fullCombo }) => game === 'rhythm' && !!fullCombo },
+  { id: 'rhythm_ap',    icon: '🌟', name: 'All Perfect',        desc: 'Every hit PERFECT — no goods, no misses',
+    check: async ({ game, allPerfect }) => game === 'rhythm' && !!allPerfect },
   { id: 'simon_5',      icon: '🧠', name: 'Memory Apprentice',  desc: 'Reach round 5 in Simon Memory',
     check: async ({ game, score }) => game === 'simon' && score >= 5 },
   { id: 'simon_10',     icon: '🧠', name: 'Memory Master',      desc: 'Reach round 10 in Simon Memory',
@@ -792,7 +798,7 @@ app.post('/api/submit-score', requireSecret, strictLimiter, async (req, res) => 
     return res.status(400).json({ error: 'Validation failed', reason: check.reason });
   }
 
-  const { game, score, gameTime, wagered, wagerId } = scoreData;
+  const { game, score, gameTime, wagered, wagerId, fullCombo, allPerfect } = scoreData;
   const season = currentSeasonNumber();
 
   // Track unique user + update streak
@@ -865,10 +871,18 @@ app.post('/api/submit-score', requireSecret, strictLimiter, async (req, res) => 
     console.warn('mission progress update failed:', e.message);
   }
 
-  // Check + unlock any new achievements for this player
+  // Check + unlock any new achievements for this player. Rhythm-specific skill
+  // flags (fullCombo, allPerfect) come from the frontend and unlock rhythm_fc /
+  // rhythm_ap respectively. The backend trusts the frontend for these because
+  // the score itself is already bound on-chain via the EIP-712 voucher — a
+  // lying client can't claim FC without also providing a matching tx receipt.
   let newAchievements = [];
   try {
-    newAchievements = await checkAndUnlockAchievements(lower, { game, score, isWin, isNewPb });
+    newAchievements = await checkAndUnlockAchievements(lower, {
+      game, score, isWin, isNewPb,
+      fullCombo:  !!fullCombo,
+      allPerfect: !!allPerfect,
+    });
   } catch (e) {
     console.warn('achievement check failed:', e.message);
   }
@@ -879,7 +893,16 @@ app.post('/api/submit-score', requireSecret, strictLimiter, async (req, res) => 
 
   console.log(`✅ [${game}] ${lower.slice(0, 8)}... → ${score} pts (rank #${rank}) +${xpEarned} XP ${txHash ? `tx: ${txHash.slice(0, 10)}...` : ''}`);
 
-  res.json({ success: true, score, rank, txHash, streak, xpEarned, xp: xpResult?.xp, level: xpResult?.level, leveledUp: !!xpResult?.leveledUp, newAchievements });
+  res.json({
+    success:   true,
+    score, rank, txHash, streak, xpEarned,
+    xp:        xpResult?.xp,
+    level:     xpResult?.level,
+    leveledUp: !!xpResult?.leveledUp,
+    isNewPb,
+    prevBest,
+    newAchievements,
+  });
 });
 
 // ─── GET /api/leaderboard?game=rhythm|simon ─────────────────────────────────

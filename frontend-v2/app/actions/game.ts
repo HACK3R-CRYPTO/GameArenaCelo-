@@ -87,6 +87,12 @@ export type ScoreData = {
   wagered?: string | null;
   wagerId?: string | null;
   txHash?:  string | null;
+  // Rhythm-only skill flags — unlock rhythm_fc / rhythm_ap achievements.
+  // Backend trusts the frontend for these since the score itself is already
+  // bound on-chain via the EIP-712 voucher (a lying client still needs a
+  // matching tx receipt, so it can't FC a score it didn't earn).
+  fullCombo?:  boolean;
+  allPerfect?: boolean;
 };
 
 type SignScoreResult =
@@ -104,6 +110,8 @@ type SubmitScoreResult =
       xp?:             number;
       level?:          number;
       leveledUp?:      boolean;
+      isNewPb?:        boolean;
+      prevBest?:       number;
       newAchievements?: { id: string; name: string; icon?: string; desc?: string }[];
     }
   | { success: false; error: string };
@@ -185,6 +193,8 @@ export async function submitScore(
       xp:              data.xp,
       level:           data.level,
       leveledUp:       !!data.leveledUp,
+      isNewPb:         !!data.isNewPb,
+      prevBest:        typeof data.prevBest === 'number' ? data.prevBest : undefined,
       newAchievements: data.newAchievements || [],
     };
   } catch {
@@ -220,6 +230,8 @@ export async function submitScoreMiniPay(
       xp:              data.xp,
       level:           data.level,
       leveledUp:       !!data.leveledUp,
+      isNewPb:         !!data.isNewPb,
+      prevBest:        typeof data.prevBest === 'number' ? data.prevBest : undefined,
       newAchievements: data.newAchievements || [],
     };
   } catch {

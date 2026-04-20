@@ -250,14 +250,18 @@ function ConnectInner() {
                     </button>
                   </div>
 
-                  {/* Continue juicy button */}
+                  {/* Continue juicy button — routes through /mint first.
+                      /mint reads hasMinted() and either shows the username
+                      form or short-circuits to /verify if the pass already
+                      exists, so this is the right step for both new and
+                      returning players. */}
                   <JuicyBtn
-                    onClick={() => router.push(`/verify?next=${encodeURIComponent(next)}`)}
+                    onClick={() => router.push(`/mint?next=${encodeURIComponent(next)}`)}
                     wall="#003a00"
                     gradient="linear-gradient(160deg, #86efac 0%, #22c55e 50%, #15803d 100%)"
                     glow="rgba(34,197,94,0.6)"
                     label="CONTINUE"
-                    sub="Next: one-time GoodDollar setup"
+                    sub="Next: pick your name + mint Game Pass"
                     icon={
                       <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
                         <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm3.707 9.293a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L12.586 13H8a1 1 0 110-2h4.586l-1.293-1.293a1 1 0 011.414-1.414l3 3z"/>

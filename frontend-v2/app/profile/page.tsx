@@ -7,6 +7,8 @@ import { useAccount, useReadContract } from "wagmi";
 import { useSelfVerification } from "@/contexts/SelfVerificationContext";
 import { useAudioSettings } from "@/hooks/useAudioSettings";
 import { playCoin, playTabSwitch } from "@/hooks/useAppAudio";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import BottomNav from "@/components/BottomNav";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 
@@ -34,22 +36,40 @@ const J = "/splash_screen_icons/joystick.png";
 const M = "/splash_screen_icons/golden_music.png";
 const V = "/splash_screen_icons/vending.png";
 
+// Desktop decoratives — curated 3+3 at edges. Matches other pages.
 const LEFT_ICONS = [
-  { src: D, top: "1%", left: "-18px", size: 120, delay: 0.0, dur: 5.2, glow: "#cc44ff", rotate: -18 },
-  { src: M, top: "8%", left: "34px", size: 80, delay: 0.7, dur: 4.3, glow: "#ffaa00", rotate: 12 },
-  { src: G, top: "24%", left: "6px", size: 110, delay: 1.4, dur: 6.0, glow: "#aa88ff", rotate: -6 },
-  { src: D, top: "36%", left: "72px", size: 140, delay: 0.3, dur: 4.8, glow: "#cc44ff", rotate: 16 },
-  { src: J, top: "54%", left: "-10px", size: 105, delay: 2.1, dur: 5.5, glow: "#22aaff", rotate: -8 },
-  { src: G, top: "72%", left: "4px", size: 108, delay: 2.8, dur: 5.0, glow: "#aa88ff", rotate: -14 },
-  { src: D, top: "88%", left: "60px", size: 95, delay: 1.9, dur: 4.6, glow: "#cc44ff", rotate: 10 },
+  { src: D, top: "2%",  left: "-22px", size: 110, delay: 0.0, dur: 5.2, glow: "#cc44ff", rotate: -18, opacity: 0.8 },
+  { src: J, top: "48%", left: "-14px", size: 90,  delay: 2.1, dur: 5.5, glow: "#22aaff", rotate: -8,  opacity: 0.65 },
+  { src: G, top: "82%", left: "-10px", size: 100, delay: 2.8, dur: 5.0, glow: "#aa88ff", rotate: -14, opacity: 0.7 },
 ];
 const RIGHT_ICONS = [
-  { src: D, top: "0%", right: "-22px", size: 115, delay: 0.4, dur: 5.0, glow: "#cc44ff", rotate: 20 },
-  { src: J, top: "16%", right: "54px", size: 100, delay: 1.2, dur: 4.8, glow: "#22aaff", rotate: 8 },
-  { src: V, top: "30%", right: "0px", size: 120, delay: 2.0, dur: 6.2, glow: "#ff44cc", rotate: -4 },
-  { src: M, top: "50%", right: "44px", size: 82, delay: 0.6, dur: 4.0, glow: "#ffaa00", rotate: -16 },
-  { src: D, top: "65%", right: "-8px", size: 100, delay: 2.4, dur: 5.2, glow: "#cc44ff", rotate: 10 },
-  { src: G, top: "80%", right: "58px", size: 108, delay: 1.8, dur: 5.8, glow: "#aa88ff", rotate: -10 },
+  { src: D, top: "4%",  right: "-24px", size: 100, delay: 0.4, dur: 5.0, glow: "#cc44ff", rotate: 20,  opacity: 0.75 },
+  { src: V, top: "44%", right: "-8px",  size: 105, delay: 2.0, dur: 6.2, glow: "#ff44cc", rotate: -4,  opacity: 0.65 },
+  { src: M, top: "80%", right: "-6px",  size: 86,  delay: 0.6, dur: 4.0, glow: "#ffaa00", rotate: -16, opacity: 0.7 },
+];
+
+// Mobile decoratives — 3+3 tucked past the viewport edges.
+type MobileIcon = {
+  src: string;
+  top: string;
+  left?: string;
+  right?: string;
+  size: number;
+  delay: number;
+  dur: number;
+  glow: string;
+  rotate: number;
+  opacity: number;
+};
+const MOBILE_LEFT_ICONS: MobileIcon[] = [
+  { src: D, top: "6%",  left: "-24px", size: 60, delay: 0.0, dur: 5.2, glow: "#cc44ff", rotate: -18, opacity: 0.45 },
+  { src: J, top: "48%", left: "-22px", size: 54, delay: 2.1, dur: 5.5, glow: "#22aaff", rotate: -8,  opacity: 0.4  },
+  { src: G, top: "84%", left: "-18px", size: 58, delay: 2.8, dur: 5.0, glow: "#aa88ff", rotate: -14, opacity: 0.4  },
+];
+const MOBILE_RIGHT_ICONS: MobileIcon[] = [
+  { src: D, top: "10%", right: "-26px", size: 58, delay: 0.4, dur: 5.0, glow: "#cc44ff", rotate: 20,  opacity: 0.45 },
+  { src: V, top: "52%", right: "-20px", size: 62, delay: 2.0, dur: 6.2, glow: "#ff44cc", rotate: -4,  opacity: 0.4  },
+  { src: M, top: "86%", right: "-18px", size: 52, delay: 0.6, dur: 4.0, glow: "#ffaa00", rotate: -16, opacity: 0.45 },
 ];
 
 const NAV_ITEMS = [
@@ -176,9 +196,16 @@ function JuicyBtn({
 }
 
 // ─── Pill Tab (matches leaderboard) ────────────────────────────────────────────
-function PillTab({ label, icon, active, onClick }: { label: string; icon: string; active: boolean; onClick: () => void }) {
+function PillTab({ label, icon, active, onClick, compact = false, iconOnly = false }: {
+  label: string; icon: string; active: boolean; onClick: () => void;
+  // compact: tighter padding + smaller text for mobile where 4 pills fight
+  // for a 360px viewport. iconOnly: drop the label entirely (e.g. SETTINGS
+  // reads as a gear icon — utility signal, distinct from primary tabs).
+  compact?: boolean; iconOnly?: boolean;
+}) {
   return (
     <div role="button" tabIndex={0} onClick={onClick}
+      aria-label={iconOnly ? label : undefined}
       // Opt out of global UI click blip — the tab-switch tick fires from the
       // onClick handler instead (only on actual tab change, not same-tab taps)
       data-no-click-sound="true"
@@ -190,7 +217,7 @@ function PillTab({ label, icon, active, onClick }: { label: string; icon: string
       <div style={{
         borderRadius: "999px",
         background: active ? "#083a6b" : "#1a0550",
-        paddingBottom: "5px",
+        paddingBottom: compact ? "4px" : "5px",
         boxShadow: active
           ? "0 0 0 2px #3b82f6, 0 0 20px rgba(59,130,246,0.7), 0 0 40px rgba(59,130,246,0.5), 0 10px 24px -4px rgba(59,130,246,0.7)"
           : "0 6px 16px -4px rgba(0,0,0,0.5)",
@@ -199,13 +226,14 @@ function PillTab({ label, icon, active, onClick }: { label: string; icon: string
         <div style={{
           borderRadius: "999px",
           background: active ? "linear-gradient(180deg, #60a5fa 0%, #2563eb 50%, #1e40af 100%)" : "linear-gradient(180deg, #3b1fa3 0%, #1e0762 100%)",
-          padding: "9px 18px", textAlign: "center",
+          padding: iconOnly ? "7px 9px" : compact ? "7px 11px" : "9px 18px",
+          textAlign: "center",
           position: "relative", overflow: "hidden",
           border: active ? "2px solid rgba(255,255,255,0.5)" : "2px solid rgba(255,255,255,0.12)",
           boxShadow: active
             ? "inset 0 6px 14px rgba(255,255,255,0.7), inset 0 -3px 6px rgba(0,0,0,0.35)"
             : "inset 0 3px 8px rgba(255,255,255,0.06), inset 0 -2px 5px rgba(0,0,0,0.35)",
-          display: "flex", alignItems: "center", gap: "7px",
+          display: "flex", alignItems: "center", gap: iconOnly ? 0 : compact ? "5px" : "7px",
         }}>
           {active && (
             <div style={{
@@ -214,13 +242,16 @@ function PillTab({ label, icon, active, onClick }: { label: string; icon: string
               borderRadius: "999px", pointerEvents: "none",
             }} />
           )}
-          <span style={{ position: "relative", zIndex: 1, fontSize: "13px" }}>{icon}</span>
-          <span style={{
-            position: "relative", zIndex: 1,
-            color: active ? "white" : "rgba(220,200,255,0.6)",
-            fontSize: "11px", fontWeight: 900, letterSpacing: "0.1em",
-            textShadow: active ? "0 2px 4px rgba(0,0,0,0.4)" : "none",
-          }}>{label}</span>
+          <span style={{ position: "relative", zIndex: 1, fontSize: compact ? "14px" : "13px" }}>{icon}</span>
+          {!iconOnly && (
+            <span style={{
+              position: "relative", zIndex: 1,
+              color: active ? "white" : "rgba(220,200,255,0.6)",
+              fontSize: compact ? "10px" : "11px",
+              fontWeight: 900, letterSpacing: compact ? "0.08em" : "0.1em",
+              textShadow: active ? "0 2px 4px rgba(0,0,0,0.4)" : "none",
+            }}>{label}</span>
+          )}
         </div>
       </div>
     </div>
@@ -353,7 +384,7 @@ function SettingsRow({ icon, label, color, children }: { icon: string; label: st
 }
 
 // ─── Pet Slot — compact pet display that lives inside the trainer card ────────
-function PetSlot({ pet }: { pet: PetStage }) {
+function PetSlot({ pet, compact = false }: { pet: PetStage; compact?: boolean }) {
   const isEgg = pet.id === "egg";
   const [poking, setPoking] = useState(false);
   const [bubble, setBubble] = useState<string | null>(null);
@@ -376,7 +407,9 @@ function PetSlot({ pet }: { pet: PetStage }) {
     <div
       role="button" tabIndex={0} onClick={handlePoke}
       style={{
-        flexShrink: 0, width: "108px", height: "118px",
+        flexShrink: 0,
+        width: compact ? "82px" : "108px",
+        height: compact ? "92px" : "118px",
         position: "relative",
         display: "flex", alignItems: "flex-end", justifyContent: "center",
         cursor: "pointer", userSelect: "none",
@@ -651,6 +684,8 @@ function PetCard({ pet, playerLevel }: { pet: PetStage; playerLevel: number }) {
 export default function ProfilePage() {
   const router = useRouter();
   const { logout, authenticated } = usePrivy();
+  // Mobile swaps the 68px left sidebar for a fixed bottom tab bar.
+  const isMobile = useIsMobile();
   const { address } = useAccount();
   const { isVerified, entitlement, claimG$ } = useSelfVerification();
 
@@ -781,11 +816,12 @@ export default function ProfilePage() {
       background: "radial-gradient(ellipse 80% 60% at 50% 15%, #6a18c8 0%, #3b0a9e 30%, #1a044a 60%, #0a0120 100%)",
       display: "flex", flexDirection: "column", overflow: "hidden",
     }}>
-      {/* Floating bg icons */}
+      {/* Floating bg icons — split by breakpoint via CSS. No SSR flash. */}
       {LEFT_ICONS.map((ic, i) => (
-        <div key={`l${i}`} className="icon-float" style={{
+        <div key={`l${i}`} className="icon-float icon-float--desktop" style={{
           position: "absolute", top: ic.top, left: ic.left, width: ic.size, height: ic.size,
-          transform: `rotate(${ic.rotate}deg)`, filter: `drop-shadow(0 0 8px ${ic.glow}99)`,
+          transform: `rotate(${ic.rotate}deg)`, filter: `drop-shadow(0 0 8px ${ic.glow}77)`,
+          opacity: ic.opacity,
           ["--dur" as string]: `${ic.dur}s`, ["--delay" as string]: `${ic.delay}s`,
           userSelect: "none", pointerEvents: "none", zIndex: 0,
         }}>
@@ -794,9 +830,34 @@ export default function ProfilePage() {
         </div>
       ))}
       {RIGHT_ICONS.map((ic, i) => (
-        <div key={`r${i}`} className="icon-float" style={{
+        <div key={`r${i}`} className="icon-float icon-float--desktop" style={{
           position: "absolute", top: ic.top, right: ic.right, width: ic.size, height: ic.size,
-          transform: `rotate(${ic.rotate}deg)`, filter: `drop-shadow(0 0 8px ${ic.glow}99)`,
+          transform: `rotate(${ic.rotate}deg)`, filter: `drop-shadow(0 0 8px ${ic.glow}77)`,
+          opacity: ic.opacity,
+          ["--dur" as string]: `${ic.dur}s`, ["--delay" as string]: `${ic.delay}s`,
+          userSelect: "none", pointerEvents: "none", zIndex: 0,
+        }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={ic.src} alt="" width={ic.size} height={ic.size} style={{ objectFit: "contain", display: "block" }} />
+        </div>
+      ))}
+      {MOBILE_LEFT_ICONS.map((ic, i) => (
+        <div key={`ml${i}`} className="icon-float icon-float--mobile" style={{
+          position: "absolute", top: ic.top, left: ic.left, width: ic.size, height: ic.size,
+          transform: `rotate(${ic.rotate}deg)`, filter: `drop-shadow(0 0 6px ${ic.glow}55)`,
+          opacity: ic.opacity,
+          ["--dur" as string]: `${ic.dur}s`, ["--delay" as string]: `${ic.delay}s`,
+          userSelect: "none", pointerEvents: "none", zIndex: 0,
+        }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={ic.src} alt="" width={ic.size} height={ic.size} style={{ objectFit: "contain", display: "block" }} />
+        </div>
+      ))}
+      {MOBILE_RIGHT_ICONS.map((ic, i) => (
+        <div key={`mr${i}`} className="icon-float icon-float--mobile" style={{
+          position: "absolute", top: ic.top, right: ic.right, width: ic.size, height: ic.size,
+          transform: `rotate(${ic.rotate}deg)`, filter: `drop-shadow(0 0 6px ${ic.glow}55)`,
+          opacity: ic.opacity,
           ["--dur" as string]: `${ic.dur}s`, ["--delay" as string]: `${ic.delay}s`,
           userSelect: "none", pointerEvents: "none", zIndex: 0,
         }}>
@@ -805,11 +866,12 @@ export default function ProfilePage() {
         </div>
       ))}
 
-      {/* Body row: sidebar + center */}
+      {/* Body row: sidebar + center (sidebar hidden on mobile, BottomNav
+          renders at the bottom of the page instead) */}
       <div style={{ display: "flex", flex: 1, minHeight: 0, position: "relative", zIndex: 2 }}>
 
-        {/* Sidebar */}
-        <div style={{
+        {/* Sidebar — desktop only */}
+        {!isMobile && <div style={{
           width: "68px", flexShrink: 0, alignSelf: "stretch",
           background: "rgba(4,1,18,0.95)", borderRight: "1px solid rgba(255,255,255,0.06)",
           display: "flex", flexDirection: "column", alignItems: "center",
@@ -875,13 +937,16 @@ export default function ProfilePage() {
           })}
 
           <div style={{ flex: 1 }} />
-        </div>
+        </div>}
 
         {/* Center */}
         <div style={{ flex: 1, minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
           <div style={{
             flex: 1, display: "flex", flexDirection: "column",
-            alignItems: "center", padding: "16px 16px 24px",
+            alignItems: "center",
+            // Extra bottom padding on mobile so content clears the fixed
+            // 64px BottomNav (+ safe-area inset via the nav itself).
+            padding: isMobile ? "16px 14px 96px" : "16px 16px 24px",
             gap: "14px", overflowY: "auto",
           }}>
 
@@ -909,12 +974,16 @@ export default function ProfilePage() {
                 <div style={{ position: "relative", zIndex: 1 }}>
 
                   {/* TOP ROW — avatar + center info + pet (Pokémon GO trainer card pattern) */}
-                  <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "10px" : "14px" }}>
 
-                    {/* LEFT — DiceBear avatar with metallic tier ring */}
-                    <div style={{ flexShrink: 0, position: "relative", width: "118px" }}>
+                    {/* LEFT — DiceBear avatar with metallic tier ring.
+                        Mobile shrinks 118→92 so the center column has real
+                        estate for "OGAZBOIZ" + tier pill without ellipsis. */}
+                    <div style={{ flexShrink: 0, position: "relative", width: isMobile ? "92px" : "118px" }}>
                       <div style={{
-                        width: "118px", height: "118px", borderRadius: "50%",
+                        width: isMobile ? "92px" : "118px",
+                        height: isMobile ? "92px" : "118px",
+                        borderRadius: "50%",
                         padding: "4px",
                         background: tier.ringGrad,
                         boxShadow: `0 0 24px ${tier.color}88, 0 0 50px ${tier.color}33, 0 10px 24px rgba(0,0,0,0.6)`,
@@ -965,7 +1034,7 @@ export default function ProfilePage() {
                         boxShadow: `0 0 14px ${tier.color}55`,
                         alignSelf: "flex-start",
                       }}>
-                        <span style={{ color: tier.color, fontSize: "9px", fontWeight: 900, letterSpacing: "0.12em", textShadow: `0 0 8px ${tier.color}aa` }}>
+                        <span style={{ color: tier.color, fontSize: "9px", fontWeight: 900, letterSpacing: "0.12em", textShadow: `0 0 8px ${tier.color}aa`, whiteSpace: "nowrap" }}>
                           {tier.name} {division}
                         </span>
                         <div style={{
@@ -1012,8 +1081,8 @@ export default function ProfilePage() {
                       )}
                     </div>
 
-                    {/* RIGHT — Pet (compact, your buddy) */}
-                    <PetSlot pet={petForLevel(playerLevel)} />
+                    {/* RIGHT — Pet (compact on mobile so center gets space) */}
+                    <PetSlot pet={petForLevel(playerLevel)} compact={isMobile} />
                   </div>
 
                   {/* BOTTOM ROW — combined XP / pet evolution bar (full width, dual meaning) */}
@@ -1029,13 +1098,21 @@ export default function ProfilePage() {
             </div>
 
 
-            {/* ── PILL TABS ── */}
+            {/* ── PILL TABS ── On mobile: compact padding so 4 pills fit
+                one row on a 360px phone, and SETTINGS becomes icon-only
+                (utility, visually distinct from primary tabs). */}
             <div style={{
-              display: "flex", gap: "8px", flexShrink: 0,
-              flexWrap: "wrap", justifyContent: "center",
+              display: "flex",
+              gap: isMobile ? "6px" : "8px",
+              flexShrink: 0,
+              flexWrap: isMobile ? "nowrap" : "wrap",
+              justifyContent: "center",
+              width: "100%",
             }}>
               {TABS.map(t => (
                 <PillTab key={t.id} label={t.label} icon={t.icon} active={activeTab === t.id}
+                  compact={isMobile}
+                  iconOnly={isMobile && t.id === "settings"}
                   onClick={() => { if (activeTab !== t.id) playTabSwitch(); setActiveTab(t.id); }} />
               ))}
             </div>
@@ -1054,8 +1131,11 @@ export default function ProfilePage() {
                     <StatGem value={`LV.${playerLevel}`} label="LEVEL" color="#fbbf24" wall="#2a1800" />
                   </div>
 
-                  {/* G$ Claim */}
-                  {isVerified && entitlement && Number(entitlement) > 0 && (
+                  {/* G$ Claim — NOTE: use explicit boolean comparison, not
+                      short-circuit on BigInt. A raw `entitlement && …` yields
+                      `0n` when entitlement is zero, which React renders as "0"
+                      between the stat gems and the game cards. */}
+                  {isVerified && Number(entitlement ?? 0) > 0 && (
                     <div style={{
                       borderRadius: "18px", background: "#003a00", paddingBottom: "5px",
                       boxShadow: "0 0 0 2px #15803d, 0 0 30px rgba(34,197,94,0.4), 0 16px 40px rgba(0,0,0,0.6)",
@@ -1440,6 +1520,9 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Mobile bottom tab nav — replaces the desktop sidebar when < 768px */}
+      {isMobile && <BottomNav />}
     </div>
   );
 }

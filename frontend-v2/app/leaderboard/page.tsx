@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import { useAccount } from "wagmi";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import BottomNav from "@/components/BottomNav";
 
 // ─── Splash icons ──────────────────────────────────────────────────────────────
 const D = "/splash_screen_icons/dice.png";
@@ -11,22 +13,43 @@ const J = "/splash_screen_icons/joystick.png";
 const M = "/splash_screen_icons/golden_music.png";
 const V = "/splash_screen_icons/vending.png";
 
+// Desktop decoratives — curated 3+3 at the edges. Matches home/games.
+// Hidden on mobile via `.icon-float--desktop`.
 const LEFT_ICONS = [
-  { src: D, top: "1%", left: "-18px", size: 120, delay: 0.0, dur: 5.2, glow: "#cc44ff", rotate: -18 },
-  { src: M, top: "8%", left: "34px", size: 80, delay: 0.7, dur: 4.3, glow: "#ffaa00", rotate: 12 },
-  { src: G, top: "24%", left: "6px", size: 110, delay: 1.4, dur: 6.0, glow: "#aa88ff", rotate: -6 },
-  { src: D, top: "36%", left: "72px", size: 140, delay: 0.3, dur: 4.8, glow: "#cc44ff", rotate: 16 },
-  { src: J, top: "54%", left: "-10px", size: 105, delay: 2.1, dur: 5.5, glow: "#22aaff", rotate: -8 },
-  { src: G, top: "72%", left: "4px", size: 108, delay: 2.8, dur: 5.0, glow: "#aa88ff", rotate: -14 },
-  { src: D, top: "88%", left: "60px", size: 95, delay: 1.9, dur: 4.6, glow: "#cc44ff", rotate: 10 },
+  { src: D, top: "2%",  left: "-22px", size: 110, delay: 0.0, dur: 5.2, glow: "#cc44ff", rotate: -18, opacity: 0.8 },
+  { src: J, top: "48%", left: "-14px", size: 90,  delay: 2.1, dur: 5.5, glow: "#22aaff", rotate: -8,  opacity: 0.65 },
+  { src: G, top: "82%", left: "-10px", size: 100, delay: 2.8, dur: 5.0, glow: "#aa88ff", rotate: -14, opacity: 0.7 },
 ];
 const RIGHT_ICONS = [
-  { src: D, top: "0%", right: "-22px", size: 115, delay: 0.4, dur: 5.0, glow: "#cc44ff", rotate: 20 },
-  { src: J, top: "16%", right: "54px", size: 100, delay: 1.2, dur: 4.8, glow: "#22aaff", rotate: 8 },
-  { src: V, top: "30%", right: "0px", size: 120, delay: 2.0, dur: 6.2, glow: "#ff44cc", rotate: -4 },
-  { src: M, top: "50%", right: "44px", size: 82, delay: 0.6, dur: 4.0, glow: "#ffaa00", rotate: -16 },
-  { src: D, top: "65%", right: "-8px", size: 100, delay: 2.4, dur: 5.2, glow: "#cc44ff", rotate: 10 },
-  { src: G, top: "80%", right: "58px", size: 108, delay: 1.8, dur: 5.8, glow: "#aa88ff", rotate: -10 },
+  { src: D, top: "4%",  right: "-24px", size: 100, delay: 0.4, dur: 5.0, glow: "#cc44ff", rotate: 20,  opacity: 0.75 },
+  { src: V, top: "44%", right: "-8px",  size: 105, delay: 2.0, dur: 6.2, glow: "#ff44cc", rotate: -4,  opacity: 0.65 },
+  { src: M, top: "80%", right: "-6px",  size: 86,  delay: 0.6, dur: 4.0, glow: "#ffaa00", rotate: -16, opacity: 0.7 },
+];
+
+// Mobile decoratives — 3+3 smaller at viewport edges. Podium art is the
+// hero, so icons are pushed past the edge and half-visible, reading as
+// atmosphere rather than competing elements. Hidden on desktop via CSS.
+type MobileIcon = {
+  src: string;
+  top: string;
+  left?: string;
+  right?: string;
+  size: number;
+  delay: number;
+  dur: number;
+  glow: string;
+  rotate: number;
+  opacity: number;
+};
+const MOBILE_LEFT_ICONS: MobileIcon[] = [
+  { src: D, top: "6%",  left: "-24px", size: 60, delay: 0.0, dur: 5.2, glow: "#cc44ff", rotate: -18, opacity: 0.45 },
+  { src: J, top: "48%", left: "-22px", size: 54, delay: 2.1, dur: 5.5, glow: "#22aaff", rotate: -8,  opacity: 0.4  },
+  { src: G, top: "84%", left: "-18px", size: 58, delay: 2.8, dur: 5.0, glow: "#aa88ff", rotate: -14, opacity: 0.4  },
+];
+const MOBILE_RIGHT_ICONS: MobileIcon[] = [
+  { src: D, top: "10%", right: "-26px", size: 58, delay: 0.4, dur: 5.0, glow: "#cc44ff", rotate: 20,  opacity: 0.45 },
+  { src: V, top: "52%", right: "-20px", size: 62, delay: 2.0, dur: 6.2, glow: "#ff44cc", rotate: -4,  opacity: 0.4  },
+  { src: M, top: "86%", right: "-18px", size: 52, delay: 0.6, dur: 4.0, glow: "#ffaa00", rotate: -16, opacity: 0.45 },
 ];
 
 const NAV_ITEMS = [
@@ -414,6 +437,8 @@ function PlayerRow({
 export default function LeaderboardPage() {
   const router = useRouter();
   const { address } = useAccount();
+  // Mobile swaps the 68px left sidebar for a fixed bottom tab bar.
+  const isMobile = useIsMobile();
   const [activeTab, setActiveTab] = useState<"rankings" | "seasons" | "pvp">("rankings");
   const [gameTab, setGameTab] = useState<"rhythm" | "simon">("rhythm");
   const [entries, setEntries] = useState<Entry[]>(DUMMY_ENTRIES);
@@ -481,11 +506,12 @@ export default function LeaderboardPage() {
       background: "radial-gradient(ellipse 80% 60% at 50% 15%, #6a18c8 0%, #3b0a9e 30%, #1a044a 60%, #0a0120 100%)",
       display: "flex", flexDirection: "column", overflow: "hidden",
     }}>
-      {/* Floating icons */}
+      {/* Floating icons — split by breakpoint via CSS. No SSR flash. */}
       {LEFT_ICONS.map((ic, i) => (
-        <div key={`l${i}`} className="icon-float" style={{
+        <div key={`l${i}`} className="icon-float icon-float--desktop" style={{
           position: "absolute", top: ic.top, left: ic.left, width: ic.size, height: ic.size,
-          transform: `rotate(${ic.rotate}deg)`, filter: `drop-shadow(0 0 8px ${ic.glow}99)`,
+          transform: `rotate(${ic.rotate}deg)`, filter: `drop-shadow(0 0 8px ${ic.glow}77)`,
+          opacity: ic.opacity,
           ["--dur" as string]: `${ic.dur}s`, ["--delay" as string]: `${ic.delay}s`,
           userSelect: "none", pointerEvents: "none", zIndex: 0,
         }}>
@@ -494,9 +520,34 @@ export default function LeaderboardPage() {
         </div>
       ))}
       {RIGHT_ICONS.map((ic, i) => (
-        <div key={`r${i}`} className="icon-float" style={{
+        <div key={`r${i}`} className="icon-float icon-float--desktop" style={{
           position: "absolute", top: ic.top, right: ic.right, width: ic.size, height: ic.size,
-          transform: `rotate(${ic.rotate}deg)`, filter: `drop-shadow(0 0 8px ${ic.glow}99)`,
+          transform: `rotate(${ic.rotate}deg)`, filter: `drop-shadow(0 0 8px ${ic.glow}77)`,
+          opacity: ic.opacity,
+          ["--dur" as string]: `${ic.dur}s`, ["--delay" as string]: `${ic.delay}s`,
+          userSelect: "none", pointerEvents: "none", zIndex: 0,
+        }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={ic.src} alt="" width={ic.size} height={ic.size} style={{ objectFit: "contain", display: "block" }} />
+        </div>
+      ))}
+      {MOBILE_LEFT_ICONS.map((ic, i) => (
+        <div key={`ml${i}`} className="icon-float icon-float--mobile" style={{
+          position: "absolute", top: ic.top, left: ic.left, width: ic.size, height: ic.size,
+          transform: `rotate(${ic.rotate}deg)`, filter: `drop-shadow(0 0 6px ${ic.glow}55)`,
+          opacity: ic.opacity,
+          ["--dur" as string]: `${ic.dur}s`, ["--delay" as string]: `${ic.delay}s`,
+          userSelect: "none", pointerEvents: "none", zIndex: 0,
+        }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={ic.src} alt="" width={ic.size} height={ic.size} style={{ objectFit: "contain", display: "block" }} />
+        </div>
+      ))}
+      {MOBILE_RIGHT_ICONS.map((ic, i) => (
+        <div key={`mr${i}`} className="icon-float icon-float--mobile" style={{
+          position: "absolute", top: ic.top, right: ic.right, width: ic.size, height: ic.size,
+          transform: `rotate(${ic.rotate}deg)`, filter: `drop-shadow(0 0 6px ${ic.glow}55)`,
+          opacity: ic.opacity,
           ["--dur" as string]: `${ic.dur}s`, ["--delay" as string]: `${ic.delay}s`,
           userSelect: "none", pointerEvents: "none", zIndex: 0,
         }}>
@@ -508,8 +559,8 @@ export default function LeaderboardPage() {
       {/* Body row: sidebar + center */}
       <div style={{ display: "flex", flex: 1, minHeight: 0, position: "relative", zIndex: 2 }}>
 
-        {/* Sidebar */}
-        <div style={{
+        {/* Sidebar — desktop only; mobile uses BottomNav below */}
+        {!isMobile && <div style={{
           width: "68px", flexShrink: 0, alignSelf: "stretch",
           background: "rgba(4,1,18,0.95)", borderRight: "1px solid rgba(255,255,255,0.06)",
           display: "flex", flexDirection: "column", alignItems: "center",
@@ -570,14 +621,18 @@ export default function LeaderboardPage() {
           })}
 
           <div style={{ flex: 1 }} />
-        </div>
+        </div>}
 
         {/* Center */}
         <div style={{ flex: 1, minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
           <div style={{
             flex: 1, display: "flex", flexDirection: "column",
             alignItems: "center",
-            padding: "18px 16px 20px", gap: "14px", overflowY: "auto",
+            // Top padding on mobile needs to clear the active tab's glow
+            // shadow (~20px) or the pill clips against the viewport edge.
+            // Extra bottom padding clears the fixed BottomNav.
+            padding: isMobile ? "24px 14px 96px" : "18px 16px 20px",
+            gap: "14px", overflowY: "auto",
           }}>
 
             {/* Juicy pill tabs */}
@@ -595,20 +650,28 @@ export default function LeaderboardPage() {
               ))}
             </div>
 
-            {/* Game sub-tabs */}
+            {/* Game sub-tabs — stronger fill/border on mobile so the
+                active state reads as a real selection, not a ghost. */}
             {activeTab !== "pvp" && (
               <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
                 {GAME_TABS.map(t => {
                   const active = gameTab === t.id;
                   return (
                     <button key={t.id} onClick={() => setGameTab(t.id as typeof gameTab)} style={{
-                      padding: "6px 14px", borderRadius: "999px", fontFamily: "inherit",
-                      background: active ? `${t.accent}22` : "rgba(255,255,255,0.04)",
-                      border: `1.5px solid ${active ? t.accent : "rgba(255,255,255,0.1)"}`,
-                      color: active ? t.accent : "rgba(200,180,255,0.5)",
-                      fontSize: "10px", fontWeight: 800, letterSpacing: "0.1em",
+                      padding: isMobile ? "7px 16px" : "6px 14px",
+                      borderRadius: "999px", fontFamily: "inherit",
+                      background: active
+                        ? `linear-gradient(180deg, ${t.accent}55 0%, ${t.accent}22 100%)`
+                        : "rgba(255,255,255,0.04)",
+                      border: `1.5px solid ${active ? t.accent : "rgba(255,255,255,0.14)"}`,
+                      color: active ? "white" : "rgba(200,180,255,0.65)",
+                      fontSize: isMobile ? "11px" : "10px",
+                      fontWeight: 800, letterSpacing: "0.1em",
                       cursor: "pointer", transition: "all 0.15s",
-                      boxShadow: active ? `0 0 16px ${t.accent}55` : "none",
+                      boxShadow: active
+                        ? `0 0 18px ${t.accent}77, inset 0 1px 0 rgba(255,255,255,0.15)`
+                        : "none",
+                      textShadow: active ? `0 0 10px ${t.accent}` : "none",
                     }}>{t.label}</button>
                   );
                 })}
@@ -644,9 +707,69 @@ export default function LeaderboardPage() {
                       })}
                     </div>
 
+                    {/* Sparse-list empty state — instead of a huge void
+                        below the podium when there are only 1-3 entries,
+                        show a CTA card that fills the space and pushes
+                        users to play. Top-game leaderboards never leave
+                        this dead; they always drive the next action. */}
                     {entries.length <= 3 && (
-                      <div style={{ color: "rgba(200,180,255,0.5)", fontSize: "10px", letterSpacing: "0.15em", marginTop: "8px" }}>
-                        TOP {entries.length} PLAYER{entries.length > 1 ? "S" : ""} SHOWN
+                      <div style={{
+                        width: "100%", maxWidth: "520px", marginTop: "12px",
+                        borderRadius: "18px",
+                        padding: "2.5px",
+                        background: "linear-gradient(135deg, #fbbf24 0%, #f97316 50%, #c026d3 100%)",
+                        boxShadow: "0 16px 36px -8px rgba(251,191,36,0.4), 0 0 40px rgba(192,38,211,0.25)",
+                      }}>
+                        <div style={{
+                          borderRadius: "16px",
+                          background: "linear-gradient(180deg, #1a0550 0%, #0a0230 100%)",
+                          padding: "18px 18px 16px",
+                          textAlign: "center",
+                          border: "1.5px solid rgba(255,255,255,0.08)",
+                        }}>
+                          <div style={{ fontSize: "28px", marginBottom: "6px" }}>🏆</div>
+                          <div style={{
+                            color: "white", fontSize: "13px", fontWeight: 900,
+                            letterSpacing: "0.08em", marginBottom: "4px",
+                            textShadow: "0 0 14px rgba(251,191,36,0.6)",
+                          }}>
+                            FRESH LEADERBOARD
+                          </div>
+                          <div style={{
+                            color: "rgba(200,170,255,0.75)", fontSize: "11px",
+                            lineHeight: 1.5, marginBottom: "14px",
+                          }}>
+                            Only {entries.length} player{entries.length > 1 ? "s have" : " has"} posted a score this week. Play now to claim a spot on the podium before it fills up.
+                          </div>
+                          <div role="button" tabIndex={0}
+                            onClick={() => router.push("/games")}
+                            style={{ cursor: "pointer", userSelect: "none", display: "inline-block" }}
+                            onMouseDown={e => { (e.currentTarget as HTMLDivElement).style.transform = "scale(0.96) translateY(2px)"; }}
+                            onMouseUp={e => { (e.currentTarget as HTMLDivElement).style.transform = ""; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = ""; }}
+                          >
+                            <div style={{
+                              borderRadius: "12px",
+                              background: "#7c2d00",
+                              paddingBottom: "4px",
+                              boxShadow: "0 8px 18px -4px rgba(251,191,36,0.6)",
+                            }}>
+                              <div style={{
+                                borderRadius: "10px 10px 8px 8px",
+                                background: "linear-gradient(160deg, #fde68a 0%, #f59e0b 50%, #b45309 100%)",
+                                padding: "9px 26px",
+                                border: "2px solid rgba(255,255,255,0.5)",
+                                boxShadow: "inset 0 4px 10px rgba(255,255,255,0.6), inset 0 -2px 6px rgba(0,0,0,0.3)",
+                              }}>
+                                <span style={{
+                                  color: "white", fontSize: "12px", fontWeight: 900,
+                                  letterSpacing: "0.18em",
+                                  textShadow: "0 1px 3px rgba(0,0,0,0.5)",
+                                }}>PLAY NOW ▸</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </>
@@ -1125,6 +1248,9 @@ export default function LeaderboardPage() {
           </div>
         );
       })()}
+
+      {/* Mobile bottom tab nav — replaces the desktop sidebar when < 768px */}
+      {isMobile && <BottomNav />}
     </div>
   );
 }

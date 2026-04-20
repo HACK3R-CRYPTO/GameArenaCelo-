@@ -118,6 +118,18 @@
   animation-delay: var(--delay, 0s);
 }
 
+/* Decoratives split by breakpoint via CSS (not JS) to avoid SSR hydration
+   flash. `icon-float--desktop` is the rich 3+3 set for desktop; on mobile
+   we render a separate pair of small corner accents marked
+   `icon-float--mobile` so the hero still has a whisper of atmosphere
+   without overwhelming a 390px viewport. */
+@media (max-width: 767px) {
+  .icon-float--desktop { display: none !important; }
+}
+@media (min-width: 768px) {
+  .icon-float--mobile { display: none !important; }
+}
+
 .dot-pulse {
   animation: dot-pulse var(--dur, 3.5s) ease-in-out infinite;
   animation-delay: var(--delay, 0s);

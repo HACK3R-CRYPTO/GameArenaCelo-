@@ -252,6 +252,35 @@ const RIGHT_ICONS: {
   },
 ];
 
+// Mobile decoratives — 4+4 at viewport edges. Splash is a hype moment so
+// runs slightly richer than the in-app pages (3+3), but still curated:
+// tucked past the edges, small sizes, low opacity so the logo and
+// progress bar stay readable.
+type MobileIcon = {
+  src: string;
+  top: string;
+  left?: string;
+  right?: string;
+  size: number;
+  delay: number;
+  dur: number;
+  glow: string;
+  rotate: number;
+  opacity: number;
+};
+const MOBILE_LEFT_ICONS: MobileIcon[] = [
+  { src: D, top: "4%",  left: "-22px", size: 66, delay: 0.0, dur: 5.2, glow: "#cc44ff", rotate: -18, opacity: 0.7 },
+  { src: M, top: "30%", left: "-14px", size: 56, delay: 0.7, dur: 4.3, glow: "#ffaa00", rotate: 12,  opacity: 0.55 },
+  { src: G, top: "62%", left: "-18px", size: 62, delay: 1.4, dur: 6.0, glow: "#aa88ff", rotate: -6,  opacity: 0.6 },
+  { src: J, top: "88%", left: "-20px", size: 58, delay: 2.1, dur: 5.5, glow: "#22aaff", rotate: -8,  opacity: 0.55 },
+];
+const MOBILE_RIGHT_ICONS: MobileIcon[] = [
+  { src: D, top: "6%",  right: "-24px", size: 62, delay: 0.4, dur: 5.0, glow: "#cc44ff", rotate: 20,  opacity: 0.7 },
+  { src: V, top: "32%", right: "-10px", size: 64, delay: 2.0, dur: 6.2, glow: "#ff44cc", rotate: -4,  opacity: 0.55 },
+  { src: M, top: "60%", right: "-12px", size: 54, delay: 0.6, dur: 4.0, glow: "#ffaa00", rotate: -16, opacity: 0.6 },
+  { src: J, top: "86%", right: "-18px", size: 60, delay: 3.0, dur: 4.6, glow: "#22aaff", rotate: 18,  opacity: 0.55 },
+];
+
 const DOTS: {
   top: string;
   left: string;
@@ -323,11 +352,11 @@ export default function SplashScreen() {
         }}
       />
 
-      {/* Left side icons */}
+      {/* Left side icons — desktop only (hidden below 768px via CSS). */}
       {LEFT_ICONS.map((icon, i) => (
         <div
           key={`l-${i}`}
-          className="icon-float"
+          className="icon-float icon-float--desktop"
           style={{
             position: "absolute",
             top: icon.top,
@@ -353,11 +382,11 @@ export default function SplashScreen() {
         </div>
       ))}
 
-      {/* Right side icons */}
+      {/* Right side icons — desktop only. */}
       {RIGHT_ICONS.map((icon, i) => (
         <div
           key={`r-${i}`}
-          className="icon-float"
+          className="icon-float icon-float--desktop"
           style={{
             position: "absolute",
             top: icon.top,
@@ -380,6 +409,54 @@ export default function SplashScreen() {
             height={icon.size}
             style={{ objectFit: "contain", display: "block" }}
           />
+        </div>
+      ))}
+
+      {/* Mobile decoratives — 4+4 curated set, hidden on desktop via CSS. */}
+      {MOBILE_LEFT_ICONS.map((icon, i) => (
+        <div
+          key={`ml-${i}`}
+          className="icon-float icon-float--mobile"
+          style={{
+            position: "absolute",
+            top: icon.top,
+            left: icon.left,
+            width: icon.size,
+            height: icon.size,
+            transform: `rotate(${icon.rotate}deg)`,
+            filter: `drop-shadow(0 0 6px ${icon.glow}66)`,
+            opacity: icon.opacity,
+            ["--dur" as string]: `${icon.dur}s`,
+            ["--delay" as string]: `${icon.delay}s`,
+            userSelect: "none",
+            pointerEvents: "none",
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={icon.src} alt="" width={icon.size} height={icon.size} style={{ objectFit: "contain", display: "block" }} />
+        </div>
+      ))}
+      {MOBILE_RIGHT_ICONS.map((icon, i) => (
+        <div
+          key={`mr-${i}`}
+          className="icon-float icon-float--mobile"
+          style={{
+            position: "absolute",
+            top: icon.top,
+            right: icon.right,
+            width: icon.size,
+            height: icon.size,
+            transform: `rotate(${icon.rotate}deg)`,
+            filter: `drop-shadow(0 0 6px ${icon.glow}66)`,
+            opacity: icon.opacity,
+            ["--dur" as string]: `${icon.dur}s`,
+            ["--delay" as string]: `${icon.delay}s`,
+            userSelect: "none",
+            pointerEvents: "none",
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={icon.src} alt="" width={icon.size} height={icon.size} style={{ objectFit: "contain", display: "block" }} />
         </div>
       ))}
 
@@ -411,6 +488,10 @@ export default function SplashScreen() {
           flexDirection: "column",
           justifyContent: "center",
           alignItems: "center",
+          // Horizontal breathing room so progress bar + text don't bleed
+          // off the viewport edges on narrow phones.
+          padding: "0 18px",
+          boxSizing: "border-box",
           pointerEvents: "none",
         }}
       >
@@ -419,7 +500,9 @@ export default function SplashScreen() {
           src="/components/game_arena_text.png"
           alt="Game Arena"
           style={{
-            width: "clamp(364px, 58.5vw, 832px)",
+            // Min lowered from 364px → 240px so the logo fits a 360px
+            // phone without clipping the main content padding.
+            width: "clamp(240px, 58.5vw, 832px)",
             height: "auto",
             animation:
               "bounce-scale-in 1s cubic-bezier(0.34, 1.56, 0.64, 1) both",
@@ -438,23 +521,27 @@ export default function SplashScreen() {
           }}
         >
 
-            {/** Parent Progress BG */}
+            {/** Parent Progress BG — center clamps so the full bar
+                 (left cap + center + right cap) fits inside the
+                 viewport with main's 18px padding on each side. */}
             <div
               style={{
                 display: "flex",
                 position: "relative",
+                maxWidth: "100%",
               }}
             >
               <img
                 src="/components/progress_bg_left.png"
                 style={{
                   height: "80px",
+                  flexShrink: 0,
                 }}
               />
               <img
                 src="/components/progress_bg_center.png"
                 style={{
-                  width: "450px",
+                  width: "clamp(180px, 60vw, 450px)",
                   height: "80px",
                 }}
               />
@@ -462,6 +549,7 @@ export default function SplashScreen() {
                 src="/components/progress_bg_right.png"
                 style={{
                   height: "80px",
+                  flexShrink: 0,
                 }}
               />
 
@@ -504,14 +592,20 @@ export default function SplashScreen() {
             </div>
             </div>
 
-          {/* Loading Texts... */}
+          {/* Loading Texts — clamp fluid font-size and constrain width so
+              long strings (CONNECTING_TO_CELO_MAINNET) don't bleed off the
+              viewport on narrow phones. */}
           <p
             style={{
-              fontSize: "1.2rem",
+              fontSize: "clamp(0.82rem, 3.4vw, 1.2rem)",
               color: "white",
               fontWeight: "normal",
               minHeight: "2rem",
               letterSpacing: "0.04em",
+              maxWidth: "100%",
+              textAlign: "center",
+              wordBreak: "break-word",
+              margin: "10px 0 0",
             }}
           >
             {loadingTexts[textIndex].slice(0, displayed)}

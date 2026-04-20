@@ -1550,12 +1550,16 @@ function PlayingView({
         ))}
       </div>
 
-      {/* ═══ COMBO TOAST (center) ═══ */}
+      {/* ═══ COMBO TOAST (center) ═══
+          Fluid padding + maxWidth so long strings like "50× COMBO!" or
+          "ENCORE!" don't spill off the viewport on 360px phones. */}
       {comboToast && (
         <div style={{
           position: "absolute", top: "32%", left: "50%",
           transform: "translate(-50%, -50%)",
-          padding: "14px 28px", borderRadius: "999px",
+          padding: "clamp(9px, 2.6vw, 14px) clamp(16px, 5vw, 28px)",
+          maxWidth: "92vw",
+          borderRadius: "999px",
           background: "linear-gradient(180deg, #fbbf24 0%, #d97706 100%)",
           border: "3px solid rgba(255,255,255,0.6)",
           boxShadow: "0 0 40px rgba(251,191,36,0.8), 0 0 80px rgba(251,191,36,0.4), 0 12px 24px rgba(0,0,0,0.5)",
@@ -1563,8 +1567,11 @@ function PlayingView({
           zIndex: 8,
         }}>
           <span style={{
-            color: "white", fontSize: "clamp(22px, 5vw, 30px)", fontWeight: 900,
+            color: "white",
+            fontSize: "clamp(16px, 4.5vw, 30px)",
+            fontWeight: 900,
             letterSpacing: "0.08em", textShadow: "0 2px 4px rgba(0,0,0,0.5)",
+            whiteSpace: "nowrap",
           }}>{comboToast}</span>
         </div>
       )}
@@ -1643,15 +1650,20 @@ function Lane({ theme, laneIdx: _laneIdx, flashing, feedback }: { theme: LaneThe
         transition: "all 0.08s",
       }} />
 
-      {/* Feedback label (floats up from bottom on hit) */}
+      {/* Feedback label (floats up from bottom on hit).
+          Fluid font — each lane on a 4-lane mobile layout is ~22vw wide;
+          a fixed 14px "PERFECT!" clipped at the lane edges. */}
       {feedbackLabel && (
         <div key={feedback!.ts} style={{
           position: "absolute", bottom: "20%", left: "50%", transform: "translateX(-50%)",
-          color: feedbackColor, fontSize: "14px", fontWeight: 900,
-          letterSpacing: "0.1em",
+          color: feedbackColor,
+          fontSize: "clamp(10px, 3.2vw, 14px)",
+          fontWeight: 900,
+          letterSpacing: "0.06em",
           textShadow: `0 0 10px ${feedbackColor}`,
           animation: "bubble-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both",
           pointerEvents: "none", zIndex: 2,
+          whiteSpace: "nowrap",
         }}>{feedbackLabel}</div>
       )}
     </div>

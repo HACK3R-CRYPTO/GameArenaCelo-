@@ -119,14 +119,24 @@ const BACKEND_APPROVAL_TYPES = {
   ],
 };
 
+// ONE provider for the entire process. ethers.JsonRpcProvider registers
+// internal polling timers; creating a new one per cron tick (every 5 min
+// in indexOnChainScores) leaked memory — the old instances couldn't GC
+// because their timers held references. Railway's watchdog kept killing
+// the process with "approaching memory threshold, restarting...".
 let provider = null;
 let passContract = null;
 let validator = null;
 let wagerContract = null;
 
-if (SOLO_WAGER_ADDR && VALIDATOR_KEY) {
+try {
+  provider = new ethers.JsonRpcProvider(CELO_RPC);
+} catch (e) {
+  console.warn('⚠️  Failed to init RPC provider:', e.message);
+}
+
+if (provider && SOLO_WAGER_ADDR && VALIDATOR_KEY) {
   try {
-    provider = new ethers.JsonRpcProvider(CELO_RPC);
     validator = new ethers.Wallet(VALIDATOR_KEY, provider);
     wagerContract = new ethers.Contract(SOLO_WAGER_ADDR, SOLO_WAGER_ABI, validator);
     passContract = new ethers.Contract(GAME_PASS_ADDR, GAME_PASS_ABI, validator);
@@ -134,23 +144,45 @@ if (SOLO_WAGER_ADDR && VALIDATOR_KEY) {
   } catch (e) {
     console.warn('⚠️  On-chain resolver not configured:', e.message);
   }
-} else {
+} else if (provider) {
   try {
-    const p = new ethers.JsonRpcProvider(CELO_RPC);
-    passContract = new ethers.Contract(GAME_PASS_ADDR, GAME_PASS_ABI, p);
+    passContract = new ethers.Contract(GAME_PASS_ADDR, GAME_PASS_ABI, provider);
   } catch (_) { }
   console.log('ℹ️  SOLO_WAGER_ADDRESS or VALIDATOR_PRIVATE_KEY not set — wager resolution disabled');
 }
 
-// ── Username cache ──────────────────────────────────────────────────────────
+// Event interface for parsing on-chain ScoreRecorded logs. Built once,
+// reused by every indexOnChainScores tick. (Previously instantiated
+// inside the cron body on each run — minor garbage but unnecessary.)
+const SCORE_EVENT_IFACE = new ethers.Interface([
+  'event ScoreRecorded(address indexed player, uint8 indexed gameType, uint256 score, uint256 indexed season, uint256 totalGames)',
+]);
+
+// ── Username cache (bounded LRU-ish — evict oldest when > 5000 entries
+//    so the map doesn't grow to infinity as new wallets hit the backend) ──
+const USERNAME_CACHE_MAX = 5000;
 const usernameCache = new Map();
 async function resolveUsername(addr) {
   const lower = addr.toLowerCase();
-  if (usernameCache.has(lower)) return usernameCache.get(lower);
+  if (usernameCache.has(lower)) {
+    // Touch: move to end so it survives the next eviction round.
+    const v = usernameCache.get(lower);
+    usernameCache.delete(lower);
+    usernameCache.set(lower, v);
+    return v;
+  }
   if (!passContract) return null;
   try {
     const name = await passContract.getUsername(addr);
-    if (name) usernameCache.set(lower, name);
+    if (name) {
+      if (usernameCache.size >= USERNAME_CACHE_MAX) {
+        // Evict the oldest (first-inserted) entry — Map iteration is
+        // insertion order, so the first key is the least-recently-touched.
+        const oldestKey = usernameCache.keys().next().value;
+        usernameCache.delete(oldestKey);
+      }
+      usernameCache.set(lower, name);
+    }
     return name || null;
   } catch (_) { return null; }
 }
@@ -1489,15 +1521,13 @@ app.get('/health', async (_, res) => {
 
 // ── Index on-chain scores on startup ────────────────────────────────────────
 async function indexOnChainScores() {
-  if (!passContract) return;
+  if (!passContract || !provider) return;
   try {
-    const iface = new ethers.Interface([
-      'event ScoreRecorded(address indexed player, uint8 indexed gameType, uint256 score, uint256 indexed season, uint256 totalGames)',
-    ]);
-    const rpc = new ethers.JsonRpcProvider(CELO_RPC);
-    const currentBlock = await rpc.getBlockNumber();
+    // Reuse the module-level provider + interface instead of allocating
+    // fresh ones every 5 min — the old pattern was the main memory leak.
+    const currentBlock = await provider.getBlockNumber();
     const fromBlock = Math.max(0, currentBlock - 200000);
-    const logs = await rpc.getLogs({
+    const logs = await provider.getLogs({
       address: GAME_PASS_ADDR,
       topics: [ethers.id('ScoreRecorded(address,uint8,uint256,uint256,uint256)')],
       fromBlock,
@@ -1507,7 +1537,7 @@ async function indexOnChainScores() {
 
     let added = 0;
     for (const log of logs) {
-      const parsed = iface.parseLog({ topics: log.topics, data: log.data });
+      const parsed = SCORE_EVENT_IFACE.parseLog({ topics: log.topics, data: log.data });
       const player = parsed.args[0].toLowerCase();
       const gameType = Number(parsed.args[1]);
       const score = Number(parsed.args[2]);
@@ -1515,7 +1545,7 @@ async function indexOnChainScores() {
 
       let timestamp = new Date().toISOString();
       try {
-        const block = await rpc.getBlock(log.blockNumber);
+        const block = await provider.getBlock(log.blockNumber);
         if (block) timestamp = new Date(Number(block.timestamp) * 1000).toISOString();
       } catch (_) { }
 

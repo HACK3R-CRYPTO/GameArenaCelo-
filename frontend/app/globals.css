@@ -140,6 +140,33 @@ button[aria-label$="button"],
   animation-delay: var(--delay, 0s);
 }
 
+/* Pause the icon-float animation on mobile. The decoratives still render
+   (they're part of the page's visual language) but animating 6+ drop-
+   shadow-filtered elements infinitely cooks the phone. Static is fine —
+   they frame the hero whether they bob or not. */
+@media (max-width: 767px) {
+  .icon-float { animation: none !important; }
+}
+
+/* Same treatment for dot-pulse (starfield) — halved count on mobile
+   AND slow the animation to 2x duration so fewer GPU paints per second. */
+@media (max-width: 767px) {
+  .dot-pulse { animation-duration: calc(var(--dur, 3.5s) * 1.6) !important; }
+}
+
+/* Full stop for users who asked the OS for reduced motion (iOS Settings
+   > Accessibility > Motion, Android Developer > Remove animations).
+   Respecting this is both an a11y requirement and a heat-reduction
+   measure for low-end devices with motion off by default. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Decoratives split by breakpoint via CSS (not JS) to avoid SSR hydration
    flash. `icon-float--desktop` is the rich 3+3 set for desktop; on mobile
    we render a separate pair of small corner accents marked

@@ -32,7 +32,7 @@ function InfoCard({ children, accentColor }: { children: React.ReactNode; accent
         "inset 0 3px 10px rgba(0,0,0,0.75)",
         "inset 0 0 30px rgba(40,0,100,0.3)",
       ].join(", "),
-      padding: "12px 14px",
+      padding: "clamp(8px, 2.2vw, 12px) clamp(10px, 3vw, 14px)",
       position: "relative", overflow: "hidden",
     }}>
       {accentColor && (
@@ -127,15 +127,21 @@ function VerifyInner() {
       <main style={{
         position: "absolute", inset: 0, overflowY: "auto",
         display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center",
-        padding: "20px", gap: "24px",
+        alignItems: "center",
+        justifyContent: "flex-start",
+        padding: "clamp(10px, 2.5vw, 28px) clamp(12px, 3.5vw, 24px) clamp(20px, 4vw, 40px)",
+        paddingTop: "max(clamp(10px, 2.5vw, 28px), env(safe-area-inset-top, 0px))",
+        paddingBottom: "max(clamp(20px, 4vw, 40px), env(safe-area-inset-bottom, 0px))",
+        gap: "clamp(8px, 2vw, 24px)",
       }}>
-        {/* Logo */}
+        {/* Logo — much smaller on mobile. On a 700px-tall phone the old
+            logo (180-380px wide) ate ~80px of vertical space before the
+            ONE-TIME SETUP card even started, pushing VERIFY below the fold. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/components/game_arena_text.png"
           alt="Game Arena"
-          style={{ width: "clamp(180px, 28vw, 380px)", height: "auto", animation: "bounce-scale-in 0.7s cubic-bezier(0.34,1.56,0.64,1) both", flexShrink: 0 }}
+          style={{ width: "clamp(120px, 24vw, 380px)", height: "auto", animation: "bounce-scale-in 0.7s cubic-bezier(0.34,1.56,0.64,1) both", flexShrink: 0 }}
         />
 
         {/* Panel wall */}
@@ -162,10 +168,11 @@ function VerifyInner() {
               borderRadius: "26px 26px 0 0", pointerEvents: "none",
             }} />
 
-            {/* Header */}
+            {/* Header — tighter padding on mobile so the card reserves
+                more room for content below. */}
             <div style={{
               background: "linear-gradient(90deg, #4c1d95 0%, #7c3aed 40%, #9333ea 60%, #7c3aed 80%, #4c1d95 100%)",
-              padding: "18px 24px",
+              padding: "clamp(12px, 3vw, 18px) clamp(16px, 4vw, 24px)",
               borderBottom: "2px solid rgba(255,255,255,0.18)",
               boxShadow: "inset 0 6px 16px rgba(255,255,255,0.2)",
               position: "relative", overflow: "hidden",
@@ -176,28 +183,32 @@ function VerifyInner() {
                 borderRadius: "26px 26px 60px 60px", pointerEvents: "none",
               }} />
               <h2 style={{
-                margin: 0, fontSize: "15px", fontWeight: 900, letterSpacing: "0.12em",
+                margin: 0, fontSize: "clamp(13px, 3.6vw, 15px)", fontWeight: 900, letterSpacing: "0.12em",
                 color: "white", textShadow: "0px 2px 4px rgba(0,0,0,0.5), 0 0 20px rgba(200,150,255,0.6)",
                 position: "relative", zIndex: 1,
               }}>ONE-TIME SETUP</h2>
               <p style={{
-                margin: "4px 0 0", fontSize: "12px", color: "rgba(255,255,255,0.7)",
+                margin: "3px 0 0", fontSize: "clamp(10px, 2.8vw, 12px)", color: "rgba(255,255,255,0.7)",
                 position: "relative", zIndex: 1,
               }}>Verify once. Unlock everything. Never again.</p>
             </div>
 
-            {/* Content */}
-            <div style={{ padding: "18px", display: "flex", flexDirection: "column", gap: "14px" }}>
+            {/* Content — tighter padding and gaps on mobile. */}
+            <div style={{
+              padding: "clamp(10px, 3vw, 18px)",
+              display: "flex", flexDirection: "column",
+              gap: "clamp(8px, 2vw, 14px)",
+            }}>
 
               <SectionDivider label="WHAT YOU UNLOCK" />
 
               {unlocks.map(u => (
                 <InfoCard key={u.label} accentColor={u.accent}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <span style={{ fontSize: "22px", flexShrink: 0 }}>{u.icon}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontSize: "clamp(18px, 5vw, 22px)", flexShrink: 0 }}>{u.icon}</span>
                     <div>
-                      <div style={{ color: "white", fontSize: "12px", fontWeight: 900, letterSpacing: "0.06em" }}>{u.label}</div>
-                      <div style={{ color: "rgba(180,150,255,0.8)", fontSize: "11.5px", marginTop: "2px", lineHeight: 1.4 }}>{u.desc}</div>
+                      <div style={{ color: "white", fontSize: "clamp(11px, 3vw, 12px)", fontWeight: 900, letterSpacing: "0.06em" }}>{u.label}</div>
+                      <div style={{ color: "rgba(180,150,255,0.8)", fontSize: "clamp(10.5px, 2.8vw, 11.5px)", marginTop: "2px", lineHeight: 1.35 }}>{u.desc}</div>
                     </div>
                   </div>
                 </InfoCard>
@@ -205,22 +216,24 @@ function VerifyInner() {
 
               <SectionDivider label="HOW IT WORKS" />
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {/* Compact step list — used to be 3 full InfoCards stacked.
+                  That ate ~150px of vertical real estate pushing the
+                  VERIFY button below the fold. Now a single borderless
+                  ordered list: small purple numbered bullet + one line. */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px", padding: "0 4px" }}>
                 {steps.map(s => (
-                  <InfoCard key={s.num}>
-                    <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
-                      <div style={{
-                        flexShrink: 0, width: "24px", height: "24px", borderRadius: "50%",
-                        background: "radial-gradient(circle at 38% 32%, #c084fc, #5b21b6 70%)",
-                        border: "1.5px solid rgba(200,150,255,0.5)",
-                        boxShadow: "0 0 10px rgba(140,70,255,0.55)",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                      }}>
-                        <span style={{ fontSize: "11px", fontWeight: 900, color: "white" }}>{s.num}</span>
-                      </div>
-                      <div style={{ color: "rgba(200,175,255,0.85)", fontSize: "12.5px", lineHeight: 1.5, paddingTop: "2px" }}>{s.text}</div>
+                  <div key={s.num} style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                    <div style={{
+                      flexShrink: 0, width: "20px", height: "20px", borderRadius: "50%",
+                      background: "radial-gradient(circle at 38% 32%, #c084fc, #5b21b6 70%)",
+                      border: "1.5px solid rgba(200,150,255,0.5)",
+                      boxShadow: "0 0 8px rgba(140,70,255,0.5)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      <span style={{ fontSize: "10px", fontWeight: 900, color: "white" }}>{s.num}</span>
                     </div>
-                  </InfoCard>
+                    <div style={{ color: "rgba(200,175,255,0.85)", fontSize: "clamp(11px, 3vw, 12.5px)", lineHeight: 1.4 }}>{s.text}</div>
+                  </div>
                 ))}
               </div>
 
@@ -248,14 +261,15 @@ function VerifyInner() {
                   paddingBottom: "7px",
                   boxShadow: `0 12px 28px -6px ${isVerifying ? "rgba(34,197,94,0.3)" : "rgba(34,197,94,0.65)"}, inset 0 -3px 8px rgba(0,0,0,0.4)`,
                 }}>
-                  {/* Face */}
+                  {/* Face — fluid padding so the button stays juicy on
+                      desktop without over-sized tapping zone on phones. */}
                   <div style={{
                     borderRadius: "18px 18px 14px 14px",
                     background: isVerifying
                       ? "linear-gradient(160deg, #4ade80 0%, #16a34a 50%, #166534 100%)"
                       : "linear-gradient(160deg, #86efac 0%, #22c55e 50%, #15803d 100%)",
-                    padding: "18px 24px",
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: "12px",
+                    padding: "clamp(12px, 3.5vw, 18px) clamp(16px, 4vw, 24px)",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: "10px",
                     position: "relative", overflow: "hidden",
                     border: "2.5px solid rgba(255,255,255,0.45)",
                     boxShadow: "inset 0 10px 22px rgba(255,255,255,0.8), inset 0 -5px 12px rgba(0,0,0,0.25)",
@@ -282,8 +296,13 @@ function VerifyInner() {
                       </svg>
                     )}
                     <span style={{
-                      zIndex: 1, color: "white", fontSize: "16px", fontWeight: 900,
+                      zIndex: 1, color: "white",
+                      // Fluid so "VERIFY WITH GOODDOLLAR" (22 chars) fits
+                      // the button width on 360px phones without clipping.
+                      fontSize: "clamp(12px, 3.4vw, 16px)",
+                      fontWeight: 900,
                       letterSpacing: "0.06em", textShadow: "0px 2px 4px rgba(0,0,0,0.35)",
+                      whiteSpace: "nowrap",
                     }}>
                       {isVerifying ? "VERIFYING..." : "VERIFY WITH GOODDOLLAR"}
                     </span>

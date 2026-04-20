@@ -205,7 +205,11 @@ export default function SimonGamePage() {
   type Star = { x: number; y: number; size: number; delay: number; dur: number; alpha: number };
   const [stars, setStars] = useState<Star[]>([]);
   useEffect(() => {
-    setStars(Array.from({ length: 44 }, () => ({
+    // 44 animated dots on desktop; mobile gets 18 to cut the composite-
+    // layer count and keep the phone cool. Each star runs an infinite
+    // dot-pulse animation — at 44 that's 44 always-running GPU timers.
+    const count = isMobile ? 18 : 44;
+    setStars(Array.from({ length: count }, () => ({
       x: Math.random() * 100,
       y: Math.random() * 100,
       size: Math.random() * 1.6 + 0.6,
@@ -213,7 +217,7 @@ export default function SimonGamePage() {
       dur: Math.random() * 3 + 2.5,
       alpha: Math.random() * 0.5 + 0.4,
     })));
-  }, []);
+  }, [isMobile]);
 
   const patternRef     = useRef<string[]>([]);       // sequence the player must match
   const userPatternRef = useRef<string[]>([]);       // what they've tapped so far this round
@@ -950,16 +954,23 @@ function PlayingView({
           <div style={{
             position: "absolute", top: "6%", left: "50%",
             transform: "translateX(-50%)",
-            padding: "12px 26px", borderRadius: "999px",
+            // Fluid padding — static 12/26 wrapped or clipped on small
+            // phones for long strings like "5TH COLOR UNLOCKED!"
+            padding: "clamp(8px, 2.4vw, 12px) clamp(14px, 4.5vw, 26px)",
+            maxWidth: "92vw",
+            borderRadius: "999px",
             background: "linear-gradient(180deg, #fbbf24 0%, #d97706 100%)",
             border: "3px solid rgba(255,255,255,0.6)",
             boxShadow: "0 0 40px rgba(251,191,36,0.8), 0 0 80px rgba(251,191,36,0.4), 0 12px 24px rgba(0,0,0,0.5)",
             animation: "bounce-scale-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both",
-            zIndex: 8, whiteSpace: "nowrap",
+            zIndex: 8,
           }}>
             <span style={{
-              color: "white", fontSize: "clamp(18px, 4vw, 24px)", fontWeight: 900,
+              color: "white",
+              fontSize: "clamp(13px, 3.8vw, 24px)",
+              fontWeight: 900,
               letterSpacing: "0.08em", textShadow: "0 2px 4px rgba(0,0,0,0.5)",
+              whiteSpace: "nowrap",
             }}>{roundFlash}</span>
           </div>
         )}
@@ -1344,7 +1355,9 @@ function FinishedView({
               {grade.desc}
             </div>
             <div style={{
-              width: "140px", height: "140px", margin: "0 auto",
+              width: "clamp(108px, 32vw, 140px)",
+              height: "clamp(108px, 32vw, 140px)",
+              margin: "0 auto",
               borderRadius: "50%", padding: "5px",
               background: `conic-gradient(from 0deg, ${grade.color}, ${grade.color}aa, ${grade.color})`,
               boxShadow: `0 0 40px ${grade.color}88, 0 0 80px ${grade.color}44`,
@@ -1354,9 +1367,17 @@ function FinishedView({
                 background: "linear-gradient(180deg, #13063a 0%, #07021a 100%)",
                 display: "flex", alignItems: "center", justifyContent: "center",
               }}>
+                {/* Letter: white core with colored glow around it.
+                    Colored-on-colored (e.g. cyan text + cyan shadow) blurs
+                    into itself and reads as a washed-out smear on mobile.
+                    White inside + colored halo outside = high contrast
+                    letter AND the grade color still dominates the badge. */}
                 <span style={{
-                  fontSize: "88px", fontWeight: 900, color: grade.color,
-                  textShadow: `0 0 28px ${grade.color}, 0 4px 8px rgba(0,0,0,0.7)`,
+                  fontSize: "clamp(68px, 22vw, 92px)",
+                  fontWeight: 900,
+                  color: "white",
+                  textShadow: `0 0 16px ${grade.color}, 0 0 34px ${grade.color}bb, 0 0 60px ${grade.color}66, 0 3px 6px rgba(0,0,0,0.8)`,
+                  WebkitTextStroke: `1px ${grade.color}`,
                   lineHeight: 1,
                 }}>{grade.letter}</span>
               </div>
@@ -1367,7 +1388,9 @@ function FinishedView({
           <div style={{ marginTop: "20px" }}>
             <div style={{ color: "rgba(200,180,255,0.6)", fontSize: "10px", fontWeight: 900, letterSpacing: "0.2em" }}>SCORE</div>
             <div style={{
-              color: "#fbbf24", fontSize: "42px", fontWeight: 900,
+              color: "#fbbf24",
+              fontSize: "clamp(32px, 10vw, 46px)",
+              fontWeight: 900,
               textShadow: "0 0 20px rgba(251,191,36,0.8), 0 2px 6px rgba(0,0,0,0.6)",
               lineHeight: 1, marginTop: "3px",
             }}>{score}</div>

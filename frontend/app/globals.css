@@ -10,8 +10,14 @@
 }
 
 @layer base {
-  html {
+  html, body {
     font-family: "Melon Pop", sans-serif;
+    /* Kill mobile pull-to-refresh. On iOS Safari and Chrome mobile, a
+       downward swipe — or even a tap near the top of the viewport during
+       the sequence flash in Simon — triggers a page reload. Game-app
+       convention (Duolingo, Clash Royale, Candy Crush) is to disable it. */
+    overscroll-behavior-y: none;
+    overscroll-behavior-x: none;
   }
   button {
     background: transparent;

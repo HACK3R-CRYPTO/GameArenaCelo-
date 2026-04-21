@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, useEffect, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import { useAccount } from "wagmi";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import BottomNav from "@/components/BottomNav";
@@ -445,12 +445,21 @@ function PlayerRow({
 }
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
-export default function LeaderboardPage() {
+function LeaderboardInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { address } = useAccount();
   // Mobile swaps the 68px left sidebar for a fixed bottom tab bar.
   const isMobile = useIsMobile();
-  const [activeTab, setActiveTab] = useState<"rankings" | "seasons" | "pvp">("rankings");
+  // Deep-link support: ?tab=seasons routes from the Games page 3-Week
+  // Cup event card directly to the Seasons tab where the Cup rankings
+  // live. Before this, the event card always landed on Rankings, which
+  // is a different leaderboard entirely.
+  const initialTab = (() => {
+    const t = searchParams.get("tab");
+    return t === "seasons" || t === "pvp" ? t : "rankings";
+  })();
+  const [activeTab, setActiveTab] = useState<"rankings" | "seasons" | "pvp">(initialTab);
   const [gameTab, setGameTab] = useState<"rhythm" | "simon">("rhythm");
   const [entries, setEntries] = useState<Entry[]>(DUMMY_ENTRIES);
   const [loading, setLoading] = useState(false);
@@ -1347,5 +1356,15 @@ export default function LeaderboardPage() {
         <MobileStreakChip streak={streak.streak} playedToday={streak.playedToday} />
       )}
     </div>
+  );
+}
+
+// useSearchParams requires a Suspense boundary in the app router, matching
+// the pattern used on /verify and /mint elsewhere in this app.
+export default function LeaderboardPage() {
+  return (
+    <Suspense>
+      <LeaderboardInner />
+    </Suspense>
   );
 }

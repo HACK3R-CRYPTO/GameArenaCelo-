@@ -460,7 +460,11 @@ export default function GamesPage() {
               icon: "🏆", color: "#fbbf24",
               title: `3-Week Cup — ${compInfo.weeksLeft} week${compInfo.weeksLeft !== 1 ? "s" : ""} left`,
               subtitle: `$${compInfo.total} pool · Cumulative · View →`,
-              onClick: () => router.push("/leaderboard"),
+              // Deep-link to the Seasons tab where the Cup prizes, your
+              // standing, and the full cumulative ranking list live.
+              // Previously this landed on the Rankings tab (weekly
+              // leaderboard) which is a different competition entirely.
+              onClick: () => router.push("/leaderboard?tab=seasons"),
             });
           }
           if (isVerified && claimableG) {

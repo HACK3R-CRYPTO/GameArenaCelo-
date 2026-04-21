@@ -1002,11 +1002,15 @@ export default function RhythmGamePage() {
           if (!missedRef.current.has(n.id)) visible.push({ ...n, spawnedAt: n.time - n.travel });
         }
       }
-      // Always setActiveNotes every frame — the tile's top position is
-      // recomputed inside the render (see activeNotes.map), so React
-      // needs to re-render every frame to drive the fall. An earlier
-      // perf pass tried to skip identical-id updates, but that froze
-      // the tile position between id changes and looked like skipping.
+
+      // Unconditional setActiveNotes every frame. The tile's `top` is
+      // computed inline inside the render from performance.now() —
+      // React needs to re-render at 60Hz for that to stay smooth. This
+      // is the EXACT pattern the old-UI celo branch used, and it
+      // worked on iPhone 13 + similar mid-range phones. Fancier
+      // alternatives (CSS keyframes, direct DOM writes via refs, sig
+      // compares) all introduced their own sync bugs — stick with the
+      // pattern the old build proved on real devices.
       setActiveNotes(visible);
 
       // Flag misses: notes that passed the good window without being hit
@@ -1571,13 +1575,12 @@ function PlayingView({
           />
         ))}
 
-        {/* Falling notes — Magic Tiles style: wall+face tiles matching our V2 button language.
-            Position is recomputed every render from performance.now() —
-            to keep that smooth, `setActiveNotes` fires every frame
-            (see the spawn loop: unconditional set, matching the old-UI
-            behavior). The CSS-keyframe experiment we briefly tried
-            looked jumpy because the animation kept restarting as React
-            re-mounted the tile on each ids-changed diff. */}
+        {/* Falling notes — Magic Tiles style: wall+face tiles matching
+            our V2 button language. Position recomputed inline from
+            performance.now() every render; setActiveNotes fires each
+            RAF frame so React reconciles at 60Hz. This is the exact
+            pattern the old-UI celo build used and confirmed smooth on
+            iPhone 13 + mid-range Android. */}
         {activeNotes.map(n => {
           const now = (performance.now() - startRef.current) / 1000;
           const progress = (now - n.spawnedAt) / n.travel; // 0 to 1, uses per-note speed

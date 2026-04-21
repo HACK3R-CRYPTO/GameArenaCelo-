@@ -10,6 +10,7 @@ import { playRankReveal, playSaveSuccess, playLevelUp, playAchievementChime } fr
 import { signScore, signScoreMiniPay, submitScore, submitScoreMiniPay } from "@/app/actions/game";
 import { CONTRACT_ADDRESSES, GAME_PASS_ABI } from "@/lib/contracts";
 import { hydrateAchievement } from "@/lib/achievements";
+import LevelUpToast from "@/components/LevelUpToast";
 
 // Only used for browser-safe READ endpoints (user level lookup). Write paths
 // go through server actions so the games-backend URL is never sent to the client.
@@ -525,6 +526,10 @@ export default function RhythmGamePage() {
   const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Full-screen level-up toast state. Set when the score-submit result
+  // arrives carrying { leveledUp: true, level: N } so the celebration
+  // overlays the finished card instead of being a tiny inline callout.
+  const [levelUpToastLevel, setLevelUpToastLevel] = useState<number | null>(null);
 
   // Auth context — Privy users provide a JWT, MiniPay users sign a message.
   // Both code paths live in the submit effect below.
@@ -741,6 +746,14 @@ export default function RhythmGamePage() {
             prevBest: result.prevBest,
             newAchievements: result.newAchievements || [],
           });
+          // Trigger the full-screen LEVEL UP toast immediately when the
+          // result lands. Slight delay so the finished-card scaleIn lands
+          // first; the toast then overlays it as a hero moment, with its
+          // own arpeggio (handled inside LevelUpToast).
+          if (result.leveledUp && typeof result.level === "number") {
+            const lv = result.level;
+            setTimeout(() => setLevelUpToastLevel(lv), 700);
+          }
         } else {
           setSubmitError(result?.error || "Score not recorded");
         }
@@ -880,17 +893,28 @@ export default function RhythmGamePage() {
   // and 3 misses end the game. Score keeps growing — no cap, Tetris-style.
   useEffect(() => {
     if (phase !== "playing" && phase !== "encore") return;
-    // Track wall-clock between frames. If two consecutive ticks are more
-    // than 0.5s apart, the tab was throttled or backgrounded — slide
-    // startRef forward by the gap so `now` doesn't jump and force-miss
-    // every queued note. Belt-and-suspenders alongside the visibility
-    // handler above (covers Android Chrome's aggressive RAF throttling
-    // even when the tab technically stays visible).
+    // Track wall-clock between frames. A gap > 1.5s means RAF was
+    // paused (tab hidden, screen locked, app switched, OS throttled).
+    // The earlier "slide startRef forward" recovery left the audio
+    // schedule + chart timeline desynced — players came back to a
+    // phantom session: timer ticking, no tiles, no score. Now we just
+    // end the run; player gets a clean finished screen and can replay.
+    //
+    // lastWall is anchored at effect mount (not at first tick) so even
+    // the very first RAF after a throttled resume can detect a stall.
     let lastWall = performance.now();
+    const STALL_THRESHOLD_MS = 1500;
     const tick = () => {
       const wall = performance.now();
       const dt = wall - lastWall;
-      if (dt > 500) startRef.current += dt;
+      if (dt > STALL_THRESHOLD_MS) {
+        setHits(h => {
+          mainTrackStatsRef.current = { misses: h.miss, goods: h.good };
+          return h;
+        });
+        setPhase("finished");
+        return;
+      }
       lastWall = wall;
 
       const now = (wall - startRef.current) / 1000;

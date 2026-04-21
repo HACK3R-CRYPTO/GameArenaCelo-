@@ -715,11 +715,21 @@ function LeaderboardInner() {
                     {/* Podium with character PNGs */}
                     <StagePodium podium={podium} />
 
-                    {/* Rows grid — 2 columns */}
+                    {/* Rows grid — 1 column on mobile (each row reads
+                        left-to-right as a full-width list item), 2 columns
+                        from tablet up. The old fixed 2-col layout put
+                        rank 4 next to rank 5 on a 360px phone, each
+                        squeezed into ~168px, and the alternating pairs
+                        felt like random clusters instead of a ranking.
+                        A vertical stack is the universal leaderboard
+                        pattern on mobile (PUBG, Clash Royale, Brawl
+                        Stars) and lets each row breathe. */}
                     <div style={{
                       width: "100%", maxWidth: "720px",
-                      display: "grid", gridTemplateColumns: "repeat(2, 1fr)",
-                      gap: "10px 14px", marginTop: "4px",
+                      display: "grid",
+                      gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)",
+                      gap: isMobile ? "8px" : "10px 14px",
+                      marginTop: "4px",
                     }}>
                       {rest.map((e, i) => {
                         const rank = i + 4;

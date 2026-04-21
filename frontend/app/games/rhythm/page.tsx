@@ -18,11 +18,11 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:300
 // ─── Pet stages (same data as profile — pet evolves with your level) ──────────
 type PetStage = { id: string; name: string; src: string; minLevel: number; color: string };
 const PET_STAGES: PetStage[] = [
-  { id: "egg",     name: "Mystery Egg",   src: "/pets/stage-1-egg.png",     minLevel: 1,  color: "#e2e8f0" },
-  { id: "baby",    name: "Baby Slime",    src: "/pets/stage-2-baby.png",    minLevel: 5,  color: "#22c55e" },
-  { id: "teen",    name: "Teen Slime",    src: "/pets/stage-3-teen.png",    minLevel: 15, color: "#a78bfa" },
+  { id: "egg", name: "Mystery Egg", src: "/pets/stage-1-egg.png", minLevel: 1, color: "#e2e8f0" },
+  { id: "baby", name: "Baby Slime", src: "/pets/stage-2-baby.png", minLevel: 5, color: "#22c55e" },
+  { id: "teen", name: "Teen Slime", src: "/pets/stage-3-teen.png", minLevel: 15, color: "#a78bfa" },
   { id: "crystal", name: "Crystal Slime", src: "/pets/stage-4-crystal.png", minLevel: 30, color: "#06b6d4" },
-  { id: "king",    name: "King Slime",    src: "/pets/stage-5-king.png",    minLevel: 50, color: "#fbbf24" },
+  { id: "king", name: "King Slime", src: "/pets/stage-5-king.png", minLevel: 50, color: "#fbbf24" },
 ];
 function petForLevel(level: number): PetStage {
   let stage = PET_STAGES[0];
@@ -33,16 +33,16 @@ function petForLevel(level: number): PetStage {
 // ─── Game constants ───────────────────────────────────────────────────────────
 const TRACK_DURATION = 45;        // seconds — gives space for verse/hook to repeat
 const PERFECT_WINDOW = 0.12;      // ±120ms (slightly forgiving — better feel)
-const GOOD_WINDOW    = 0.28;      // ±280ms
-const BPM            = 120;       // 120 BPM → 0.5s per beat (readable)
-const BEAT           = 60 / BPM;
+const GOOD_WINDOW = 0.28;      // ±280ms
+const BPM = 120;       // 120 BPM → 0.5s per beat (readable)
+const BEAT = 60 / BPM;
 
 // Travel time PER SECTION — tuned for Magic Tiles / DJMAX readability.
 // Longer = more time to see the tile coming. Never drop below 1.3s (too stressful).
 const TRAVEL_INTRO = 2.5;   // slow — teach the mechanic
 const TRAVEL_VERSE = 2.1;   // medium
 const TRAVEL_BUILD = 1.7;   // faster — building tension
-const TRAVEL_DROP  = 1.4;   // fastest — but still readable
+const TRAVEL_DROP = 1.4;   // fastest — but still readable
 
 // ─── V2 splash icons — ambient background ─────────────────────────────────────
 const D = "/splash_screen_icons/dice.png";
@@ -51,21 +51,21 @@ const J = "/splash_screen_icons/joystick.png";
 const M = "/splash_screen_icons/golden_music.png";
 
 const BG_ICONS = [
-  { src: M, top: "5%",  left: "-18px", size: 100, dur: 4.0, delay: 0,   rotate: -12 },
-  { src: D, top: "18%", right: "20px", size: 80,  dur: 5.2, delay: 0.5, rotate: 15  },
-  { src: M, top: "42%", left: "22px",  size: 70,  dur: 4.6, delay: 1.1, rotate: -8  },
-  { src: G, top: "60%", right: "-10px",size: 95,  dur: 5.8, delay: 0.3, rotate: 10  },
-  { src: J, top: "76%", left: "-14px", size: 88,  dur: 5.0, delay: 1.7, rotate: -18 },
-  { src: M, top: "88%", right: "30px", size: 72,  dur: 4.2, delay: 0.9, rotate: 20  },
+  { src: M, top: "5%", left: "-18px", size: 100, dur: 4.0, delay: 0, rotate: -12 },
+  { src: D, top: "18%", right: "20px", size: 80, dur: 5.2, delay: 0.5, rotate: 15 },
+  { src: M, top: "42%", left: "22px", size: 70, dur: 4.6, delay: 1.1, rotate: -8 },
+  { src: G, top: "60%", right: "-10px", size: 95, dur: 5.8, delay: 0.3, rotate: 10 },
+  { src: J, top: "76%", left: "-14px", size: 88, dur: 5.0, delay: 1.7, rotate: -18 },
+  { src: M, top: "88%", right: "30px", size: 72, dur: 4.2, delay: 0.9, rotate: 20 },
 ];
 
 // ─── Lane palette (V2 discipline: magenta world + 3 supporting game colors) ──
 type LaneTheme = { wall: string; face: string; glow: string; accent: string };
 const LANES: LaneTheme[] = [
   { wall: "#7c1d5a", face: "linear-gradient(160deg, #f5a3ef 0%, #e879f9 50%, #c026d3 100%)", glow: "rgba(232,121,249,0.8)", accent: "#e879f9" },
-  { wall: "#083a6b", face: "linear-gradient(160deg, #93c5fd 0%, #3b82f6 50%, #1d4ed8 100%)", glow: "rgba(59,130,246,0.8)",  accent: "#3b82f6" },
+  { wall: "#083a6b", face: "linear-gradient(160deg, #93c5fd 0%, #3b82f6 50%, #1d4ed8 100%)", glow: "rgba(59,130,246,0.8)", accent: "#3b82f6" },
   { wall: "#7c2d00", face: "linear-gradient(160deg, #fde68a 0%, #fbbf24 50%, #b45309 100%)", glow: "rgba(251,191,36,0.85)", accent: "#fbbf24" },
-  { wall: "#003a00", face: "linear-gradient(160deg, #86efac 0%, #22c55e 50%, #15803d 100%)", glow: "rgba(34,197,94,0.8)",   accent: "#22c55e" },
+  { wall: "#003a00", face: "linear-gradient(160deg, #86efac 0%, #22c55e 50%, #15803d 100%)", glow: "rgba(34,197,94,0.8)", accent: "#22c55e" },
 ];
 
 // ─── Note chart — each tile carries its own melody pitch ─────────────────────
@@ -77,7 +77,7 @@ type NoteDef = { id: number; lane: number; time: number; travel: number; freq: n
 
 // C minor scale pitches used across the melody
 const P_C5 = 523.25, P_Eb5 = 622.25, P_F5 = 698.46,
-      P_G5 = 783.99, P_Bb5 = 932.33, P_C6 = 1046.50;
+  P_G5 = 783.99, P_Bb5 = 932.33, P_C6 = 1046.50;
 
 function buildChart(): NoteDef[] {
   const notes: NoteDef[] = [];
@@ -95,27 +95,27 @@ function buildChart(): NoteDef[] {
 
   // ═══ VERSE (9.0s → 13.5s): main hook — G-Bb-C6-Bb descending-then-rising
   const verse: [number, number, number][] = [
-    [9.0,  2, P_G5],  [9.5,  3, P_Bb5], [10.0, 2, P_C6],  [10.5, 3, P_Bb5],
-    [11.0, 1, P_G5],  [11.5, 0, P_F5],  [12.0, 1, P_Eb5], [12.5, 2, P_F5],
-    [13.0, 3, P_G5],  [13.5, 2, P_Bb5],
+    [9.0, 2, P_G5], [9.5, 3, P_Bb5], [10.0, 2, P_C6], [10.5, 3, P_Bb5],
+    [11.0, 1, P_G5], [11.5, 0, P_F5], [12.0, 1, P_Eb5], [12.5, 2, P_F5],
+    [13.0, 3, P_G5], [13.5, 2, P_Bb5],
   ];
   verse.forEach(([t, lane, f]) => push(lane, t, TRAVEL_VERSE, f));
 
   // ═══ BUILD (15.0s → 19.25s): ascending arpeggios + eighth-note run into drop
   const build: [number, number, number][] = [
-    [15.0, 0, P_C5],  [15.5, 1, P_Eb5], [16.0, 2, P_G5], [16.5, 3, P_Bb5],
-    [17.0, 1, P_C5],  [17.5, 2, P_Eb5],
+    [15.0, 0, P_C5], [15.5, 1, P_Eb5], [16.0, 2, P_G5], [16.5, 3, P_Bb5],
+    [17.0, 1, P_C5], [17.5, 2, P_Eb5],
     // Eighth burst: ascending sweep into the drop
-    [18.5,  0, P_Eb5], [18.75, 1, P_G5], [19.0,  2, P_Bb5], [19.25, 3, P_C6],
+    [18.5, 0, P_Eb5], [18.75, 1, P_G5], [19.0, 2, P_Bb5], [19.25, 3, P_C6],
   ];
   build.forEach(([t, lane, f]) => push(lane, t, TRAVEL_BUILD, f));
 
   // ═══ DROP 1 (21.0s → 28.5s): main hook at peak energy
   const drop: [number, number, number][] = [
-    [21.0, 3, P_C6],  [21.5, 2, P_G5],  [22.0, 3, P_Bb5], [22.5, 1, P_G5],
+    [21.0, 3, P_C6], [21.5, 2, P_G5], [22.0, 3, P_Bb5], [22.5, 1, P_G5],
     [23.5, 1, P_Eb5], [23.75, 2, P_G5], [24.5, 0, P_F5],
-    [25.0, 3, P_C6],  [25.25, 2, P_G5], [25.5, 1, P_Eb5], [25.75, 0, P_C5],
-    [26.5, 0, P_C5],  [27.0, 1, P_Eb5], [27.5, 2, P_G5],  [28.0, 1, P_Eb5], [28.5, 0, P_C5],
+    [25.0, 3, P_C6], [25.25, 2, P_G5], [25.5, 1, P_Eb5], [25.75, 0, P_C5],
+    [26.5, 0, P_C5], [27.0, 1, P_Eb5], [27.5, 2, P_G5], [28.0, 1, P_Eb5], [28.5, 0, P_C5],
   ];
   drop.forEach(([t, lane, f]) => push(lane, t, TRAVEL_DROP, f));
 
@@ -123,28 +123,28 @@ function buildChart(): NoteDef[] {
 
   // ═══ VERSE 2 (30.0s → 34.5s): same hook, so it sticks in your head (the earworm)
   const verse2: [number, number, number][] = [
-    [30.0, 2, P_G5],  [30.5, 3, P_Bb5], [31.0, 2, P_C6],  [31.5, 3, P_Bb5],
-    [32.0, 1, P_G5],  [32.5, 0, P_F5],  [33.0, 1, P_Eb5], [33.5, 2, P_F5],
-    [34.0, 3, P_G5],  [34.5, 2, P_Bb5],
+    [30.0, 2, P_G5], [30.5, 3, P_Bb5], [31.0, 2, P_C6], [31.5, 3, P_Bb5],
+    [32.0, 1, P_G5], [32.5, 0, P_F5], [33.0, 1, P_Eb5], [33.5, 2, P_F5],
+    [34.0, 3, P_G5], [34.5, 2, P_Bb5],
   ];
   verse2.forEach(([t, lane, f]) => push(lane, t, TRAVEL_VERSE, f));
 
   // ═══ RE-BUILD (35.5s → 36.25s): short eighth-note ramp into the final drop
   const rebuild: [number, number, number][] = [
-    [35.5,  0, P_Eb5], [35.75, 1, P_G5], [36.0, 2, P_Bb5], [36.25, 3, P_C6],
+    [35.5, 0, P_Eb5], [35.75, 1, P_G5], [36.0, 2, P_Bb5], [36.25, 3, P_C6],
   ];
   rebuild.forEach(([t, lane, f]) => push(lane, t, TRAVEL_BUILD, f));
 
   // ═══ FINAL DROP (37.5s → 43.0s): bigger, more aggressive ending
   const drop2: [number, number, number][] = [
     // Phrase A: punchy downbeats
-    [37.5, 3, P_C6],  [38.0, 2, P_G5],  [38.5, 3, P_Bb5], [39.0, 1, P_G5],
+    [37.5, 3, P_C6], [38.0, 2, P_G5], [38.5, 3, P_Bb5], [39.0, 1, P_G5],
     // Phrase B: eighth pair accent
     [39.5, 1, P_Eb5], [39.75, 2, P_G5], [40.0, 3, P_Bb5], [40.25, 2, P_G5],
     // Phrase C: full descending cascade — the dramatic sweep
-    [41.0, 3, P_C6],  [41.25, 2, P_G5], [41.5, 1, P_Eb5], [41.75, 0, P_C5],
+    [41.0, 3, P_C6], [41.25, 2, P_G5], [41.5, 1, P_Eb5], [41.75, 0, P_C5],
     // Phrase D: resolve on the tonic (C) with one emphatic final note
-    [42.5, 0, P_C5],  [43.0, 0, P_C5],
+    [42.5, 0, P_C5], [43.0, 0, P_C5],
   ];
   drop2.forEach(([t, lane, f]) => push(lane, t, TRAVEL_DROP, f));
 
@@ -170,9 +170,9 @@ type Phase = "idle" | "countdown" | "playing" | "encore" | "finished";
 // Encore pool — the melody keeps looping during encore, pulling from these pitches.
 // Paired with lane position for the familiar low-left → high-right feel.
 const ENCORE_POOL: [number, number][] = [
-  [0, P_C5],  [1, P_Eb5], [2, P_G5],  [3, P_Bb5], [3, P_C6],
-  [2, P_G5],  [1, P_F5],  [0, P_C5],  [1, P_Eb5], [2, P_G5],
-  [3, P_Bb5], [2, P_G5],  [1, P_Eb5], [0, P_C5],
+  [0, P_C5], [1, P_Eb5], [2, P_G5], [3, P_Bb5], [3, P_C6],
+  [2, P_G5], [1, P_F5], [0, P_C5], [1, P_Eb5], [2, P_G5],
+  [3, P_Bb5], [2, P_G5], [1, P_Eb5], [0, P_C5],
 ];
 
 export default function RhythmGamePage() {
@@ -194,7 +194,7 @@ export default function RhythmGamePage() {
     fetch(`${BACKEND_URL}/api/user/${address}`)
       .then(r => r.json())
       .then(d => setPlayerLevel(d.level || 1))
-      .catch(() => {});
+      .catch(() => { });
   }, [address]);
   const pet = petForLevel(playerLevel);
 
@@ -301,9 +301,9 @@ export default function RhythmGamePage() {
     const eighth = BEAT / 2;
 
     // C minor note frequencies — used by every bass call
-    const C2  = 65.41;
+    const C2 = 65.41;
     const Eb2 = 77.78;
-    const G2  = 98.00;
+    const G2 = 98.00;
     const Ab2 = 103.83;
     const Bb2 = 116.54;
 
@@ -354,17 +354,17 @@ export default function RhythmGamePage() {
     //    the "tiles come fast but don't groove with the music" feel during cascades.
     const fastFills: [number, number][] = [
       // Build burst (tiles 18.5→19.25): on-beats 18.5/19.0 already covered by main loop
-      [18.75, G2],  [19.25, G2],
+      [18.75, G2], [19.25, G2],
       // Drop 1 eighth pair (tiles 23.5/23.75)
       [23.75, G2],
       // Drop 1 cascade (tiles 25.0→25.75)
-      [25.25, G2],  [25.75, C2],
+      [25.25, G2], [25.75, C2],
       // Rebuild (tiles 35.5→36.25)
-      [35.75, G2],  [36.25, G2],
+      [35.75, G2], [36.25, G2],
       // Drop 2 eighth pair (tiles 39.5→40.25)
-      [39.75, G2],  [40.25, G2],
+      [39.75, G2], [40.25, G2],
       // Drop 2 cascade (tiles 41.0→41.75)
-      [41.25, G2],  [41.75, C2],
+      [41.25, G2], [41.75, C2],
     ];
     for (const [t, f] of fastFills) {
       scheduleBass(ctx, audioStartTime + t, f, 0.44);
@@ -471,19 +471,19 @@ export default function RhythmGamePage() {
   const [flashLane, setFlashLane] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<{ lane: number; type: "perfect" | "good" | "miss"; ts: number } | null>(null);
 
-  const chartRef   = useRef<NoteDef[]>([]);
-  const startRef   = useRef<number>(0);
+  const chartRef = useRef<NoteDef[]>([]);
+  const startRef = useRef<number>(0);
   const spawnedRef = useRef<Set<number>>(new Set());
-  const missedRef  = useRef<Set<number>>(new Set());
-  const rafRef     = useRef<number>(0);
+  const missedRef = useRef<Set<number>>(new Set());
+  const rafRef = useRef<number>(0);
   const burstIdRef = useRef(0);
 
   // Encore refs — drive the unbounded survival mode after the main track
-  const encoreMissesRef    = useRef(0);                  // 3 = game over
+  const encoreMissesRef = useRef(0);                  // 3 = game over
   const encoreNextSpawnRef = useRef(0);                  // wall-clock time for next tile
-  const encorePoolIdxRef   = useRef(0);                  // rotates through ENCORE_POOL
-  const encoreIdRef        = useRef(100000);             // high id base to avoid clashes
-  const encoreLoopAtRef    = useRef(0);                  // next audio loop reschedule time
+  const encorePoolIdxRef = useRef(0);                  // rotates through ENCORE_POOL
+  const encoreIdRef = useRef(100000);             // high id base to avoid clashes
+  const encoreLoopAtRef = useRef(0);                  // next audio loop reschedule time
   const [encoreLives, setEncoreLives] = useState(3);     // UI display
 
   // ─── Ambient starfield — same cosmic arcade vibe as Simon ────────────────
@@ -625,13 +625,13 @@ export default function RhythmGamePage() {
     // song without missing any of its notes is what unlocks it. If the player
     // never reached main-end (died before, e.g. pressed X), both stay false.
     const reachedMainEnd = mainTrackStatsRef.current.misses > 0 || mainTrackStatsRef.current.goods > 0 || phase === "finished";
-    const mainChartLen   = chartRef.current.filter(n => n.id < 100000).length;
-    const mainHits       = hits.perfect + hits.good; // cumulative, including encore
+    const mainChartLen = chartRef.current.filter(n => n.id < 100000).length;
+    const mainHits = hits.perfect + hits.good; // cumulative, including encore
     // Conservative FC check: main-track snapshot had zero misses AND we
     // actually made it through the whole main chart (total hits - encore hits
     // ≥ main chart length).
     const mainPlusEncoreHits = mainHits; // setHits was monotonic with taps
-    const fullCombo  = reachedMainEnd
+    const fullCombo = reachedMainEnd
       && mainTrackStatsRef.current.misses === 0
       && mainPlusEncoreHits >= mainChartLen;
     const allPerfect = fullCombo && mainTrackStatsRef.current.goods === 0;
@@ -696,11 +696,11 @@ export default function RhythmGamePage() {
             message?: string; shortMessage?: string; details?: string;
             cause?: { name?: string; code?: string; message?: string };
           };
-          const name      = e?.name ?? "";
-          const code      = e?.code ?? 0;
+          const name = e?.name ?? "";
+          const code = e?.code ?? 0;
           const causeName = e?.cause?.name ?? "";
           const causeCode = e?.cause?.code ?? "";
-          const msg       = (e?.message ?? e?.shortMessage ?? e?.details ?? e?.cause?.message ?? "").toLowerCase();
+          const msg = (e?.message ?? e?.shortMessage ?? e?.details ?? e?.cause?.message ?? "").toLowerCase();
           const isRejected =
             name === "UserRejectedRequestError" || code === 4001 || code === -32003 ||
             causeName === "UserRejectedRequestError" ||
@@ -713,9 +713,9 @@ export default function RhythmGamePage() {
             code === -32000 || code === -32010 || causeCode === "insufficient_funds" ||
             msg.includes("insufficient funds") || msg.includes("insufficient balance") ||
             msg.includes("gas limit") || msg.includes("exceeds gas");
-          if (isRejected)        setTxError("Transaction rejected — score not saved");
+          if (isRejected) setTxError("Transaction rejected — score not saved");
           else if (isGasOrFunds) setTxError("Insufficient CELO for gas — top up and try again");
-          else                   setTxError("Transaction failed — score not saved");
+          else setTxError("Transaction failed — score not saved");
           return;  // BAIL: don't call submitScore, nothing is saved anywhere
         } finally {
           setSigningOnChain(false);
@@ -804,7 +804,7 @@ export default function RhythmGamePage() {
       const next = c + 1;
       if (next > maxCombo) setMaxCombo(next);
       // Combo milestone toast
-      if (next === 5)  setComboToast("WARMED UP!");
+      if (next === 5) setComboToast("WARMED UP!");
       if (next === 10) setComboToast("ON FIRE 🔥");
       if (next === 15) setComboToast("UNSTOPPABLE!");
       if (next === 25) setComboToast("GOD MODE!");
@@ -841,14 +841,59 @@ export default function RhythmGamePage() {
     return () => window.removeEventListener("keydown", handler);
   }, [phase, hitLane]);
 
+  // ── Tab-visibility / mobile-backgrounding guard ──
+  //
+  // The rhythm RAF loop reads `now = (performance.now() - startRef.current) / 1000`
+  // every frame and compares it against each note's scheduled time. When
+  // mobile browsers background the page (user switched apps, locked screen,
+  // pulled down notifications), the page's RAF gets paused but the wall
+  // clock keeps moving. On return, `now` jumps forward by tens of seconds
+  // and EVERY pending note instantly satisfies `now > n.time + GOOD_WINDOW`.
+  // Result: tiles "freeze" while the miss counter stampedes and combo
+  // dies — exactly the bug users reported on mobile after coming back to
+  // a paused game.
+  //
+  // Fix: when the tab hides during gameplay, kick the game to "finished"
+  // so the player sees a clean game-over screen instead of a phantom
+  // miss avalanche. We snapshot mid-game stats so on-chain submission
+  // still has valid numbers (a graceful early-quit, not a crash).
+  useEffect(() => {
+    if (phase !== "playing" && phase !== "encore") return;
+    const onHide = () => {
+      if (typeof document === "undefined") return;
+      if (document.visibilityState !== "hidden") return;
+      // Snapshot current hits for the finished screen, then bail to
+      // finished. Same path the QUIT button takes mid-run.
+      setHits(h => {
+        mainTrackStatsRef.current = { misses: h.miss, goods: h.good };
+        return h;
+      });
+      setPhase("finished");
+    };
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
+  }, [phase]);
+
   // Main RAF loop — handles both the scripted song AND the endless encore.
   // Encore is triggered when the 30s chart finishes while the player's combo is
   // alive. In encore, new tiles are spawned dynamically at accelerating speed
   // and 3 misses end the game. Score keeps growing — no cap, Tetris-style.
   useEffect(() => {
     if (phase !== "playing" && phase !== "encore") return;
+    // Track wall-clock between frames. If two consecutive ticks are more
+    // than 0.5s apart, the tab was throttled or backgrounded — slide
+    // startRef forward by the gap so `now` doesn't jump and force-miss
+    // every queued note. Belt-and-suspenders alongside the visibility
+    // handler above (covers Android Chrome's aggressive RAF throttling
+    // even when the tab technically stays visible).
+    let lastWall = performance.now();
     const tick = () => {
-      const now = (performance.now() - startRef.current) / 1000;
+      const wall = performance.now();
+      const dt = wall - lastWall;
+      if (dt > 500) startRef.current += dt;
+      lastWall = wall;
+
+      const now = (wall - startRef.current) / 1000;
       if (phase === "playing") setTimeLeft(Math.max(0, TRACK_DURATION - now));
 
       // ── Encore: spawn new tiles dynamically, accelerating over time ──
@@ -953,8 +998,8 @@ export default function RhythmGamePage() {
   // ─── Render helpers ──────────────────────────────────────────────────────────
 
   const totalNotes = chartRef.current.length || buildChart().length;
-  const maxScore   = 10 * 5 * totalNotes; // perfect + max multiplier per note
-  const grade      = gradeFor(score, maxScore);
+  const maxScore = 10 * 5 * totalNotes; // perfect + max multiplier per note
+  const grade = gradeFor(score, maxScore);
 
   // ─── Layout ──────────────────────────────────────────────────────────────────
 
@@ -967,6 +1012,13 @@ export default function RhythmGamePage() {
       overflow: "hidden",
       fontFamily: "inherit",
       touchAction: "manipulation",
+      // Block iOS long-press callout (Save As / Show / Copy menu that
+      // appears when a finger rests on a tappable region). Players were
+      // accidentally triggering it mid-run and the menu blocked the lane,
+      // wrecking the round.
+      userSelect: "none",
+      WebkitUserSelect: "none",
+      WebkitTouchCallout: "none",
     }}>
       {/* Starfield — 44 twinkling points, ambient depth behind the game */}
       {stars.map((s, i) => (
@@ -1100,7 +1152,7 @@ function IdleView({ onStart, onExit }: { onStart: () => void; onExit: () => void
           color: "white", marginTop: "6px",
           textShadow: "0 0 24px rgba(232,121,249,0.9), 0 4px 10px rgba(0,0,0,0.7)",
           lineHeight: 1,
-        }}>RHYTHM<br/>RUSH</div>
+        }}>RHYTHM<br />RUSH</div>
       </div>
 
       <div style={{
@@ -1109,7 +1161,7 @@ function IdleView({ onStart, onExit }: { onStart: () => void; onExit: () => void
       }}>
         Tap the notes as they hit the bottom.
         Build combos for bigger multipliers.
-        <br/>
+        <br />
         <span style={{ color: "rgba(251,191,36,0.85)" }}>
           Desktop: A S D F or ← ↓ ↑ →
         </span>
@@ -1209,9 +1261,9 @@ function PetCenter({
 
   // Combo-driven aura + pulse — more dramatic progression than before so the
   // pet visibly grows and glows as you chain streaks. Max at 1.3x scale.
-  const showAura   = combo >= 10;
-  const bigAura    = combo >= 25;
-  const celebrate  = combo > 0 && combo % 10 === 0 && combo >= 10;
+  const showAura = combo >= 10;
+  const bigAura = combo >= 25;
+  const celebrate = combo > 0 && combo % 10 === 0 && combo >= 10;
   const pulseScale = 1 + Math.min(combo, 40) * 0.0075; // 1.0 → 1.30 across 0→40 combo
 
   const animClass = reaction === "jump" ? "pet-poke" : "slime-idle";
@@ -1842,9 +1894,9 @@ function FinishedView({
             display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px",
           }}>
             <MiniStat label="PERFECT" value={hits.perfect} color="#fbbf24" />
-            <MiniStat label="GOOD"    value={hits.good}    color="#e879f9" />
-            <MiniStat label="MISS"    value={hits.miss}    color="#ef4444" />
-            <MiniStat label="MAX×"    value={maxCombo}     color="#22c55e" />
+            <MiniStat label="GOOD" value={hits.good} color="#e879f9" />
+            <MiniStat label="MISS" value={hits.miss} color="#ef4444" />
+            <MiniStat label="MAX×" value={maxCombo} color="#22c55e" />
           </div>
 
           {/* Accuracy bar */}
@@ -1990,8 +2042,8 @@ function RewardPanel({
   if (!result) return null;
 
   const { rank, xpEarned, level, leveledUp, isNewPb, prevBest, newAchievements = [] } = result;
-  const showPbDelta  = isNewPb && typeof prevBest === "number" && prevBest > 0;
-  const showFirstPb  = isNewPb && !showPbDelta;
+  const showPbDelta = isNewPb && typeof prevBest === "number" && prevBest > 0;
+  const showFirstPb = isNewPb && !showPbDelta;
 
   return (
     <RewardContent

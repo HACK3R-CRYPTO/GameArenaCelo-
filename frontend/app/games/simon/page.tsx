@@ -10,6 +10,7 @@ import { useAudioSettings, effectiveGains } from "@/hooks/useAudioSettings";
 import { playRankReveal, playSaveSuccess, playLevelUp, playAchievementChime } from "@/hooks/useAppAudio";
 import { signScore, signScoreMiniPay, submitScore, submitScoreMiniPay } from "@/app/actions/game";
 import { CONTRACT_ADDRESSES, GAME_PASS_ABI } from "@/lib/contracts";
+import { hydrateAchievement } from "@/lib/achievements";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 
@@ -1716,15 +1717,21 @@ function RewardContent({
             ✦ NEW ACHIEVEMENT{newAchievements.length > 1 ? "S" : ""} ✦
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-            {newAchievements.map(a => (
-              <div key={a.id} style={{
-                display: "flex", alignItems: "center", gap: "8px",
-                color: "rgba(255,255,255,0.9)", fontSize: "12px", fontWeight: 800,
-              }}>
-                <span style={{ fontSize: "16px" }}>{a.icon || "🏆"}</span>
-                <span>{a.name}</span>
-              </div>
-            ))}
+            {newAchievements.map((raw, i) => {
+              // Defensive hydrate — see rhythm/page.tsx comment. Handles
+              // both the legacy string-only response and the new hydrated
+              // object shape without relying on the backend being fresh.
+              const a = hydrateAchievement(raw);
+              return (
+                <div key={a.id || i} style={{
+                  display: "flex", alignItems: "center", gap: "8px",
+                  color: "rgba(255,255,255,0.9)", fontSize: "12px", fontWeight: 800,
+                }}>
+                  <span style={{ fontSize: "16px" }}>{a.icon}</span>
+                  <span>{a.name}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

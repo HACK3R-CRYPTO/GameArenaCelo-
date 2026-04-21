@@ -9,6 +9,7 @@ import { useAudioSettings, effectiveGains } from "@/hooks/useAudioSettings";
 import { playRankReveal, playSaveSuccess, playLevelUp, playAchievementChime } from "@/hooks/useAppAudio";
 import { signScore, signScoreMiniPay, submitScore, submitScoreMiniPay } from "@/app/actions/game";
 import { CONTRACT_ADDRESSES, GAME_PASS_ABI } from "@/lib/contracts";
+import { hydrateAchievement } from "@/lib/achievements";
 
 // Only used for browser-safe READ endpoints (user level lookup). Write paths
 // go through server actions so the games-backend URL is never sent to the client.
@@ -2156,15 +2157,22 @@ function RewardContent({
             ✦ NEW ACHIEVEMENT{newAchievements.length > 1 ? "S" : ""} ✦
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-            {newAchievements.map(a => (
-              <div key={a.id} style={{
-                display: "flex", alignItems: "center", gap: "8px",
-                color: "rgba(255,255,255,0.9)", fontSize: "12px", fontWeight: 800,
-              }}>
-                <span style={{ fontSize: "16px" }}>{a.icon || "🏆"}</span>
-                <span>{a.name}</span>
-              </div>
-            ))}
+            {newAchievements.map((raw, i) => {
+              // Defensive hydrate — the live backend sometimes returns
+              // just the id string (legacy shape), which used to render
+              // as a bare trophy with no name. hydrateAchievement maps
+              // any id through the local ACHIEVEMENT_META catalog.
+              const a = hydrateAchievement(raw);
+              return (
+                <div key={a.id || i} style={{
+                  display: "flex", alignItems: "center", gap: "8px",
+                  color: "rgba(255,255,255,0.9)", fontSize: "12px", fontWeight: 800,
+                }}>
+                  <span style={{ fontSize: "16px" }}>{a.icon}</span>
+                  <span>{a.name}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

@@ -1326,8 +1326,14 @@ function FinishedView({
     <div style={{
       position: "absolute", inset: 0, zIndex: 15,
       background: "rgba(4,0,20,0.82)", backdropFilter: "blur(10px)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      padding: "20px",
+      display: "flex",
+      // Same fix as Rhythm's FinishedView: scroll the overlay so all
+      // callouts + Play Again / Exit stay reachable on short viewports.
+      alignItems: "flex-start", justifyContent: "center",
+      overflowY: "auto",
+      padding: "clamp(12px, 4vw, 20px)",
+      paddingTop: "max(clamp(12px, 4vw, 20px), env(safe-area-inset-top, 0px))",
+      paddingBottom: "max(clamp(24px, 6vw, 40px), env(safe-area-inset-bottom, 0px))",
       animation: "fadeIn 0.3s ease both",
     }}>
       <div style={{
@@ -1335,12 +1341,14 @@ function FinishedView({
         borderRadius: "26px", background: "#1a0550", paddingBottom: "7px",
         boxShadow: "0 0 0 3px #5b21b6, 0 0 50px rgba(109,40,217,0.6), 0 30px 60px rgba(0,0,0,0.9)",
         animation: "scaleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both",
+        marginTop: "auto", marginBottom: "auto",
       }}>
         <div style={{
           borderRadius: "24px 24px 20px 20px",
           background: "linear-gradient(180deg, #2a0c6e 0%, #13063a 50%, #07021a 100%)",
           border: "2px solid rgba(255,255,255,0.12)",
-          padding: "28px 24px", textAlign: "center",
+          padding: "clamp(18px, 5vw, 28px) clamp(16px, 5vw, 24px)",
+          textAlign: "center",
           overflow: "hidden", position: "relative",
         }}>
           <div style={{

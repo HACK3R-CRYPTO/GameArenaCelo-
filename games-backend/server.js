@@ -468,7 +468,16 @@ async function checkAndUnlockAchievements(wallet, ctx) {
       trigger_game: ctx.game || null,
     });
     if (!error) {
-      newlyUnlocked.push(ach.id);
+      // Return the hydrated shape the frontend expects
+      // ({ id, name, icon, desc }) — previously we pushed just the ID
+      // string, so the finished-screen achievement list rendered as a
+      // column of empty 🏆 trophies with no names.
+      newlyUnlocked.push({
+        id: ach.id,
+        name: ach.name,
+        icon: ach.icon,
+        desc: ach.desc,
+      });
       console.log(`🏅 ${wallet.slice(0, 8)}... unlocked: ${ach.name}`);
     }
   }

@@ -126,12 +126,19 @@ const NoteCanvas = forwardRef<NoteCanvasHandle, Props>(function NoteCanvas({ lan
 
         // Motion trail — a vertical gradient above the tile that fades
         // from transparent to the glow color. Sells the fall.
+        // Use globalAlpha instead of string-concat-hex because the
+        // lane theme `glow` values can be rgba() strings, where
+        // `"rgba(…)" + "00"` produces garbage like "rgba(…)00" that
+        // blows up addColorStop.
         const trailH = 26;
         const trail = ctx.createLinearGradient(0, y - trailH, 0, y);
-        trail.addColorStop(0, theme.glow + "00");
-        trail.addColorStop(1, theme.glow + "80");
+        trail.addColorStop(0, "transparent");
+        trail.addColorStop(1, theme.glow);
+        ctx.save();
+        ctx.globalAlpha = 0.5 * alpha;
         ctx.fillStyle = trail;
         ctx.fillRect(x + tileW * 0.2, y - trailH, tileW * 0.6, trailH);
+        ctx.restore();
 
         // Glow halo — one outer shadow layer. Multi-layer shadows like
         // the DOM version's 3-stop box-shadow are too expensive per

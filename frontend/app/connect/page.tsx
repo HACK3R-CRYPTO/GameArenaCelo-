@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useAccount } from "wagmi";
 import { useIsMiniPay } from "@/hooks/useMiniPay";
@@ -100,6 +100,27 @@ function ConnectInner() {
   const isConnected = ready && (authenticated || (isMiniPay && !!address));
   const shortAddr = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : null;
   const source = isMiniPay ? "MiniPay" : "Privy";
+
+  // Copy-to-clipboard for the full address. New players signing in with
+  // Google have an embedded wallet but no UI to grab the address, so they
+  // get stuck when someone asks them to send CELO for gas. This fixes that.
+  const [copied, setCopied] = useState(false);
+  const copyAddress = async () => {
+    if (!address) return;
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      // Fallback for older browsers / insecure origins
+      const ta = document.createElement("textarea");
+      ta.value = address;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); setCopied(true); setTimeout(() => setCopied(false), 1600); } catch {}
+      document.body.removeChild(ta);
+    }
+  };
 
   return (
     <div style={{
@@ -215,39 +236,121 @@ function ConnectInner() {
               {isConnected ? (
                 // Already connected — show status + explicit Continue
                 <>
-                  {/* Connected status card */}
+                  {/* Connected status card — status row + copyable address */}
                   <div style={{
                     borderRadius: "14px",
                     background: "linear-gradient(180deg, rgba(12,4,40,0.95) 0%, rgba(6,1,22,0.98) 100%)",
                     border: "1px solid rgba(34,197,94,0.45)",
                     boxShadow: "0 0 18px rgba(34,197,94,0.15), inset 0 3px 10px rgba(0,0,0,0.75)",
                     padding: "14px 16px",
-                    display: "flex", alignItems: "center", gap: "12px",
+                    display: "flex", flexDirection: "column", gap: "12px",
                   }}>
-                    <div style={{
-                      width: "10px", height: "10px", borderRadius: "50%",
-                      background: "#22c55e", boxShadow: "0 0 10px rgba(34,197,94,0.8)",
-                      flexShrink: 0,
-                    }} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ color: "#86efac", fontSize: "12px", fontWeight: 900, letterSpacing: "0.06em" }}>WALLET CONNECTED</div>
-                      <div style={{ color: "rgba(180,150,255,0.75)", fontSize: "11.5px", marginTop: "2px" }}>
-                        {source} · {shortAddr ?? "embedded wallet"}
-                      </div>
-                    </div>
-                    {/* Disconnect — lets user switch account */}
-                    <button
-                      onClick={() => logout()}
-                      style={{
-                        background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.35)",
-                        borderRadius: "8px", padding: "5px 10px",
-                        color: "rgba(252,165,165,0.85)", fontSize: "10px", fontWeight: 700,
-                        letterSpacing: "0.08em", cursor: "pointer", fontFamily: "inherit",
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      <div style={{
+                        width: "10px", height: "10px", borderRadius: "50%",
+                        background: "#22c55e", boxShadow: "0 0 10px rgba(34,197,94,0.8)",
                         flexShrink: 0,
-                      }}
-                    >
-                      SWITCH
-                    </button>
+                      }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ color: "#86efac", fontSize: "12px", fontWeight: 900, letterSpacing: "0.06em" }}>WALLET CONNECTED</div>
+                        <div style={{ color: "rgba(180,150,255,0.75)", fontSize: "11.5px", marginTop: "2px" }}>
+                          {source}{shortAddr ? ` · ${shortAddr}` : " · embedded wallet"}
+                        </div>
+                      </div>
+                      {/* Disconnect — lets user switch account */}
+                      <button
+                        onClick={() => logout()}
+                        style={{
+                          background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.35)",
+                          borderRadius: "8px", padding: "5px 10px",
+                          color: "rgba(252,165,165,0.85)", fontSize: "10px", fontWeight: 700,
+                          letterSpacing: "0.08em", cursor: "pointer", fontFamily: "inherit",
+                          flexShrink: 0,
+                        }}
+                      >
+                        SWITCH
+                      </button>
+                    </div>
+
+                    {/* Copyable address row — one-tap copy of the full 0x
+                        address. Embedded-wallet players (Google/email login)
+                        have no other way to grab this for CELO top-ups. */}
+                    {address && (
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={copyAddress}
+                        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); copyAddress(); } }}
+                        style={{
+                          cursor: "pointer", userSelect: "none",
+                          display: "flex", alignItems: "center", gap: "10px",
+                          padding: "8px 10px",
+                          borderRadius: "10px",
+                          background: "rgba(255,255,255,0.04)",
+                          border: `1px solid ${copied ? "rgba(34,197,94,0.55)" : "rgba(140,80,255,0.3)"}`,
+                          transition: "border-color 0.18s, background 0.18s",
+                        }}
+                      >
+                        <div style={{
+                          fontFamily: "monospace",
+                          fontSize: "11px",
+                          color: "rgba(230,220,255,0.92)",
+                          flex: 1, minWidth: 0,
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        }}>
+                          {address}
+                        </div>
+                        {copied ? (
+                          <div style={{
+                            display: "flex", alignItems: "center", gap: "5px",
+                            color: "#86efac", fontSize: "10.5px", fontWeight: 900,
+                            letterSpacing: "0.08em", flexShrink: 0,
+                          }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            COPIED
+                          </div>
+                        ) : (
+                          <div style={{
+                            display: "flex", alignItems: "center", gap: "5px",
+                            color: "rgba(200,170,255,0.85)", fontSize: "10.5px", fontWeight: 900,
+                            letterSpacing: "0.08em", flexShrink: 0,
+                          }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                            COPY
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Gas hint — Celo mainnet needs real CELO for gas.
+                        Point new players to the Telegram group so someone
+                        can send them a cent or two to their address. */}
+                    <div style={{
+                      fontSize: "10.5px",
+                      color: "rgba(180,150,255,0.7)",
+                      lineHeight: 1.45,
+                    }}>
+                      Need CELO for gas? Copy your address and ask in our{" "}
+                      <a
+                        href="https://t.me/+oY4inbBoglViNmE0"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          color: "#67e8f9",
+                          fontWeight: 800,
+                          textDecoration: "none",
+                          borderBottom: "1px dashed rgba(103,232,249,0.5)",
+                        }}
+                      >
+                        Telegram group
+                      </a>
+                      . Someone will send you a cent.
+                    </div>
                   </div>
 
                   {/* Continue juicy button — routes through /mint first.

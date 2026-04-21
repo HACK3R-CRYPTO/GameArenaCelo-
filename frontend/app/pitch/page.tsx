@@ -285,13 +285,13 @@ function TractionSlide() {
   const tiles = [
     { label: "PLAYERS", value: stats ? fmt(stats.totalUsers) : "…", c: GOLD },
     { label: "GAMES PLAYED", value: stats ? fmt(stats.totalGames) : "…", c: MAGENTA },
-    { label: "G$ WAGERED", value: stats ? `${Number(stats.totalWagered).toFixed(0)}` : "…", c: GREEN },
-    { label: "PRIZE POT", value: stats ? `${Number(stats.estimatedPrizePot).toFixed(2)} G$` : "…", c: CYAN },
+    { label: "TOP RHYTHM", value: stats ? fmt(stats.topRhythm) : "…", c: GREEN },
+    { label: "TOP SIMON", value: stats ? fmt(stats.topSimon) : "…", c: CYAN },
   ];
 
   return (
     <SlideFrame eyebrow="TRACTION">
-      <H1>People are playing. Every score hits the chain.</H1>
+      <H1>People are playing. Scores hit the chain.</H1>
       <div style={{
         marginTop: "clamp(20px, 3vh, 40px)",
         display: "grid",
@@ -325,7 +325,7 @@ function TractionSlide() {
         ))}
       </div>
       <Lead>
-        Two games live on Celo mainnet. One signed score rail. Every wager funds UBI. These numbers are live, pulled as you read this.
+        Two games live on Celo mainnet. Free play by default. Weekly seasons and the 3 Week Cup run on one signed score rail. These numbers are live, pulled as you read this.
       </Lead>
       {stats && (
         <div style={{
@@ -334,9 +334,9 @@ function TractionSlide() {
           fontSize: "clamp(12px, 1.3vw, 15px)",
           fontWeight: 600,
         }}>
-          Top Rhythm score: <strong style={{ color: GOLD }}>{stats.topRhythm}</strong>
+          3 Week Cup prize: <strong style={{ color: GOLD }}>$30 USDC</strong> split across the top three
           {" · "}
-          Top Simon score: <strong style={{ color: CYAN }}>{stats.topSimon}</strong>
+          GoodDollar UBI pool: <strong style={{ color: GREEN }}>500k verified humans</strong>
         </div>
       )}
     </SlideFrame>
@@ -373,7 +373,7 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
           letterSpacing: "0.14em",
           textShadow: "0 0 16px rgba(251,191,36,0.6)",
         }}>
-          SKILL GAMES · REAL REWARDS · FUNDED UBI
+          FREE SKILL GAMES · REAL PRIZES · FUNDED UBI
         </div>
         <div style={{
           marginTop: "clamp(24px, 5vh, 44px)",
@@ -415,9 +415,9 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
     key: "solution",
     render: () => (
       <SlideFrame eyebrow="THE SOLUTION">
-        <H1>Free tokens. Real skill. Real UBI.</H1>
+        <H1>Free to play. Real prizes. Real UBI.</H1>
         <Lead>
-          Scan your face once. Claim <strong style={{ color: GREEN }}>G$</strong> every 24 hours. Wager it on a 30 second skill round. Win <strong style={{ color: GOLD }}>1.3x</strong>. Every wager funds GoodDollar UBI for 500,000 verified humans.
+          You open the app and play. No wallet needed to start. Earn XP, level up, evolve your pet. Top the weekly leaderboard for badges. Place in a hosted <strong style={{ color: GOLD }}>Cup</strong> and we send you real USDC. Free G$ claims and optional wagers tie you into GoodDollar UBI for 500,000 verified humans.
         </Lead>
         <div style={{
           marginTop: "clamp(16px, 3vh, 32px)",
@@ -427,9 +427,9 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
           maxWidth: "1100px",
         }}>
           {[
-            { icon: "💰", title: "Claim free G$", body: "No purchase. No deposit.", c: GREEN },
-            { icon: "🎮", title: "Wager skill", body: "Win 1.3x on Rhythm or Simon.", c: GOLD },
-            { icon: "🌍", title: "Fund UBI", body: "Every wager goes to GoodDollar.", c: CYAN },
+            { icon: "🎮", title: "Play free", body: "No deposit. No paywall. Open and play.", c: GREEN },
+            { icon: "🏆", title: "Win USDC", body: "Win a hosted Cup. We send the prize to your wallet.", c: GOLD },
+            { icon: "🌍", title: "Back UBI", body: "Every G$ claim ties you to GoodDollar.", c: CYAN },
           ].map((card, i) => (
             <div key={i} style={{
               borderRadius: "16px",
@@ -514,13 +514,13 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
     key: "journey",
     render: () => (
       <SlideFrame eyebrow="USER JOURNEY">
-        <H1>Set up once. Play forever.</H1>
+        <H1>Play first. Everything else is optional.</H1>
         <div style={{ height: "clamp(12px, 2vh, 24px)" }} />
-        <Step n={1} title="Connect" body="Google, email, or wallet. 10 seconds. No seed phrase." />
-        <Step n={2} title="Mint Game Pass" body="Soulbound NFT with your username. Free. Pay a few cents of CELO for gas." />
-        <Step n={3} title="Verify" body="One GoodDollar face scan. Unlocks claims, wagering, and leaderboards." />
-        <Step n={4} title="Claim daily" body="Free G$ every 24 hours. Tap to claim." />
-        <Step n={5} title="Play and progress" body="Earn XP. Level up. Evolve your pet. Climb tiers. Unlock badges." />
+        <Step n={1} title="Play" body="Open Rhythm or Simon. No wallet required. Pure skill." />
+        <Step n={2} title="Connect" body="Google, email, or wallet via Privy. 10 seconds. No seed phrase." />
+        <Step n={3} title="Mint Game Pass" body="Soulbound NFT with your username. A few cents of CELO for gas. Unlocks leaderboards and hosted Cups." />
+        <Step n={4} title="Verify (optional)" body="One GoodDollar face scan. Only needed if you want to claim free G$ and wager later." />
+        <Step n={5} title="Climb" body="Earn XP. Level up. Evolve your pet. Win weekly badges." />
       </SlideFrame>
     ),
   },
@@ -530,19 +530,19 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
     key: "economy",
     render: () => (
       <SlideFrame eyebrow="THE ECONOMY">
-        <H1>Free. Real. Yours.</H1>
+        <H1>Free to play. Prizes are real.</H1>
         <BulletList>
           <Bullet accent={GREEN}>
-            <strong>G$ is real.</strong> Live ERC 20 on Celo. Market value. Works across GoodDollar.
+            <strong>Play costs nothing.</strong> No token to buy. No deposit. Open the app and play.
           </Bullet>
           <Bullet accent={GOLD}>
-            <strong>You claim it.</strong> Same daily allocation for every verified human. No presale. No vesting.
+            <strong>Competitions pay USDC.</strong> When we host a cup, the top three get real USDC straight to their wallet. The current 3 Week Cup sits at $15, $10, $5.
           </Bullet>
           <Bullet accent={MAGENTA}>
-            <strong>Win 1.3x.</strong> Losses feed the weekly prize pool. That pool feeds UBI.
+            <strong>Weekly seasons mint badges.</strong> Bronze, Silver, and Gold per game, per week. On chain and auditable.
           </Bullet>
           <Bullet accent={CYAN}>
-            <strong>No gambling risk.</strong> You stake earned in game currency. Skill reward, not wagering.
+            <strong>G$ and wager are optional.</strong> You claim G$ free every 24 hours from GoodDollar. Wager contracts are live on chain. We ship the in game toggle next.
           </Bullet>
         </BulletList>
       </SlideFrame>
@@ -675,19 +675,22 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
               c: GREEN,
               items: [
                 "Rhythm Rush and Simon Memory live",
-                "G$ wagering with on chain settlement",
-                "Game Pass and username mint",
-                "Weekly seasons and 3 Week Cup",
-                "6 loop progression stack",
-                "MiniPay and Privy auth",
+                "Free play, no wallet required",
+                "Weekly seasons with Bronze, Silver, Gold badges",
+                "3 Week Cup with on chain G$ prizes",
+                "XP, levels, and 5 stage pet evolution",
+                "Daily missions and play streaks",
+                "Wager contracts deployed on Celo mainnet",
+                "Game Pass, username mint, MiniPay and Privy auth",
               ],
             },
             {
               label: "NEXT",
               c: GOLD,
               items: [
-                "Challenge AI head to head",
+                "Wager UI toggle inside the game flow",
                 "Achievement NFT badge mint",
+                "Challenge AI head to head",
                 "Tournament brackets",
                 "Third skill game",
               ],

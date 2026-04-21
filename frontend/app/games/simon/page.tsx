@@ -11,6 +11,8 @@ import { playRankReveal, playSaveSuccess, playLevelUp, playAchievementChime } fr
 import { signScore, signScoreMiniPay, submitScore, submitScoreMiniPay } from "@/app/actions/game";
 import { CONTRACT_ADDRESSES, GAME_PASS_ABI } from "@/lib/contracts";
 import { hydrateAchievement } from "@/lib/achievements";
+import LevelUpToast from "@/components/LevelUpToast";
+import PetEvolveToast from "@/components/PetEvolveToast";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 
@@ -250,6 +252,12 @@ export default function SimonGamePage() {
   const [submitting, setSubmitting] = useState(false);
   const [signingOnChain, setSigningOnChain] = useState(false);
   const [txError, setTxError] = useState<string | null>(null);
+  // Celebrations — mirrors the rhythm page wiring. LEVEL UP is the
+  // primary moment; PET EVOLUTION queues ~3.8s later when the new
+  // level crosses a pet-stage threshold so the two don't stack.
+  const [levelUpToastLevel, setLevelUpToastLevel] = useState<number | null>(null);
+  const [petEvolveToPet, setPetEvolveToPet] = useState<typeof PET_STAGES[number] | null>(null);
+  const [petEvolveAtLevel, setPetEvolveAtLevel] = useState<number>(1);
   const [gameTimeMs, setGameTimeMs] = useState(0);
 
   const { getAccessToken, user } = usePrivy();
@@ -410,6 +418,19 @@ export default function SimonGamePage() {
           prevBest: result.prevBest,
           newAchievements: result.newAchievements || [],
         });
+        // Staged celebrations — LEVEL UP first, pet evolution queued
+        // after if the new level crossed a pet-stage boundary.
+        if (result.leveledUp && typeof result.level === "number") {
+          const newLv = result.level;
+          const prevLv = playerLevel;
+          const prevPet = petForLevel(prevLv);
+          const newPet = petForLevel(newLv);
+          setTimeout(() => setLevelUpToastLevel(newLv), 700);
+          if (prevPet.id !== newPet.id) {
+            setPetEvolveAtLevel(newLv);
+            setTimeout(() => setPetEvolveToPet(newPet), 700 + 3800);
+          }
+        }
       } else {
         setSubmitError(result?.error || "Score not recorded");
       }
@@ -613,6 +634,19 @@ export default function SimonGamePage() {
           txError={txError}
         />
       )}
+
+      {/* ═══ LEVEL-UP CELEBRATION ═══ */}
+      <LevelUpToast
+        level={levelUpToastLevel}
+        onClose={() => setLevelUpToastLevel(null)}
+      />
+
+      {/* ═══ PET EVOLUTION CELEBRATION ═══ */}
+      <PetEvolveToast
+        pet={petEvolveToPet}
+        newLevel={petEvolveAtLevel}
+        onClose={() => setPetEvolveToPet(null)}
+      />
     </div>
   );
 }

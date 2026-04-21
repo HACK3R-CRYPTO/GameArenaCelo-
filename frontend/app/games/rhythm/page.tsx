@@ -467,7 +467,11 @@ export default function RhythmGamePage() {
   const [maxCombo, setMaxCombo] = useState(0);
   const [hits, setHits] = useState({ perfect: 0, good: 0, miss: 0 });
   const [timeLeft, setTimeLeft] = useState(TRACK_DURATION);
-  const [activeNotes, setActiveNotes] = useState<(NoteDef & { spawnedAt: number })[]>([]);
+  // activeNotes was the React-state mirror of currently-visible tiles.
+  // Now the canvas draws them directly from the RAF tick's local
+  // `visible` array, and nothing outside this component consumes the
+  // list, so it's gone. One fewer setState per frame = one fewer
+  // reconcile.
   const [bursts, setBursts] = useState<Burst[]>([]);
   const [comboToast, setComboToast] = useState<string | null>(null);
   const [flashLane, setFlashLane] = useState<number | null>(null);
@@ -475,6 +479,15 @@ export default function RhythmGamePage() {
 
   const chartRef = useRef<NoteDef[]>([]);
   const startRef = useRef<number>(0);
+  // audioStartRef holds the AudioContext.currentTime value at "GO!"
+  // (countdown == 0). The RAF tick uses it to derive `now` from the
+  // audio clock instead of performance.now(). Audio clocks are
+  // monotonic and immune to main-thread jank — if the UI stutters for
+  // 100ms during a GC pause, tiles and drums stay in sync because
+  // both are keyed off the same audio timeline. performance.now()
+  // fallback kicks in when the audio context is unavailable (pre-user-
+  // gesture edge cases, autoplay-blocked browsers).
+  const audioStartRef = useRef<number>(0);
   const spawnedRef = useRef<Set<number>>(new Set());
   const missedRef = useRef<Set<number>>(new Set());
   const rafRef = useRef<number>(0);
@@ -576,13 +589,13 @@ export default function RhythmGamePage() {
     // window — exactly the "MISS at start with no tiles falling" bug
     // users reported. The RAF loop now also skips ticks while
     // startRef.current === 0 so the countdown effect is the only
-    // writer.
+    // writer. Same treatment for audioStartRef.
     startRef.current = 0;
+    audioStartRef.current = 0;
     setEncoreLives(3);
     setScore(0); setCombo(0); setMaxCombo(0);
     setHits({ perfect: 0, good: 0, miss: 0 });
     setTimeLeft(TRACK_DURATION);
-    setActiveNotes([]);
     setBursts([]);
     setComboToast(null);
     setFlashLane(null);
@@ -606,12 +619,18 @@ export default function RhythmGamePage() {
     if (countdown <= 0) {
       // GO! — bright higher-octave bell to signal play starts
       playBell(783.99, 0.28);  // G5
+      const ctx = getAudioCtx();
+      // Anchor tile timing to the AudioContext clock. Both the drum
+      // schedule AND the tile physics read from this same zero-point,
+      // so they can never drift under main-thread jank. performance.now
+      // stays as a fallback anchor for stall detection.
+      if (ctx) audioStartRef.current = ctx.currentTime;
       startRef.current = performance.now();
       gameStartMsRef.current = Date.now();  // wall-clock start for gameTime calculation
       setPhase("playing");
       // Schedule the full 30-second drum track aligned to the audio clock.
-      // Same zero-point as startRef means tiles and drums share one timeline.
-      const ctx = getAudioCtx();
+      // Same zero-point as audioStartRef means tiles and drums share
+      // one timeline.
       if (ctx) scheduleDrumTrack(ctx.currentTime);
       return;
     }
@@ -933,7 +952,6 @@ export default function RhythmGamePage() {
     // cadence, AND only when the value actually changed.
     let lastTimerSecond = -1;            // setTimeLeft only when whole seconds change
     let lastBurstPrune = 0;              // setBursts cleanup max ~4×/sec
-    let lastVisibleSig = "";             // setActiveNotes only when id set changes (canvas draws tiles, React just mirrors state)
     const tick = () => {
       const wall = performance.now();
       // Anchor guard — under fast restart re-renders the RAF effect can
@@ -957,7 +975,15 @@ export default function RhythmGamePage() {
       }
       lastWall = wall;
 
-      const now = (wall - startRef.current) / 1000;
+      // Prefer the AudioContext clock as the authoritative timeline.
+      // The drum schedule uses the same zero-point (audioStartRef), so
+      // tiles and audio can never drift under main-thread jank.
+      // Fall back to performance.now if the audio context isn't
+      // available (pre-gesture edge cases).
+      const ctx = getAudioCtx();
+      const now = ctx && audioStartRef.current > 0
+        ? ctx.currentTime - audioStartRef.current
+        : (wall - startRef.current) / 1000;
       if (phase === "playing") {
         const sec = Math.ceil(TRACK_DURATION - now);
         if (sec !== lastTimerSecond) {
@@ -1012,17 +1038,10 @@ export default function RhythmGamePage() {
 
       // Canvas draw — imperative, single paint op per frame regardless
       // of tile count. React never reconciles the tiles; see
-      // components/rhythm/NoteCanvas.tsx. We still call setActiveNotes
-      // (with a sig-compare skip) so any React-side consumer of
-      // activeNotes stays consistent, but the TILES THEMSELVES are
-      // no longer rendered from that state.
+      // components/rhythm/NoteCanvas.tsx. Nothing outside this RAF
+      // tick consumes the visible list, so we don't mirror it into
+      // React state at all anymore (saves a reconcile per id change).
       canvasHandleRef.current?.draw(visible, now);
-
-      const sig = visible.map(v => v.id).join(",");
-      if (sig !== lastVisibleSig) {
-        lastVisibleSig = sig;
-        setActiveNotes(visible);
-      }
 
       // Flag misses: notes that passed the good window without being hit
       for (const n of chartRef.current) {
@@ -1168,7 +1187,7 @@ export default function RhythmGamePage() {
       {(phase === "playing" || phase === "encore") && (
         <PlayingView
           score={score} combo={combo} timeLeft={timeLeft}
-          activeNotes={activeNotes} bursts={bursts}
+          bursts={bursts}
           comboToast={comboToast} flashLane={flashLane} feedback={feedback}
           onTapLane={hitLane}
           // QUIT ends the run with the current score. Transitions to "finished"
@@ -1455,14 +1474,14 @@ function PetCenter({
 
 // ─── Playing: the actual game ─────────────────────────────────────────────────
 function PlayingView({
-  score, combo, timeLeft, activeNotes, bursts,
+  score, combo, timeLeft, bursts,
   comboToast, flashLane, feedback,
   onTapLane, onQuit, startRef, canvasHandleRef,
   pet,
   isEncore, encoreLives,
 }: {
   score: number; combo: number; timeLeft: number;
-  activeNotes: (NoteDef & { spawnedAt: number })[]; bursts: Burst[];
+  bursts: Burst[];
   comboToast: string | null; flashLane: number | null;
   feedback: { lane: number; type: "perfect" | "good" | "miss"; ts: number } | null;
   onTapLane: (lane: number) => void;

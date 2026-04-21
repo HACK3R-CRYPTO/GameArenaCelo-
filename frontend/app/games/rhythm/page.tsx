@@ -926,7 +926,6 @@ export default function RhythmGamePage() {
     // preserved), but the React-visible state only updates on a slower
     // cadence, AND only when the value actually changed.
     let lastTimerSecond = -1;            // setTimeLeft only when whole seconds change
-    let lastVisibleSig = "";             // setActiveNotes only when ids change
     let lastBurstPrune = 0;              // setBursts cleanup max ~4×/sec
     const tick = () => {
       const wall = performance.now();
@@ -1003,16 +1002,12 @@ export default function RhythmGamePage() {
           if (!missedRef.current.has(n.id)) visible.push({ ...n, spawnedAt: n.time - n.travel });
         }
       }
-      // Skip the React update if the visible set is unchanged. The set
-      // typically holds 1-3 items at a time; 60 reconciles/sec of the
-      // same array was the biggest CPU drain on thermal-throttled
-      // phones. CSS animations on the tiles handle the actual fall —
-      // React only needs to re-render when ids enter or leave the set.
-      const sig = visible.map(v => v.id).join(",");
-      if (sig !== lastVisibleSig) {
-        lastVisibleSig = sig;
-        setActiveNotes(visible);
-      }
+      // Always setActiveNotes every frame — the tile's top position is
+      // recomputed inside the render (see activeNotes.map), so React
+      // needs to re-render every frame to drive the fall. An earlier
+      // perf pass tried to skip identical-id updates, but that froze
+      // the tile position between id changes and looked like skipping.
+      setActiveNotes(visible);
 
       // Flag misses: notes that passed the good window without being hit
       for (const n of chartRef.current) {
@@ -1577,36 +1572,29 @@ function PlayingView({
         ))}
 
         {/* Falling notes — Magic Tiles style: wall+face tiles matching our V2 button language.
-            Motion is driven by a CSS keyframe (`tile-fall`) not by React
-            re-computing `top` every frame. React is throttled to only
-            render when tile ids change (perf), so per-frame position
-            updates here would freeze the tile between renders and look
-            like skipping. The GPU composites the fall via transform, so
-            it stays smooth at 60fps regardless of React cadence.
-            `animationDelay` is negative so a tile that's already been
-            falling for some time (spawned slightly before this render)
-            picks up the animation mid-way — preserves timing accuracy. */}
+            Position is recomputed every render from performance.now() —
+            to keep that smooth, `setActiveNotes` fires every frame
+            (see the spawn loop: unconditional set, matching the old-UI
+            behavior). The CSS-keyframe experiment we briefly tried
+            looked jumpy because the animation kept restarting as React
+            re-mounted the tile on each ids-changed diff. */}
         {activeNotes.map(n => {
-          const nowAtRender = (performance.now() - startRef.current) / 1000;
-          const alreadyFallenSec = Math.max(0, nowAtRender - n.spawnedAt);
+          const now = (performance.now() - startRef.current) / 1000;
+          const progress = (now - n.spawnedAt) / n.travel; // 0 to 1, uses per-note speed
+          const yPct = Math.max(0, Math.min(1, progress)) * 100;
           const theme = LANES[n.lane];
           const laneWidthPct = 100 / LANES.length;
+          const fadeIn = Math.min(1, progress / 0.15);
           return (
             <div key={n.id} style={{
               position: "absolute",
               left: `calc(${laneWidthPct * n.lane}% + ${laneWidthPct / 2}%)`,
-              top: "0%",
+              top: `${yPct}%`,
               transform: "translate(-50%, -50%)",
               width: "78%", maxWidth: "90px", minWidth: "54px",
               pointerEvents: "none",
-              // GPU-animated fall from top:0% → top:100% over n.travel
-              // seconds. alreadyFallenSec > 0 catches tiles whose
-              // spawnedAt is slightly in the past (React runs at 4-20Hz
-              // under throttle; RAF physics at 60Hz). Fade-in handled
-              // by the same keyframe (0→1 opacity in the first 15%).
-              animation: `tile-fall ${n.travel}s linear both`,
-              animationDelay: `${-alreadyFallenSec}s`,
-              willChange: "transform, opacity",
+              opacity: fadeIn,
+              willChange: "top, transform",
             }}>
               {/* Motion trail above the tile — sells the "falling" feel */}
               <div style={{

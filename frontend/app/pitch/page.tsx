@@ -18,6 +18,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import QRCode from "qrcode";
 
 // Brand palette references so every slide feels part of the app
 const GOLD = "#fbbf24";
@@ -157,6 +158,191 @@ function Step({ n, title, body }: { n: number; title: string; body: string }) {
   );
 }
 
+// Play-now slide renders a QR code to the live app. Generated at mount
+// so we never ship a stale PNG; link is the single source of truth.
+function PlayNowSlide() {
+  const URL = "https://gamearenahq.xyz/";
+  const [dataUrl, setDataUrl] = useState<string>("");
+
+  useEffect(() => {
+    QRCode.toDataURL(URL, {
+      errorCorrectionLevel: "H",
+      margin: 1,
+      width: 720,
+      color: { dark: "#0a0120", light: "#ffffff" },
+    })
+      .then(setDataUrl)
+      .catch(() => {});
+  }, []);
+
+  return (
+    <SlideFrame eyebrow="PLAY NOW">
+      <H1>Scan. Play. Win 1.3x.</H1>
+      <div style={{
+        marginTop: "clamp(20px, 4vh, 48px)",
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "clamp(24px, 4vw, 56px)",
+      }}>
+        {/* QR tile with a gold border so it reads as a target, not decor */}
+        <div style={{
+          padding: "clamp(14px, 2vh, 22px)",
+          borderRadius: "24px",
+          background: "white",
+          boxShadow: `0 0 0 4px ${GOLD}, 0 0 60px ${GOLD}66, 0 20px 50px rgba(0,0,0,0.6)`,
+        }}>
+          {dataUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={dataUrl}
+              alt="QR code for gamearenahq.xyz"
+              style={{
+                display: "block",
+                width: "clamp(220px, 28vw, 360px)",
+                height: "clamp(220px, 28vw, 360px)",
+              }}
+            />
+          ) : (
+            <div style={{
+              width: "clamp(220px, 28vw, 360px)",
+              height: "clamp(220px, 28vw, 360px)",
+              background: "#eee",
+            }} />
+          )}
+        </div>
+
+        <div style={{ maxWidth: "460px" }}>
+          <div style={{
+            color: GOLD,
+            fontSize: "clamp(18px, 2.4vw, 26px)",
+            fontWeight: 900,
+            letterSpacing: "0.08em",
+            textShadow: `0 0 16px ${GOLD}aa`,
+          }}>
+            gamearenahq.xyz
+          </div>
+          <ul style={{
+            listStyle: "none", padding: 0,
+            margin: "clamp(14px, 2vh, 22px) 0 0",
+            color: "rgba(230,220,255,0.9)",
+            fontSize: "clamp(14px, 1.7vw, 18px)",
+            lineHeight: 1.55,
+          }}>
+            <li>Point your camera at the code.</li>
+            <li>Sign in with Google in 10 seconds.</li>
+            <li>Claim G$. Play Rhythm or Simon.</li>
+            <li>Every wager funds real UBI.</li>
+          </ul>
+          <a href={URL} target="_blank" rel="noreferrer"
+            style={{
+              display: "inline-block",
+              marginTop: "clamp(16px, 2.4vh, 26px)",
+              padding: "clamp(10px, 1.4vh, 14px) clamp(20px, 2.6vw, 32px)",
+              borderRadius: "999px",
+              background: `linear-gradient(160deg, ${GREEN} 0%, #15803d 100%)`,
+              border: "2px solid rgba(255,255,255,0.5)",
+              color: "white",
+              fontWeight: 900,
+              fontSize: "clamp(13px, 1.7vw, 16px)",
+              letterSpacing: "0.1em",
+              textDecoration: "none",
+              boxShadow: "0 0 24px rgba(34,197,94,0.5), inset 0 4px 10px rgba(255,255,255,0.4)",
+            }}>
+            OPEN LINK
+          </a>
+        </div>
+      </div>
+    </SlideFrame>
+  );
+}
+
+// Traction slide pulls live numbers from the backend so the deck is always
+// honest about where we are. Falls back gracefully if the API is down.
+function TractionSlide() {
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
+  const [stats, setStats] = useState<{
+    totalUsers: number; totalGames: number; totalWagered: string;
+    rhythmPlayers: number; simonPlayers: number;
+    topRhythm: number; topSimon: number;
+    estimatedPrizePot: string;
+  } | null>(null);
+
+  useEffect(() => {
+    fetch(`${BACKEND_URL}/api/stats`)
+      .then(r => r.json())
+      .then(setStats)
+      .catch(() => {});
+  }, [BACKEND_URL]);
+
+  const fmt = (n: number) => {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1000).toFixed(1)}K`;
+    return String(n);
+  };
+
+  const tiles = [
+    { label: "PLAYERS", value: stats ? fmt(stats.totalUsers) : "…", c: GOLD },
+    { label: "GAMES PLAYED", value: stats ? fmt(stats.totalGames) : "…", c: MAGENTA },
+    { label: "G$ WAGERED", value: stats ? `${Number(stats.totalWagered).toFixed(0)}` : "…", c: GREEN },
+    { label: "PRIZE POT", value: stats ? `${Number(stats.estimatedPrizePot).toFixed(2)} G$` : "…", c: CYAN },
+  ];
+
+  return (
+    <SlideFrame eyebrow="TRACTION">
+      <H1>People are playing. Every score hits the chain.</H1>
+      <div style={{
+        marginTop: "clamp(20px, 3vh, 40px)",
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+        gap: "clamp(14px, 2vw, 22px)",
+        maxWidth: "1200px",
+      }}>
+        {tiles.map((s, i) => (
+          <div key={i} style={{
+            borderRadius: "18px",
+            background: "linear-gradient(180deg, rgba(20,10,50,0.8), rgba(6,1,24,0.9))",
+            border: `2px solid ${s.c}`,
+            boxShadow: `0 0 22px ${s.c}44`,
+            padding: "clamp(16px, 2.4vh, 24px)",
+            textAlign: "center",
+          }}>
+            <div style={{
+              color: s.c,
+              fontSize: "clamp(32px, 5vw, 56px)",
+              fontWeight: 900, lineHeight: 1,
+              textShadow: `0 0 18px ${s.c}`,
+            }}>{s.value}</div>
+            <div style={{
+              color: "rgba(200,180,255,0.7)",
+              fontSize: "clamp(10px, 1.2vw, 12px)",
+              fontWeight: 800,
+              letterSpacing: "0.16em",
+              marginTop: "8px",
+            }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+      <Lead>
+        Two games live on Celo mainnet. One signed score rail. Every wager funds UBI. These numbers are live, pulled as you read this.
+      </Lead>
+      {stats && (
+        <div style={{
+          marginTop: "clamp(10px, 1.6vh, 18px)",
+          color: "rgba(200,180,255,0.65)",
+          fontSize: "clamp(12px, 1.3vw, 15px)",
+          fontWeight: 600,
+        }}>
+          Top Rhythm score: <strong style={{ color: GOLD }}>{stats.topRhythm}</strong>
+          {" · "}
+          Top Simon score: <strong style={{ color: CYAN }}>{stats.topSimon}</strong>
+        </div>
+      )}
+    </SlideFrame>
+  );
+}
+
 // ─── Slide content ────────────────────────────────────────────────────────────
 
 const SLIDES: { key: string; render: () => React.ReactNode }[] = [
@@ -207,24 +393,17 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
     key: "problem",
     render: () => (
       <SlideFrame eyebrow="THE PROBLEM">
-        <H1>Web3 gaming is broken three ways.</H1>
+        <H1>Web3 games fail you.</H1>
         <div style={{ height: "clamp(12px, 2vh, 28px)" }} />
         <BulletList>
           <Bullet accent="#ef4444">
-            <strong>Pay-to-play walls.</strong> Most on-chain games need you
-            to buy a token or NFT before you can do anything. 95%+ of
-            would-be players bounce there.
+            <strong>You pay to play.</strong> 95% of new players quit at the paywall.
           </Bullet>
           <Bullet accent="#f97316">
-            <strong>&quot;Skill&quot; games aren&apos;t skill games.</strong>{" "}
-            The category is dominated by loot boxes and RNG. Real skill
-            games sit on app stores — where they can&apos;t settle real-money
-            stakes.
+            <strong>Loot boxes win, skill loses.</strong> Real skill games sit on app stores. They cannot settle real money.
           </Bullet>
           <Bullet accent="#fbbf24">
-            <strong>Gaming economies extract.</strong> Value flows OUT of
-            the player base into early token-dumpers. Nothing flows back
-            to the humans playing.
+            <strong>The economy extracts.</strong> Value goes to early token holders, not players.
           </Bullet>
         </BulletList>
       </SlideFrame>
@@ -236,14 +415,9 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
     key: "solution",
     render: () => (
       <SlideFrame eyebrow="THE SOLUTION">
-        <H1>Free-to-play skill games. Real stakes. Funded UBI.</H1>
+        <H1>Free tokens. Real skill. Real UBI.</H1>
         <Lead>
-          Claim a free crypto token (<strong style={{ color: GREEN }}>G$</strong>)
-          every 24h after a one-time face scan. Wager it on 30-second skill
-          rounds — beat the target, win <strong style={{ color: GOLD }}>1.3×</strong> back.
-          Every wager funnels into real{" "}
-          <strong style={{ color: GREEN }}>GoodDollar UBI</strong> for ~500k
-          verified humans worldwide.
+          Scan your face once. Claim <strong style={{ color: GREEN }}>G$</strong> every 24 hours. Wager it on a 30 second skill round. Win <strong style={{ color: GOLD }}>1.3x</strong>. Every wager funds GoodDollar UBI for 500,000 verified humans.
         </Lead>
         <div style={{
           marginTop: "clamp(16px, 3vh, 32px)",
@@ -253,9 +427,9 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
           maxWidth: "1100px",
         }}>
           {[
-            { icon: "💰", title: "Claim free G$", body: "No purchase. No deposit. No card.", c: GREEN },
-            { icon: "🎮", title: "Wager on skill", body: "Rhythm + Memory. 1.3× on win.", c: GOLD },
-            { icon: "🌍", title: "Fund real UBI", body: "Every wager → GoodDollar pool.", c: CYAN },
+            { icon: "💰", title: "Claim free G$", body: "No purchase. No deposit.", c: GREEN },
+            { icon: "🎮", title: "Wager skill", body: "Win 1.3x on Rhythm or Simon.", c: GOLD },
+            { icon: "🌍", title: "Fund UBI", body: "Every wager goes to GoodDollar.", c: CYAN },
           ].map((card, i) => (
             <div key={i} style={{
               borderRadius: "16px",
@@ -286,7 +460,7 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
     key: "games",
     render: () => (
       <SlideFrame eyebrow="THE PRODUCT">
-        <H1>Two games live. Arena model for more.</H1>
+        <H1>Two games live. More on the rail.</H1>
         <div style={{
           marginTop: "clamp(16px, 3vh, 32px)",
           display: "grid",
@@ -297,15 +471,15 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
           {[
             {
               name: "RHYTHM RUSH", icon: "🥁", accent: MAGENTA,
-              body: "30-second music track, 4 falling-tile lanes. Hit to the beat for PERFECT / GOOD. Clear the chart with combo alive → unlock ENCORE, an accelerating 3-life survival mode.",
+              body: "30 second track. Four lanes. Tap the beat. Keep your combo to unlock ENCORE, a three life survival mode.",
             },
             {
               name: "SIMON MEMORY", icon: "🧠", accent: CYAN,
-              body: "Color sequence memory with 4 pads. Round 5 unlocks a 5th bonus pad. Difficulty scales indefinitely — Tetris-style no-ceiling scoring.",
+              body: "Four pads. Repeat the sequence. Round 5 adds a fifth pad. No score cap. Difficulty keeps scaling.",
             },
             {
-              name: "COMING SOON", icon: "⚡", accent: GOLD,
-              body: "Challenge-AI head-to-head mode. More skill titles on the roadmap — the Arena model lets us drop new games into the same economy and progression.",
+              name: "NEXT UP", icon: "⚡", accent: GOLD,
+              body: "Challenge AI for head to head runs. The Arena model drops new titles into the same economy and leaderboards.",
             },
           ].map((g, i) => (
             <div key={i} style={{
@@ -340,13 +514,13 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
     key: "journey",
     render: () => (
       <SlideFrame eyebrow="USER JOURNEY">
-        <H1>One-time setup. Lifetime play.</H1>
+        <H1>Set up once. Play forever.</H1>
         <div style={{ height: "clamp(12px, 2vh, 24px)" }} />
-        <Step n={1} title="Connect" body="Google, email, or wallet. 10 seconds via Privy or MiniPay — no seed phrase." />
-        <Step n={2} title="Mint Game Pass" body="Soulbound NFT with your chosen username. Free — just a few cents of CELO gas." />
-        <Step n={3} title="Verify" body="One-time GoodDollar face scan. Unlocks G$ claims, wagering, leaderboard eligibility." />
-        <Step n={4} title="Claim G$ daily" body="Free G$ every 24h. Tap-to-claim straight from the app." />
-        <Step n={5} title="Play & progress" body="Every game earns XP. Level up → pet evolves → tier climbs → badges unlock." />
+        <Step n={1} title="Connect" body="Google, email, or wallet. 10 seconds. No seed phrase." />
+        <Step n={2} title="Mint Game Pass" body="Soulbound NFT with your username. Free. Pay a few cents of CELO for gas." />
+        <Step n={3} title="Verify" body="One GoodDollar face scan. Unlocks claims, wagering, and leaderboards." />
+        <Step n={4} title="Claim daily" body="Free G$ every 24 hours. Tap to claim." />
+        <Step n={5} title="Play and progress" body="Earn XP. Level up. Evolve your pet. Climb tiers. Unlock badges." />
       </SlideFrame>
     ),
   },
@@ -356,25 +530,19 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
     key: "economy",
     render: () => (
       <SlideFrame eyebrow="THE ECONOMY">
-        <H1>G$ is free. G$ is real. G$ is the unlock.</H1>
+        <H1>Free. Real. Yours.</H1>
         <BulletList>
           <Bullet accent={GREEN}>
-            <strong>Not fiat. Not a security.</strong> G$ is a live ERC-20
-            on Celo with a market value, redeemable across the GoodDollar
-            ecosystem.
+            <strong>G$ is real.</strong> Live ERC 20 on Celo. Market value. Works across GoodDollar.
           </Bullet>
           <Bullet accent={GOLD}>
-            <strong>Claimed, not bought.</strong> Every verified human gets
-            the same daily allocation. No pre-sale, no vesting, no lock-up.
+            <strong>You claim it.</strong> Same daily allocation for every verified human. No presale. No vesting.
           </Bullet>
           <Bullet accent={MAGENTA}>
-            <strong>Wager it → 1.3× return on win.</strong> Losses
-            recirculate into the weekly prize pool and back to UBI.
+            <strong>Win 1.3x.</strong> Losses feed the weekly prize pool. That pool feeds UBI.
           </Bullet>
           <Bullet accent={CYAN}>
-            <strong>No gambling regulation risk.</strong> Stakes are in
-            free, earned in-game currency — skill-reward framing, not
-            wagering.
+            <strong>No gambling risk.</strong> You stake earned in game currency. Skill reward, not wagering.
           </Bullet>
         </BulletList>
       </SlideFrame>
@@ -386,7 +554,7 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
     key: "retention",
     render: () => (
       <SlideFrame eyebrow="RETENTION">
-        <H1>Six compounding loops keep players in the app.</H1>
+        <H1>Six loops that keep you coming back.</H1>
         <div style={{
           marginTop: "clamp(16px, 2vh, 28px)",
           display: "grid",
@@ -395,12 +563,12 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
           maxWidth: "1180px",
         }}>
           {[
-            { icon: "📊", title: "XP + Levels", body: "Every game earns XP. No level cap.", c: GOLD },
-            { icon: "🐣", title: "Pet Evolution", body: "Egg → Baby → Teen → Crystal → King across 5 stages.", c: GREEN },
-            { icon: "🏆", title: "Rank Tiers", body: "Bronze → Master, weekly leaderboard driven.", c: MAGENTA },
-            { icon: "🎯", title: "Daily Missions", body: "3 fresh missions / 24h. Claim XP.", c: "#f97316" },
-            { icon: "🔥", title: "Play Streaks", body: "Frozen-flame visual when you lapse — pull to re-engage.", c: CYAN },
-            { icon: "✦", title: "Achievements", body: "13 milestones. NFT badge mint on roadmap.", c: "#f472b6" },
+            { icon: "📊", title: "XP and Levels", body: "Every game earns XP. No cap.", c: GOLD },
+            { icon: "🐣", title: "Pet Evolution", body: "5 stages. Egg to King Slime.", c: GREEN },
+            { icon: "🏆", title: "Rank Tiers", body: "Bronze to Master. Updates weekly.", c: MAGENTA },
+            { icon: "🎯", title: "Daily Missions", body: "3 missions. Refresh every 24h.", c: "#f97316" },
+            { icon: "🔥", title: "Streaks", body: "Skip a day, your flame freezes. Play to thaw.", c: CYAN },
+            { icon: "✦", title: "Achievements", body: "13 milestones. NFT badges ship next.", c: "#f472b6" },
           ].map((loop, i) => (
             <div key={i} style={{
               borderRadius: "14px",
@@ -436,109 +604,52 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
     key: "distribution",
     render: () => (
       <SlideFrame eyebrow="DISTRIBUTION">
-        <H1>Already inside the fastest-growing mobile crypto wallet on Earth.</H1>
+        <H1>Players are already here.</H1>
         <BulletList>
           <Bullet accent={GREEN}>
-            <strong>MiniPay</strong> — Opera&apos;s Celo-native wallet, ~4M
-            monthly actives across Africa, LatAm, South Asia.
+            <strong>MiniPay.</strong> 4M monthly actives across Africa, LatAm, and South Asia. Game Arena runs inside it.
           </Bullet>
           <Bullet accent={GOLD}>
-            <strong>Celo mainnet</strong> — sub-cent gas (~$0.001/tx). Kills
-            the &quot;I can&apos;t afford gas&quot; failure that breaks L1 games.
+            <strong>Celo mainnet.</strong> $0.001 per transaction. No gas wall.
           </Bullet>
           <Bullet accent={MAGENTA}>
-            <strong>Web-first, no app store.</strong> Shareable links,
-            embeds anywhere, instant updates.
+            <strong>Web, not app store.</strong> Share a link. It opens. Updates ship instantly.
           </Bullet>
           <Bullet accent={CYAN}>
-            <strong>Privy social login</strong> captures the non-crypto
-            majority — 60%+ of our expected base has never touched a wallet.
+            <strong>Social login.</strong> 60% of our base has never used a wallet. Google or email gets them playing in 10 seconds.
           </Bullet>
         </BulletList>
       </SlideFrame>
     ),
   },
 
-  // 9. TRACTION (placeholders — fill at pitch time)
+  // 9. TRACTION (live numbers from /api/stats)
   {
     key: "traction",
-    render: () => (
-      <SlideFrame eyebrow="TRACTION">
-        <H1>Shipped. Live. Growing.</H1>
-        <div style={{
-          marginTop: "clamp(20px, 3vh, 40px)",
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-          gap: "clamp(14px, 2vw, 22px)",
-          maxWidth: "1200px",
-        }}>
-          {[
-            { label: "GAME PASSES MINTED", value: "—", c: GOLD },
-            { label: "GAMES PLAYED", value: "—", c: MAGENTA },
-            { label: "G$ WAGERED", value: "—", c: GREEN },
-            { label: "PEAK WEEKLY PLAYERS", value: "—", c: CYAN },
-          ].map((s, i) => (
-            <div key={i} style={{
-              borderRadius: "18px",
-              background: "linear-gradient(180deg, rgba(20,10,50,0.8), rgba(6,1,24,0.9))",
-              border: `2px solid ${s.c}`,
-              boxShadow: `0 0 22px ${s.c}44`,
-              padding: "clamp(16px, 2.4vh, 24px)",
-              textAlign: "center",
-            }}>
-              <div style={{
-                color: s.c,
-                fontSize: "clamp(32px, 5vw, 56px)",
-                fontWeight: 900, lineHeight: 1,
-                textShadow: `0 0 18px ${s.c}`,
-              }}>{s.value}</div>
-              <div style={{
-                color: "rgba(200,180,255,0.7)",
-                fontSize: "clamp(10px, 1.2vw, 12px)",
-                fontWeight: 800,
-                letterSpacing: "0.16em",
-                marginTop: "8px",
-              }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-        <Lead color="rgba(200,180,255,0.55)">
-          Live metrics pulled from backend `/api/stats` — fill with current
-          numbers before presenting.
-        </Lead>
-      </SlideFrame>
-    ),
+    render: () => <TractionSlide />,
   },
 
   // 10. TECH & TRUST
   {
     key: "tech",
     render: () => (
-      <SlideFrame eyebrow="TECH & TRUST">
-        <H1>Built for scale. Verifiable on-chain.</H1>
+      <SlideFrame eyebrow="TECH AND TRUST">
+        <H1>Every score is on chain.</H1>
         <BulletList>
           <Bullet accent={GOLD}>
-            <strong>Celo mainnet</strong> — every score, wager, and badge
-            on-chain and auditable.
+            <strong>Celo mainnet.</strong> Scores, wagers, and badges are on chain and auditable.
           </Bullet>
           <Bullet accent={GREEN}>
-            <strong>Signed-score submission</strong> — EIP-712 vouchers
-            from the backend + player wallet countersign. Server can&apos;t
-            post a score the player didn&apos;t play, player can&apos;t post a
-            score the server didn&apos;t sign.
+            <strong>Signed scores.</strong> EIP 712 vouchers. Backend signs, wallet countersigns. Neither side can post a score alone.
           </Bullet>
           <Bullet accent={MAGENTA}>
-            <strong>Soulbound Game Pass NFT</strong> — non-transferable,
-            one per human. Kills the secondary market for bot accounts.
+            <strong>Soulbound Game Pass.</strong> One per human. No transfers. No bot secondary market.
           </Bullet>
           <Bullet accent={CYAN}>
-            <strong>Face-scan verification</strong> — GoodDollar-powered
-            Sybil resistance at the identity layer.
+            <strong>Face scan.</strong> GoodDollar Sybil resistance at the identity layer.
           </Bullet>
           <Bullet accent="#f472b6">
-            <strong>Canvas-rendered rhythm engine</strong> + Web Audio
-            synthesis — production mobile-web game patterns, no MP3
-            bandwidth, no licensing risk.
+            <strong>Canvas and Web Audio.</strong> No MP3 bandwidth. No licensing risk.
           </Bullet>
         </BulletList>
       </SlideFrame>
@@ -550,7 +661,7 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
     key: "roadmap",
     render: () => (
       <SlideFrame eyebrow="ROADMAP">
-        <H1>Shipped. Next. Horizon.</H1>
+        <H1>What you get. What is next.</H1>
         <div style={{
           marginTop: "clamp(18px, 3vh, 30px)",
           display: "grid",
@@ -563,21 +674,21 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
               label: "SHIPPED",
               c: GREEN,
               items: [
-                "Rhythm Rush + Simon Memory live",
-                "Wagering in G$ with on-chain settlement",
-                "Game Pass + username minting",
-                "Weekly seasons + 3-Week Cup",
-                "Full 6-loop progression stack",
-                "MiniPay + Privy auth in production",
+                "Rhythm Rush and Simon Memory live",
+                "G$ wagering with on chain settlement",
+                "Game Pass and username mint",
+                "Weekly seasons and 3 Week Cup",
+                "6 loop progression stack",
+                "MiniPay and Privy auth",
               ],
             },
             {
               label: "NEXT",
               c: GOLD,
               items: [
-                "Challenge AI head-to-head",
+                "Challenge AI head to head",
                 "Achievement NFT badge mint",
-                "Tournament mode (PvP brackets)",
+                "Tournament brackets",
                 "Third skill game",
               ],
             },
@@ -585,9 +696,9 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
               label: "HORIZON",
               c: MAGENTA,
               items: [
-                "Signed-oracle anti-cheat at scale",
-                "Public API for third-party games",
-                "Native mobile shells (PWA → app store)",
+                "Signed oracle anti cheat at scale",
+                "Public API for third party games",
+                "Native shells for app stores",
               ],
             },
           ].map((col, i) => (
@@ -631,9 +742,9 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
     key: "ask",
     render: () => (
       <SlideFrame eyebrow="THE ASK">
-        <H1>Let&apos;s build the arena.</H1>
+        <H1>Build the arena with us.</H1>
         <Lead>
-          We&apos;re looking for partners across three lanes — pick what fits:
+          Three lanes. Pick the one that fits you.
         </Lead>
         <div style={{
           marginTop: "clamp(14px, 2vh, 22px)",
@@ -643,9 +754,9 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
           maxWidth: "1100px",
         }}>
           {[
-            { c: GREEN, title: "Funding", body: "Pre-seed to ship tournaments, a 3rd game, and a 2-engineer core team for 12 months." },
-            { c: GOLD, title: "Distribution", body: "MiniPay dapp-store placement, Celo Foundation intros, wallet integrations." },
-            { c: MAGENTA, title: "Partnership", body: "Skill-game studios who want an on-chain economy + UBI rail plug-in." },
+            { c: GREEN, title: "Funding", body: "Pre seed. Tournaments, a third game, and a two engineer team for 12 months." },
+            { c: GOLD, title: "Distribution", body: "MiniPay dapp store, Celo Foundation intros, wallet integrations." },
+            { c: MAGENTA, title: "Partnership", body: "Skill game studios who want an on chain economy and UBI rail." },
           ].map((a, i) => (
             <div key={i} style={{
               borderRadius: "18px",
@@ -706,6 +817,12 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
         </div>
       </SlideFrame>
     ),
+  },
+
+  // 13. PLAY NOW (QR)
+  {
+    key: "play",
+    render: () => <PlayNowSlide />,
   },
 ];
 

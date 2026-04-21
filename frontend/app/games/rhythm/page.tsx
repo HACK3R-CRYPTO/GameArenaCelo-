@@ -11,6 +11,7 @@ import { signScore, signScoreMiniPay, submitScore, submitScoreMiniPay } from "@/
 import { CONTRACT_ADDRESSES, GAME_PASS_ABI } from "@/lib/contracts";
 import { hydrateAchievement } from "@/lib/achievements";
 import LevelUpToast from "@/components/LevelUpToast";
+import PetEvolveToast from "@/components/PetEvolveToast";
 import NoteCanvas, { type NoteCanvasHandle } from "@/components/rhythm/NoteCanvas";
 
 // Only used for browser-safe READ endpoints (user level lookup). Write paths
@@ -540,6 +541,12 @@ export default function RhythmGamePage() {
   // arrives carrying { leveledUp: true, level: N } so the celebration
   // overlays the finished card instead of being a tiny inline callout.
   const [levelUpToastLevel, setLevelUpToastLevel] = useState<number | null>(null);
+  // Pet evolution celebration — separate moment from level-up. Fires
+  // only when the new level crosses a pet-stage threshold
+  // (5/15/30/50). Compares petForLevel(prev) vs petForLevel(new) at
+  // submit-result time.
+  const [petEvolveToPet, setPetEvolveToPet] = useState<typeof PET_STAGES[number] | null>(null);
+  const [petEvolveAtLevel, setPetEvolveAtLevel] = useState<number>(1);
 
   // Auth context — Privy users provide a JWT, MiniPay users sign a message.
   // Both code paths live in the submit effect below.
@@ -765,13 +772,24 @@ export default function RhythmGamePage() {
             prevBest: result.prevBest,
             newAchievements: result.newAchievements || [],
           });
-          // Trigger the full-screen LEVEL UP toast immediately when the
-          // result lands. Slight delay so the finished-card scaleIn lands
-          // first; the toast then overlays it as a hero moment, with its
-          // own arpeggio (handled inside LevelUpToast).
+          // Trigger the full-screen LEVEL UP celebration immediately
+          // when the result lands. Slight delay so the finished-card
+          // scaleIn lands first; the celebration then overlays it as
+          // a hero moment with its own staged audio/visual.
           if (result.leveledUp && typeof result.level === "number") {
-            const lv = result.level;
-            setTimeout(() => setLevelUpToastLevel(lv), 700);
+            const newLv = result.level;
+            const prevLv = playerLevel;
+            const prevPet = petForLevel(prevLv);
+            const newPet = petForLevel(newLv);
+            setTimeout(() => setLevelUpToastLevel(newLv), 700);
+            // Pet evolution — fires AFTER the level-up celebration
+            // dismisses so the two don't stack. If level crossed a
+            // pet-stage boundary (Egg→Baby→Teen→Crystal→King), queue
+            // the bigger evolution moment to play next.
+            if (prevPet.id !== newPet.id) {
+              setPetEvolveAtLevel(newLv);
+              setTimeout(() => setPetEvolveToPet(newPet), 700 + 3800);
+            }
           }
         } else {
           setSubmitError(result?.error || "Score not recorded");
@@ -1208,6 +1226,20 @@ export default function RhythmGamePage() {
           txError={txError}
         />
       )}
+
+      {/* ═══ LEVEL-UP CELEBRATION — full-screen staged moment ═══ */}
+      <LevelUpToast
+        level={levelUpToastLevel}
+        onClose={() => setLevelUpToastLevel(null)}
+      />
+
+      {/* ═══ PET EVOLUTION CELEBRATION — queued after level-up when
+              the new level crosses a pet-stage boundary ═══ */}
+      <PetEvolveToast
+        pet={petEvolveToPet}
+        newLevel={petEvolveAtLevel}
+        onClose={() => setPetEvolveToPet(null)}
+      />
     </div>
   );
 }

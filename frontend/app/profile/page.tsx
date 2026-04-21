@@ -3,13 +3,15 @@
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { usePrivy } from "@privy-io/react-auth";
-import { useAccount, useReadContract } from "wagmi";
+import { useAccount, useReadContract, useBalance } from "wagmi";
 import { useSelfVerification } from "@/contexts/SelfVerificationContext";
 import { useAudioSettings } from "@/hooks/useAudioSettings";
 import { playCoin, playTabSwitch } from "@/hooks/useAppAudio";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import BottomNav from "@/components/BottomNav";
 import MobileStreakChip from "@/components/MobileStreakChip";
+import { CONTRACT_ADDRESSES, ERC20_ABI } from "@/lib/contracts";
+import { formatUnits } from "viem";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 
@@ -253,6 +255,71 @@ function PillTab({ label, icon, active, onClick, compact = false, iconOnly = fal
               textShadow: active ? "0 2px 4px rgba(0,0,0,0.4)" : "none",
             }}>{label}</span>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Balance Chip ──────────────────────────────────────────────────────────────
+// Wallet balance tile used on the profile Stats tab. Same 3D wall+face
+// treatment as StatGem but with a prominent currency symbol — the symbol
+// is the primary read (is this G$ or CELO?) and the number is the value.
+function BalanceChip({
+  symbol, value, sub, color, wall, face,
+}: {
+  symbol: string; value: string; sub: string;
+  color: string; wall: string; face: string;
+}) {
+  return (
+    <div style={{
+      borderRadius: "16px", background: wall, paddingBottom: "5px",
+      boxShadow: `0 8px 22px -4px ${color}66, 0 0 0 1.5px ${color}55, 0 0 18px ${color}22`,
+    }}>
+      <div style={{
+        borderRadius: "14px 14px 12px 12px",
+        background: face,
+        padding: "clamp(10px, 2.8vw, 14px) clamp(10px, 2.8vw, 14px)",
+        position: "relative", overflow: "hidden",
+        border: "2px solid rgba(255,255,255,0.45)",
+        boxShadow: "inset 0 6px 14px rgba(255,255,255,0.6), inset 0 -3px 8px rgba(0,0,0,0.25)",
+        display: "flex", alignItems: "center", gap: "10px",
+        minWidth: 0,
+      }}>
+        {/* Top gloss */}
+        <div style={{
+          position: "absolute", top: "2px", left: "5%", right: "5%", height: "46%",
+          background: "linear-gradient(180deg, rgba(255,255,255,0.65) 0%, transparent 100%)",
+          borderRadius: "14px 14px 60px 60px", pointerEvents: "none",
+        }} />
+        <div style={{
+          zIndex: 1, flexShrink: 0,
+          minWidth: "34px", height: "34px", padding: "0 8px",
+          borderRadius: "10px",
+          background: "rgba(0,0,0,0.35)",
+          border: "1px solid rgba(255,255,255,0.25)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "white", fontSize: "clamp(11px, 3vw, 13px)", fontWeight: 900,
+          letterSpacing: "0.04em",
+          textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+          whiteSpace: "nowrap",
+        }}>{symbol}</div>
+        <div style={{ zIndex: 1, minWidth: 0, flex: 1 }}>
+          <div style={{
+            color: "white",
+            fontSize: "clamp(15px, 4.5vw, 20px)",
+            fontWeight: 900,
+            lineHeight: 1,
+            textShadow: "0 2px 4px rgba(0,0,0,0.4)",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>{value}</div>
+          <div style={{
+            color: "rgba(255,255,255,0.75)",
+            fontSize: "clamp(8.5px, 2.3vw, 10px)",
+            fontWeight: 800, letterSpacing: "0.12em",
+            marginTop: "3px",
+            textShadow: "0 1px 2px rgba(0,0,0,0.3)",
+          }}>{sub.toUpperCase()}</div>
         </div>
       </div>
     </div>
@@ -725,6 +792,29 @@ export default function ProfilePage() {
     args: address ? [address, 1] : undefined, query: { enabled: !!address },
   });
 
+  // Wallet balances — CELO (native) + G$ (GoodDollar ERC20). Matches the
+  // old UI's AccountModal so players have a home for "how much do I have"
+  // instead of bouncing to a block explorer. Both use wagmi's refetch
+  // cadence (block-polling), so they update when G$ claims or wager
+  // settlements land on-chain.
+  const { data: celoBalance } = useBalance({
+    address,
+    query: { enabled: !!address },
+  });
+  const { data: gBalanceRaw } = useReadContract({
+    address: CONTRACT_ADDRESSES.G_TOKEN as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    query: { enabled: !!address },
+  });
+  const celoDisplay = celoBalance
+    ? parseFloat(formatUnits(celoBalance.value, 18)).toFixed(3)
+    : "0.000";
+  const gDisplay = gBalanceRaw != null
+    ? parseFloat(formatUnits(gBalanceRaw as bigint, 18)).toFixed(2)
+    : "0.00";
+
   const username = (onchainUsername as string) || "Player";
   const totalGames = Number(gamesPlayedRaw || 0);
 
@@ -1124,6 +1214,31 @@ export default function ProfilePage() {
               {/* STATS TAB */}
               {activeTab === "stats" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  {/* Wallet balances — G$ (GoodDollar) and CELO (gas).
+                      Two chips side-by-side so players always know:
+                        (a) what they can wager with (G$)
+                        (b) whether they can pay gas to mint/claim (CELO)
+                      Before this, the new UI had no way to see either
+                      without opening a block explorer. */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                    <BalanceChip
+                      symbol="G$"
+                      value={gDisplay}
+                      sub="GoodDollar"
+                      color="#fbbf24"
+                      wall="#7c2d00"
+                      face="linear-gradient(160deg, #fde68a 0%, #f59e0b 50%, #b45309 100%)"
+                    />
+                    <BalanceChip
+                      symbol="CELO"
+                      value={celoDisplay}
+                      sub="Gas token"
+                      color="#a7f3d0"
+                      wall="#064e3b"
+                      face="linear-gradient(160deg, #86efac 0%, #10b981 50%, #065f46 100%)"
+                    />
+                  </div>
+
                   {/* Stat gems */}
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
                     <StatGem value={String(totalGames)} label="GAMES" color="#a78bfa" wall="#1a0550" />

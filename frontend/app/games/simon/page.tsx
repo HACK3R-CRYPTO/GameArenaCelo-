@@ -394,9 +394,12 @@ export default function SimonGamePage() {
           msg.includes("gas limit") || msg.includes("exceeds gas") ||
           msg.includes("gas required") || msg.includes("intrinsic gas") ||
           msg.includes("cannot estimate") || msg.includes("estimate gas");
+        // Three buckets, three messages. The render layer keys off the
+        // text to choose the correct UI variant — rejection (red banner),
+        // gas (orange help card), other (red with retry hint).
         if (isRejected)        setTxError("Transaction rejected. Tap PLAY AGAIN to try again.");
         else if (isGasOrFunds) setTxError("Score didn't save — needs a top up.");
-        else                   setTxError("Score didn't save — needs a top up.");
+        else                   setTxError("Score didn't save. Tap PLAY AGAIN to try again.");
         return;
       } finally {
         setSigningOnChain(false);
@@ -1546,15 +1549,12 @@ function RewardPanel({
   }
 
   if (txError) {
-    // Privy embedded wallets (new Google-login users) often surface
-    // gas failures as generic "Transaction failed" without specific
-    // keywords. Since for new accounts >90% of non-rejection failures
-    // ARE gas, treat any non-rejection error as gas-likely and show
-    // the help card. False positives still get a useful Telegram CTA;
-    // false negatives leave the user staring at a dead red banner.
+    // Strict classification — only call it gas when the catch block tagged
+    // the message with "top up" (i.e. it confirmed insufficient-funds /
+    // gas-related signals). User-rejected and other failures get the
+    // small red banner instead, with no misleading gas blame.
     const low = txError.toLowerCase();
-    const isRejected = low.includes("rejected") || low.includes("denied");
-    const isGasError = !isRejected;
+    const isGasError = low.includes("top up");
     return (
       <GasAwareTxError
         txError={txError}

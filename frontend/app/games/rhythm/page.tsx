@@ -786,9 +786,12 @@ export default function RhythmGamePage() {
             msg.includes("gas limit") || msg.includes("exceeds gas") ||
             msg.includes("gas required") || msg.includes("intrinsic gas") ||
             msg.includes("cannot estimate") || msg.includes("estimate gas");
+          // Three buckets, three messages. The render layer keys off the
+          // text to choose the correct UI variant — rejection (red banner),
+          // gas (orange help card), other (red with retry hint).
           if (isRejected) setTxError("Transaction rejected. Tap PLAY AGAIN to try again.");
           else if (isGasOrFunds) setTxError("Score didn't save — needs a top up.");
-          else setTxError("Score didn't save — needs a top up.");
+          else setTxError("Score didn't save. Tap PLAY AGAIN to try again.");
           return;  // BAIL: don't call submitScore, nothing is saved anywhere
         } finally {
           setSigningOnChain(false);
@@ -2101,15 +2104,12 @@ function RewardPanel({
     );
   }
 
-  // On-chain failure / rejection. Privy embedded wallets often surface
-  // gas issues as a generic "Transaction failed" with no keywords, so
-  // treating any non-rejection error as gas-likely is the right default
-  // for new Google-login users. False positives still get a Telegram
-  // CTA which is useful for any failure type.
+  // Strict classification — only call it gas when the catch block tagged
+  // the message with "top up". User-rejected and other failures get the
+  // small red banner instead, with no misleading gas blame.
   if (txError) {
     const low = txError.toLowerCase();
-    const isRejected = low.includes("rejected") || low.includes("denied");
-    const isGasError = !isRejected;
+    const isGasError = low.includes("top up");
     return <GasAwareTxError txError={txError} isGasError={isGasError} />;
   }
 

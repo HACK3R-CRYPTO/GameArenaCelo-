@@ -388,14 +388,26 @@ export default function SimonGamePage() {
           msg.includes("user rejected") ||
           msg.includes("rejected the request") ||
           msg.includes("user denied");
+        // Broad gas/funds detection. We catch the obvious cases (insufficient
+        // funds, gas-limit, EstimateGas errors) AND the JSON-RPC fallbacks
+        // Privy embedded wallets surface as generic codes (-32000, -32603)
+        // when a no-CELO wallet tries to write. Anything that's neither a
+        // user rejection nor a clear gas case still gets the gas-help card
+        // downstream, since for new accounts that's the dominant failure.
         const isGasOrFunds =
           name === "InsufficientFundsError" || name === "EstimateGasExecutionError" ||
-          code === -32000 || code === -32010 || causeCode === "insufficient_funds" ||
+          code === -32000 || code === -32010 || code === -32603 ||
+          causeCode === "insufficient_funds" ||
           msg.includes("insufficient funds") || msg.includes("insufficient balance") ||
-          msg.includes("gas limit") || msg.includes("exceeds gas");
-        if (isRejected)        setTxError("Transaction rejected — score not saved");
-        else if (isGasOrFunds) setTxError("Insufficient CELO for gas — top up and try again");
-        else                   setTxError("Transaction failed — score not saved");
+          msg.includes("gas limit") || msg.includes("exceeds gas") ||
+          msg.includes("gas required") || msg.includes("intrinsic gas") ||
+          msg.includes("cannot estimate") || msg.includes("estimate gas");
+        // Three buckets, three messages. The render layer keys off the
+        // text to choose the correct UI variant — rejection (red banner),
+        // gas (orange help card), other (red with retry hint).
+        if (isRejected)        setTxError("Transaction rejected. Tap PLAY AGAIN to try again.");
+        else if (isGasOrFunds) setTxError("Score didn't save — needs a top up.");
+        else                   setTxError("Score didn't save. Tap PLAY AGAIN to try again.");
         return;
       } finally {
         setSigningOnChain(false);
@@ -1571,15 +1583,12 @@ function RewardPanel({
   }
 
   if (txError) {
-    // Detect gas-related failures so we can show a plain-English help card
-    // with concrete next steps. The setter upstream already tags gas errors
-    // with "Insufficient CELO"; we pattern match to stay decoupled from the
-    // exact string.
+    // Strict classification — only call it gas when the catch block tagged
+    // the message with "top up" (i.e. it confirmed insufficient-funds /
+    // gas-related signals). User-rejected and other failures get the
+    // small red banner instead, with no misleading gas blame.
     const low = txError.toLowerCase();
-    const isGasError =
-      low.includes("insufficient") ||
-      low.includes("gas") ||
-      low.includes("top up");
+    const isGasError = low.includes("top up");
     return (
       <GasAwareTxError
         txError={txError}

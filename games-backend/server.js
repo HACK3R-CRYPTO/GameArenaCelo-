@@ -1455,11 +1455,26 @@ async function getChallengePlays() {
   const startIso = new Date(CHALLENGE_START * 1000).toISOString();
   const endIso   = new Date(CHALLENGE_END   * 1000).toISOString();
 
-  const { data: rows } = await supabase
-    .from('activity')
-    .select('wallet_address')
-    .gte('created_at', startIso)
-    .lt('created_at', endIso);
+  // Supabase caps unranged selects at 1000 rows. With 2k+ activity rows in
+  // the 72-hour window, a single .select() truncates and every player's
+  // count sticks at whatever fraction of the first 1000 rows happens to be
+  // theirs. Paginate through every row in the window using .range() so
+  // the in-memory aggregation sees the full set.
+  const PAGE_SIZE = 1000;
+  const allRows = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from('activity')
+      .select('wallet_address')
+      .gte('created_at', startIso)
+      .lt('created_at', endIso)
+      .order('created_at', { ascending: true })   // deterministic paging
+      .range(from, from + PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    allRows.push(...page);
+    if (page.length < PAGE_SIZE) break;            // last page reached
+  }
+  const rows = allRows;
 
   const plays = new Map();
   for (const row of (rows || [])) {
@@ -1507,9 +1522,26 @@ app.get('/api/challenge', async (req, res) => {
   // if multiple concurrent requests race here they all converge on one row.
   await freezeChallengeIfNeeded(nowSec, ranked);
 
-  // My play count + qualification state, if the client passed ?player=.
+  // My play count — query Postgres directly with a head-only count for
+  // this wallet so it is exact even if the aggregation cache is briefly
+  // stale OR the paginated scan above still missed a row. The count is
+  // O(1) on Supabase with the activity_created_at_idx + wallet_address
+  // composite filter, so this is cheap.
   const requester = (req.query.player || '').toString().toLowerCase();
-  const myPlays = requester ? (plays.get(requester) || 0) : 0;
+  let myPlays = 0;
+  if (requester && active) {
+    const startIso = new Date(CHALLENGE_START * 1000).toISOString();
+    const endIso   = new Date(CHALLENGE_END   * 1000).toISOString();
+    const { count } = await supabase
+      .from('activity')
+      .select('*', { count: 'exact', head: true })
+      .eq('wallet_address', requester)
+      .gte('created_at', startIso)
+      .lt('created_at', endIso);
+    myPlays = count || 0;
+  } else if (requester) {
+    myPlays = plays.get(requester) || 0;
+  }
 
   res.json({
     active,

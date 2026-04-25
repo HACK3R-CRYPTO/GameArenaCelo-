@@ -15,6 +15,27 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS).split(',').map(o => o.trim(
 app.use(express.json());
 
 // ─── Rate Limiting ──────────────────────────────────────────────────────────
+// Three buckets, each keyed appropriately:
+//   • standardLimiter — generic per-IP cap, used for low-cost reads.
+//   • strictLimiter   — per-IP cap for endpoints with real cost (faucet),
+//                       low ceiling because each call costs us money.
+//   • gameSubmitLimiter — per-wallet cap on score submissions. Higher
+//                         ceiling than strictLimiter so a hot-streak
+//                         player rolling Rhythm rounds back-to-back never
+//                         hits it; keyed by wallet so two legit players
+//                         on the same network/WiFi don't share a bucket.
+//
+// 60 submissions per minute is one finished game every second. Real
+// rhythm rounds are 45s minimum, so the only way to exceed this is
+// scripted abuse — which the score-vs-elapsed-time bound catches anyway.
+
+// Pull the wallet out of the request body for keying. Falls back to the
+// IP if the body shape is unexpected, so we never drop the limit entirely.
+const walletKey = (req) => {
+  const w = (req.body?.playerAddress || req.body?.wallet || '').toString().toLowerCase();
+  return w && /^0x[0-9a-f]{40}$/.test(w) ? `wallet:${w}` : `ip:${req.ip}`;
+};
+
 const standardLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
   max: 30,
@@ -25,6 +46,15 @@ const strictLimiter = rateLimit({
   windowMs: 5 * 60 * 1000, // 5 minutes
   max: 10,
   message: { error: 'Rate limit exceeded. Please wait a few minutes.' }
+});
+
+const gameSubmitLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,           // 1 minute window
+  max: 60,                            // 60 finished games per wallet per minute
+  keyGenerator: walletKey,            // per-wallet bucket, not per-IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'You are submitting too fast. Take a breath and try again in a moment.' }
 });
 
 // ─── Internal secret — every request from Next.js must include this header ───
@@ -717,7 +747,7 @@ function validateScore({ score, gameTime, game }) {
 }
 
 // ─── POST /api/start-session ───────────────────────────────────────────────
-app.post('/api/start-session', strictLimiter, async (req, res) => {
+app.post('/api/start-session', gameSubmitLimiter, async (req, res) => {
   const { playerAddress } = req.body;
   if (!playerAddress) return res.status(400).json({ error: 'Missing playerAddress' });
   if (!validator) return res.status(500).json({ error: 'Validator not ready' });
@@ -792,7 +822,7 @@ app.post('/api/sign-score', requireSecret, async (req, res) => {
 });
 
 // ─── POST /api/submit-score ─────────────────────────────────────────────────
-app.post('/api/submit-score', requireSecret, strictLimiter, async (req, res) => {
+app.post('/api/submit-score', requireSecret, gameSubmitLimiter, async (req, res) => {
   const { playerAddress, scoreData, session } = req.body;
 
   const isInternalCall = req.headers['x-internal-secret'] === INTERNAL_SECRET && INTERNAL_SECRET;

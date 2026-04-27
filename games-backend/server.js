@@ -1730,6 +1730,9 @@ app.get('/api/competition', async (_, res) => {
   const { start: compStart } = seasonBounds(COMPETITION_WEEKS[0]);
   const { end: compEnd }     = seasonBounds(COMPETITION_WEEKS[COMPETITION_WEEKS.length - 1]);
 
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (weeksLeft === 0) await freezeCompetitionIfNeeded(nowSec, rankings, compEnd, compStart);
+
   res.json({
     weeks: COMPETITION_WEEKS,
     prizes: { first: 15, second: 10, third: 5 },
@@ -1739,6 +1742,53 @@ app.get('/api/competition', async (_, res) => {
     currentWeek: current,
     rankings,
   });
+});
+
+// ─── Competition freeze — mirrors freezeChallengeIfNeeded ────────────────────
+// Writes a single immutable snapshot to competition_winners when the comp ends.
+// Idempotent via upsert + onConflict:'id'. In-process guard avoids redundant
+// Supabase writes; cold-start re-runs are safe because upsert is a no-op.
+let competitionFrozen = false;
+const COMPETITION_ID = 'gamearena-3week-s11-13';
+const COMPETITION_NAME = '3-Week Competition';
+
+async function freezeCompetitionIfNeeded(nowSec, rankings, compEnd, compStart) {
+  if (competitionFrozen) return;
+  if (nowSec < compEnd) return;
+
+  const winners = rankings.slice(0, 3).map((r, i) => ({
+    rank: i + 1,
+    wallet: r.wallet,
+    username: r.username,
+    total: r.total,
+    totalRhythm: r.totalRhythm,
+    totalSimon: r.totalSimon,
+  }));
+
+  try {
+    await supabase.from('competition_winners').upsert({
+      id: COMPETITION_ID,
+      name: COMPETITION_NAME,
+      starts_at: new Date(compStart * 1000).toISOString(),
+      ends_at:   new Date(compEnd   * 1000).toISOString(),
+      weeks: COMPETITION_WEEKS,
+      prizes: { first: 15, second: 10, third: 5 },
+      winners,
+    }, { onConflict: 'id' });
+    competitionFrozen = true;
+    console.log(`🏆 Froze ${COMPETITION_ID} — ${winners.length} winner(s)`);
+  } catch (e) {
+    console.error('Failed to freeze competition:', e?.message || e);
+  }
+}
+
+// ─── GET /api/competition/past — archive of frozen competition results ────────
+app.get('/api/competition/past', async (_, res) => {
+  const { data } = await supabase
+    .from('competition_winners')
+    .select('*')
+    .order('ends_at', { ascending: false });
+  res.json({ competitions: data || [] });
 });
 
 // ─── POST /api/dice-roll — disabled until Phase 2 signed oracle ──────────────

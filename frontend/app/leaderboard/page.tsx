@@ -496,7 +496,21 @@ function LeaderboardInner() {
     prize_usdc: number;
     winners: { rank: number; wallet: string; username: string | null; plays: number }[];
   };
+  type PastCompetition = {
+    id: string;
+    name: string;
+    starts_at: string;
+    ends_at: string;
+    weeks: number[];
+    prizes: { first: number; second: number; third: number };
+    winners: { rank: number; wallet: string; username: string | null; total: number; totalRhythm: number; totalSimon: number }[];
+  };
+  type SelectedEvent =
+    | { type: "challenge"; data: PastChallenge }
+    | { type: "competition"; data: PastCompetition };
   const [pastChallenges, setPastChallenges] = useState<PastChallenge[]>([]);
+  const [pastCompetitions, setPastCompetitions] = useState<PastCompetition[]>([]);
+  const [selectedEvent, setSelectedEvent] = useState<SelectedEvent | null>(null);
   useEffect(() => {
     if (activeTab !== "seasons") return;
     fetch(`${BACKEND_URL}/api/seasons`).then(r => r.json()).then(setSeasonsData).catch(() => setSeasonsData(null));
@@ -505,6 +519,10 @@ function LeaderboardInner() {
       .then(r => r.json())
       .then(d => setPastChallenges(d.challenges || []))
       .catch(() => setPastChallenges([]));
+    fetch(`${BACKEND_URL}/api/competition/past`)
+      .then(r => r.json())
+      .then(d => setPastCompetitions(d.competitions || []))
+      .catch(() => setPastCompetitions([]));
   }, [activeTab]);
 
   // Live countdown to season end (refreshes every second)
@@ -968,6 +986,18 @@ function LeaderboardInner() {
                   );
                 })()}
 
+                {/* ── EVENTS — unified section for all live + past competitions.
+                    Arena Cups, 3-Week Competition, and future events all live
+                    here so players have one place to check what's running and
+                    what's already ended. ── */}
+                {(challenge || (competition && competition.weeksLeft > 0) || pastChallenges.length > 0 || pastCompetitions.length > 0) && (
+                  <div style={{
+                    fontSize: "10px", fontWeight: 900, letterSpacing: "0.2em",
+                    color: "rgba(251,215,100,0.9)", textAlign: "center",
+                    textShadow: "0 0 14px rgba(251,191,36,0.7)",
+                  }}>── EVENTS ──</div>
+                )}
+
                 {/* ── 72-HR ARENA CUP — live participation board ──
                     Pinned above the 3-Week Competition because it's the
                     most time-bound thing on the screen. Shows the top
@@ -1154,113 +1184,6 @@ function LeaderboardInner() {
                   </div>
                 )}
 
-                {/* ── PAST CHALLENGES — sibling of the live cup so the cup
-                    family stays grouped (live → completed → other events).
-                    Always renders so the section telegraphs its purpose
-                    even before the first event freezes a record. */}
-                <div>
-                  <div style={{
-                    fontSize: "10px", fontWeight: 900, letterSpacing: "0.2em",
-                    color: "rgba(254,215,170,0.85)", textAlign: "center",
-                    textShadow: "0 0 14px rgba(251,191,36,0.6)",
-                    marginBottom: "10px",
-                  }}>── COMPLETED CUPS ──</div>
-                  {pastChallenges.length === 0 ? (
-                    <div style={{
-                      padding: "14px 12px", borderRadius: "14px",
-                      background: "rgba(20,10,50,0.5)",
-                      border: "1px dashed rgba(251,191,36,0.3)",
-                      color: "rgba(200,180,255,0.55)",
-                      fontSize: "11px", textAlign: "center",
-                      fontWeight: 700, lineHeight: 1.5,
-                    }}>
-                      No completed cups yet. Winners freeze here once an event ends.
-                    </div>
-                  ) : (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "10px" }}>
-                      {pastChallenges.map(ch => {
-                        const winner = ch.winners[0] || null;
-                        const myFinish = address
-                          ? (ch.winners.find(w => w.wallet.toLowerCase() === address.toLowerCase())?.rank ?? 0)
-                          : 0;
-                        const placed = myFinish > 0 && myFinish <= ch.top_n;
-                        const medalColor = myFinish === 1 ? "#fbbf24" : myFinish === 2 ? "#e2e8f0" : myFinish === 3 ? "#f97316" : "#a78bfa";
-                        const medal = myFinish === 1 ? "🥇" : myFinish === 2 ? "🥈" : myFinish === 3 ? "🥉" : myFinish > 0 ? "🏅" : null;
-                        const dateLabel = new Date(ch.ends_at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-                        return (
-                          <div key={ch.id} style={{
-                            borderRadius: "14px",
-                            background: "linear-gradient(180deg, rgba(40,10,80,0.8) 0%, rgba(10,2,40,0.9) 100%)",
-                            border: placed ? `1.5px solid ${medalColor}88` : "1px solid rgba(251,191,36,0.3)",
-                            boxShadow: placed
-                              ? `0 0 14px ${medalColor}33, 0 6px 14px rgba(0,0,0,0.5)`
-                              : "0 0 10px rgba(251,191,36,0.08), 0 6px 14px rgba(0,0,0,0.5)",
-                            padding: "12px 14px",
-                          }}>
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", marginBottom: "8px" }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
-                                <span style={{ fontSize: "14px" }}>🏆</span>
-                                <span style={{
-                                  color: "#fbbf24", fontSize: "11.5px", fontWeight: 900, letterSpacing: "0.06em",
-                                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                                }}>{ch.name.toUpperCase()}</span>
-                              </div>
-                              {medal && (
-                                <div style={{
-                                  padding: "2px 8px", borderRadius: "999px",
-                                  background: `${medalColor}1a`, border: `1px solid ${medalColor}66`,
-                                  flexShrink: 0,
-                                }}>
-                                  <span style={{ fontSize: "10px" }}>{medal}</span>
-                                  <span style={{ color: medalColor, fontSize: "9px", fontWeight: 900, marginLeft: "4px" }}>
-                                    #{myFinish}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                            <div style={{
-                              display: "flex", justifyContent: "space-between",
-                              color: "rgba(200,180,255,0.6)", fontSize: "9.5px", fontWeight: 700,
-                              letterSpacing: "0.06em", marginBottom: "8px",
-                            }}>
-                              <span>ENDED {dateLabel}</span>
-                              <span style={{ color: "#fde68a" }}>${ch.top_n * ch.prize_usdc} POOL</span>
-                            </div>
-                            {winner ? (
-                              <div style={{
-                                display: "flex", alignItems: "center", gap: "8px",
-                                padding: "6px 8px", borderRadius: "8px",
-                                background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)",
-                              }}>
-                                <span style={{ fontSize: "13px" }}>🥇</span>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ color: "rgba(254,215,170,0.65)", fontSize: "8px", fontWeight: 800, letterSpacing: "0.1em" }}>WINNER</div>
-                                  <div style={{
-                                    color: "white", fontSize: "11px", fontWeight: 800,
-                                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                                  }}>
-                                    {winner.username || `${winner.wallet.slice(0,4)}…${winner.wallet.slice(-3)}`}
-                                  </div>
-                                </div>
-                                <div style={{ color: "#fbbf24", fontSize: "12px", fontWeight: 900 }}>
-                                  {winner.plays} plays
-                                </div>
-                              </div>
-                            ) : (
-                              <div style={{
-                                padding: "10px 8px", borderRadius: "8px",
-                                background: "rgba(0,0,0,0.25)",
-                                color: "rgba(200,180,255,0.5)", fontSize: "10px",
-                                textAlign: "center", fontWeight: 700,
-                              }}>No qualifiers</div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
                 {/* ── 3-WEEK COMPETITION SPECIAL EVENT — single gold accent ── */}
                 {competition && competition.weeksLeft > 0 && (
                   <div style={{
@@ -1426,6 +1349,125 @@ function LeaderboardInner() {
                           </div>
                         </div>
                       )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── COMPLETED EVENTS — grid cards matching Completed Seasons style ── */}
+                {(pastChallenges.length > 0 || pastCompetitions.length > 0) && (
+                  <div>
+                    <div style={{
+                      fontSize: "10px", fontWeight: 900, letterSpacing: "0.2em",
+                      color: "rgba(254,215,170,0.85)", textAlign: "center",
+                      textShadow: "0 0 14px rgba(251,191,36,0.6)", marginBottom: "12px",
+                    }}>── COMPLETED EVENTS ──</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "10px" }}>
+                      {pastCompetitions.map(comp => {
+                        const winner = comp.winners[0];
+                        const myFinish = address ? (comp.winners.find(w => w.wallet.toLowerCase() === address.toLowerCase())?.rank ?? 0) : 0;
+                        const placed = myFinish > 0 && myFinish <= 3;
+                        const myMedalColor = myFinish === 1 ? "#fbbf24" : myFinish === 2 ? "#e2e8f0" : myFinish === 3 ? "#f97316" : null;
+                        const myMedal = myFinish === 1 ? "🥇" : myFinish === 2 ? "🥈" : myFinish === 3 ? "🥉" : null;
+                        return (
+                          <div key={comp.id}
+                            role="button" tabIndex={0}
+                            onClick={() => setSelectedEvent({ type: "competition", data: comp })}
+                            style={{
+                              borderRadius: "14px",
+                              background: "rgba(20,10,50,0.6)",
+                              border: placed ? `1.5px solid ${myMedalColor}88` : "1px solid rgba(251,191,36,0.18)",
+                              boxShadow: placed ? `0 0 12px ${myMedalColor}33, 0 6px 14px rgba(0,0,0,0.5)` : "0 6px 14px rgba(0,0,0,0.5)",
+                              padding: "12px 14px", cursor: "pointer", userSelect: "none",
+                              transition: "transform 0.15s, border-color 0.15s",
+                            }}
+                            onMouseEnter={e => { const el = e.currentTarget as HTMLDivElement; el.style.transform = "translateY(-2px)"; if (!placed) el.style.borderColor = "rgba(251,191,36,0.45)"; }}
+                            onMouseLeave={e => { const el = e.currentTarget as HTMLDivElement; el.style.transform = ""; if (!placed) el.style.borderColor = "rgba(251,191,36,0.18)"; }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                              <div style={{ color: "#fbbf24", fontSize: "12px", fontWeight: 900, letterSpacing: "0.05em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                                {comp.name.toUpperCase()}
+                              </div>
+                              {myMedal && (
+                                <div style={{ padding: "2px 8px", borderRadius: "999px", background: `${myMedalColor}1a`, border: `1px solid ${myMedalColor}66`, flexShrink: 0, marginLeft: "6px" }}>
+                                  <span style={{ fontSize: "10px" }}>{myMedal}</span>
+                                  <span style={{ color: myMedalColor!, fontSize: "9px", fontWeight: 900, marginLeft: "4px" }}>YOU</span>
+                                </div>
+                              )}
+                            </div>
+                            {winner ? (
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "6px 8px", borderRadius: "8px", background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)", marginBottom: "8px" }}>
+                                <span style={{ fontSize: "13px" }}>🏆</span>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ color: "rgba(254,215,170,0.65)", fontSize: "8px", fontWeight: 800, letterSpacing: "0.1em" }}>WINNER</div>
+                                  <div style={{ color: "white", fontSize: "11px", fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {winner.username || `${winner.wallet.slice(0, 4)}…${winner.wallet.slice(-3)}`}
+                                  </div>
+                                </div>
+                                <div style={{ color: "#fbbf24", fontSize: "13px", fontWeight: 900 }}>{winner.total}</div>
+                              </div>
+                            ) : (
+                              <div style={{ color: "rgba(200,180,255,0.4)", fontSize: "10px", textAlign: "center", padding: "12px 0" }}>No results</div>
+                            )}
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "rgba(200,180,255,0.55)", fontSize: "9px", fontWeight: 700 }}>
+                              <span>💰 ${comp.prizes.first + comp.prizes.second + comp.prizes.third} pool</span>
+                              <span style={{ color: "rgba(251,191,36,0.7)", fontSize: "10px", fontWeight: 800, letterSpacing: "0.1em" }}>VIEW →</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {pastChallenges.map(ch => {
+                        const winner = ch.winners[0];
+                        const myFinish = address ? (ch.winners.find(w => w.wallet.toLowerCase() === address.toLowerCase())?.rank ?? 0) : 0;
+                        const placed = myFinish > 0 && myFinish <= ch.top_n;
+                        const myMedalColor = myFinish === 1 ? "#fbbf24" : myFinish === 2 ? "#e2e8f0" : myFinish === 3 ? "#f97316" : myFinish > 0 ? "#a78bfa" : null;
+                        const myMedal = myFinish === 1 ? "🥇" : myFinish === 2 ? "🥈" : myFinish === 3 ? "🥉" : myFinish > 0 ? "🏅" : null;
+                        return (
+                          <div key={ch.id}
+                            role="button" tabIndex={0}
+                            onClick={() => setSelectedEvent({ type: "challenge", data: ch })}
+                            style={{
+                              borderRadius: "14px",
+                              background: "rgba(20,10,50,0.6)",
+                              border: placed ? `1.5px solid ${myMedalColor}88` : "1px solid rgba(251,191,36,0.18)",
+                              boxShadow: placed ? `0 0 12px ${myMedalColor}33, 0 6px 14px rgba(0,0,0,0.5)` : "0 6px 14px rgba(0,0,0,0.5)",
+                              padding: "12px 14px", cursor: "pointer", userSelect: "none",
+                              transition: "transform 0.15s, border-color 0.15s",
+                            }}
+                            onMouseEnter={e => { const el = e.currentTarget as HTMLDivElement; el.style.transform = "translateY(-2px)"; if (!placed) el.style.borderColor = "rgba(251,191,36,0.45)"; }}
+                            onMouseLeave={e => { const el = e.currentTarget as HTMLDivElement; el.style.transform = ""; if (!placed) el.style.borderColor = "rgba(251,191,36,0.18)"; }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                              <div style={{ color: "#fbbf24", fontSize: "12px", fontWeight: 900, letterSpacing: "0.05em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                                {ch.name.toUpperCase()}
+                              </div>
+                              {myMedal && (
+                                <div style={{ padding: "2px 8px", borderRadius: "999px", background: `${myMedalColor}1a`, border: `1px solid ${myMedalColor}66`, flexShrink: 0, marginLeft: "6px" }}>
+                                  <span style={{ fontSize: "10px" }}>{myMedal}</span>
+                                  <span style={{ color: myMedalColor!, fontSize: "9px", fontWeight: 900, marginLeft: "4px" }}>YOU</span>
+                                </div>
+                              )}
+                            </div>
+                            {winner ? (
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "6px 8px", borderRadius: "8px", background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)", marginBottom: "8px" }}>
+                                <span style={{ fontSize: "13px" }}>🏆</span>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ color: "rgba(254,215,170,0.65)", fontSize: "8px", fontWeight: 800, letterSpacing: "0.1em" }}>WINNER</div>
+                                  <div style={{ color: "white", fontSize: "11px", fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {winner.username || `${winner.wallet.slice(0, 4)}…${winner.wallet.slice(-3)}`}
+                                  </div>
+                                </div>
+                                <div style={{ color: "#fbbf24", fontSize: "13px", fontWeight: 900 }}>{winner.plays}</div>
+                              </div>
+                            ) : (
+                              <div style={{ color: "rgba(200,180,255,0.4)", fontSize: "10px", textAlign: "center", padding: "12px 0" }}>No results</div>
+                            )}
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "rgba(200,180,255,0.55)", fontSize: "9px", fontWeight: 700 }}>
+                              <span>🏅 {ch.winners.length}/{ch.top_n} qualified</span>
+                              <span style={{ color: "rgba(251,191,36,0.7)", fontSize: "10px", fontWeight: 800, letterSpacing: "0.1em" }}>VIEW →</span>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -1673,6 +1715,119 @@ function LeaderboardInner() {
                         </div>
                         <div style={{ color: "#fbbf24", fontSize: "13px", fontWeight: 900, flexShrink: 0 }}>
                           {e.score}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Event Detail Modal — same pattern as Season Detail Modal ── */}
+      {selectedEvent && (() => {
+        const isChallenge = selectedEvent.type === "challenge";
+        const name = isChallenge ? selectedEvent.data.name : selectedEvent.data.name;
+        const endsAt = isChallenge ? selectedEvent.data.ends_at : selectedEvent.data.ends_at;
+        const endDate = new Date(endsAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        type AnyWinner = { rank: number; wallet: string; username: string | null; plays?: number; total?: number; totalRhythm?: number; totalSimon?: number };
+        const winners: AnyWinner[] = isChallenge ? selectedEvent.data.winners : selectedEvent.data.winners;
+        const prizeFor = (rank: number) =>
+          isChallenge
+            ? selectedEvent.data.prize_usdc
+            : rank === 1 ? selectedEvent.data.prizes.first : rank === 2 ? selectedEvent.data.prizes.second : selectedEvent.data.prizes.third;
+        const scoreLabel = isChallenge ? "plays" : "pts";
+        const scoreOf = (w: AnyWinner) => isChallenge ? (w.plays ?? 0) : (w.total ?? 0);
+        const subLabel = (w: AnyWinner) =>
+          !isChallenge && w.totalRhythm != null
+            ? `🥁 ${w.totalRhythm} + 🧠 ${w.totalSimon}`
+            : isChallenge ? `${selectedEvent.data.min_plays} plays to qualify` : "";
+        const rankColor = (r: number) => r === 1 ? "#fbbf24" : r === 2 ? "#e2e8f0" : r === 3 ? "#f97316" : "#a78bfa";
+        const rankMedal = (r: number) => r === 1 ? "🥇" : r === 2 ? "🥈" : r === 3 ? "🥉" : "🏅";
+        return (
+          <div onClick={() => setSelectedEvent(null)}
+            style={{
+              position: "fixed", inset: 0, zIndex: 100,
+              background: "rgba(4,0,20,0.78)", backdropFilter: "blur(8px)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              padding: "20px",
+            }}
+          >
+            <div onClick={e => e.stopPropagation()} style={{
+              width: "100%", maxWidth: "440px", maxHeight: "88vh",
+              borderRadius: "24px",
+              background: "#1a0520", paddingBottom: "6px",
+              boxShadow: "0 0 0 3px #92400e, 0 0 50px rgba(251,191,36,0.35), 0 30px 60px rgba(0,0,0,0.9)",
+              display: "flex", flexDirection: "column",
+            }}>
+              <div style={{
+                flex: 1, minHeight: 0,
+                borderRadius: "22px 22px 18px 18px",
+                background: "linear-gradient(180deg, #2a1000 0%, #13060a 50%, #07021a 100%)",
+                border: "2px solid rgba(251,191,36,0.2)",
+                display: "flex", flexDirection: "column", overflow: "hidden",
+              }}>
+                {/* Header */}
+                <div style={{
+                  padding: "16px 18px",
+                  borderBottom: "1px solid rgba(251,191,36,0.15)",
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  background: "linear-gradient(180deg, rgba(251,191,36,0.08) 0%, transparent 100%)",
+                }}>
+                  <div>
+                    <div style={{ color: "#fbbf24", fontSize: "16px", fontWeight: 900, letterSpacing: "0.06em" }}>
+                      {name.toUpperCase()}
+                    </div>
+                    <div style={{ color: "rgba(254,215,170,0.55)", fontSize: "10px", fontWeight: 700, marginTop: "2px" }}>
+                      ENDED {endDate}
+                    </div>
+                  </div>
+                  <button onClick={() => setSelectedEvent(null)} style={{
+                    width: "32px", height: "32px", borderRadius: "50%",
+                    background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)",
+                    color: "rgba(255,255,255,0.7)", fontSize: "16px", cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>✕</button>
+                </div>
+                {/* Finalists list */}
+                <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "7px" }}>
+                  <div style={{ color: "rgba(254,215,170,0.6)", fontSize: "9px", fontWeight: 800, letterSpacing: "0.18em", marginBottom: "4px" }}>
+                    FINAL STANDINGS · {winners.length} {isChallenge ? "QUALIFIER" : "FINALIST"}{winners.length !== 1 ? "S" : ""}
+                  </div>
+                  {winners.length === 0 ? (
+                    <div style={{ padding: "20px", textAlign: "center", color: "rgba(200,180,255,0.4)", fontSize: "11px", fontWeight: 700 }}>
+                      No results recorded
+                    </div>
+                  ) : winners.map(w => {
+                    const isMe = !!address && w.wallet.toLowerCase() === address.toLowerCase();
+                    const rc = rankColor(w.rank);
+                    const rm = rankMedal(w.rank);
+                    const sub = subLabel(w);
+                    return (
+                      <div key={w.wallet} style={{
+                        display: "flex", alignItems: "center", gap: "10px",
+                        padding: "10px 12px", borderRadius: "12px",
+                        background: isMe ? `${rc}18` : w.rank <= 3 ? `${rc}0d` : "rgba(255,255,255,0.03)",
+                        border: isMe ? `1.5px solid ${rc}77` : `1px solid ${w.rank <= 3 ? rc + "33" : "rgba(255,255,255,0.07)"}`,
+                      }}>
+                        <span style={{ fontSize: "18px", flexShrink: 0 }}>{rm}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ color: isMe ? rc : "white", fontSize: "13px", fontWeight: isMe ? 900 : 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {isMe ? "YOU" : (w.username || `${w.wallet.slice(0, 4)}…${w.wallet.slice(-3)}`)}
+                          </div>
+                          {sub && (
+                            <div style={{ color: "rgba(200,180,255,0.5)", fontSize: "9px", fontWeight: 700, marginTop: "2px" }}>
+                              {sub}
+                            </div>
+                          )}
+                          <div style={{ color: "rgba(200,180,255,0.5)", fontSize: "9px", fontWeight: 700, marginTop: "1px" }}>
+                            RANK #{w.rank} · ${prizeFor(w.rank)} USDC
+                          </div>
+                        </div>
+                        <div style={{ color: rc, fontSize: "14px", fontWeight: 900, textShadow: `0 0 8px ${rc}88`, flexShrink: 0 }}>
+                          {scoreOf(w)} {scoreLabel}
                         </div>
                       </div>
                     );

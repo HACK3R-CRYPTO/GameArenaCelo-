@@ -460,7 +460,7 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
     key: "games",
     render: () => (
       <SlideFrame eyebrow="THE PRODUCT">
-        <H1>Two games live. More on the rail.</H1>
+        <H1>Three experiences live. Platform open to developers.</H1>
         <div style={{
           marginTop: "clamp(16px, 3vh, 32px)",
           display: "grid",
@@ -478,8 +478,8 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
               body: "Four pads. Repeat the sequence. Round 5 adds a fifth pad. No score cap. Difficulty keeps scaling.",
             },
             {
-              name: "NEXT UP", icon: "⚡", accent: GOLD,
-              body: "Challenge AI for head to head runs. The Arena model drops new titles into the same economy and leaderboards.",
+              name: "HUMAN VS AI", icon: "🤖", accent: GOLD,
+              body: "Face Markov-1, a live AI opponent registered on ERC-8004 Agent Trust Protocol. Rock-Paper-Scissors and Coin Flip with real G$ stakes.",
             },
           ].map((g, i) => (
             <div key={i} style={{
@@ -623,7 +623,45 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
     ),
   },
 
-  // 9. TRACTION (live numbers from /api/stats)
+  // 9. DEVELOPER PLATFORM
+  {
+    key: "platform",
+    render: () => (
+      <SlideFrame eyebrow="THE PLATFORM">
+        <H1>Build a game. Plug into the arena.</H1>
+        <Lead>
+          GameArena is open to external developers. List your game, pay to be visible, and your players compete inside the same arena, leaderboards, and prize infrastructure we already built.
+        </Lead>
+        <div style={{
+          marginTop: "clamp(16px, 3vh, 32px)",
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+          gap: "clamp(12px, 1.6vw, 20px)",
+          maxWidth: "1100px",
+        }}>
+          {[
+            { icon: "🔌", title: "Plug in", body: "Integrate your game via our SDK. Your players land inside GameArena and compete on the existing leaderboard.", c: GREEN },
+            { icon: "💰", title: "Pay to list", body: "Listing fee gives you visibility in the arena. No need to build community from scratch.", c: GOLD },
+            { icon: "🏆", title: "Shared infrastructure", body: "Seasons, cups, XP, streaks, pet system, and prize pools. Your game inherits all of it.", c: MAGENTA },
+            { icon: "🌍", title: "Instant reach", body: "Access our player base on day one. Distribution without the grind.", c: CYAN },
+          ].map((card, i) => (
+            <div key={i} style={{
+              borderRadius: "16px",
+              background: `linear-gradient(180deg, ${card.c}18 0%, rgba(0,0,0,0.3) 100%)`,
+              border: `1.5px solid ${card.c}55`,
+              padding: "clamp(14px, 2vh, 20px)",
+            }}>
+              <div style={{ fontSize: "clamp(26px, 3vw, 38px)" }}>{card.icon}</div>
+              <div style={{ color: "white", fontWeight: 900, fontSize: "clamp(13px, 1.6vw, 17px)", marginTop: "8px" }}>{card.title}</div>
+              <div style={{ color: "rgba(200,180,255,0.75)", fontSize: "clamp(11.5px, 1.3vw, 13.5px)", marginTop: "4px", lineHeight: 1.45 }}>{card.body}</div>
+            </div>
+          ))}
+        </div>
+      </SlideFrame>
+    ),
+  },
+
+  // 10. TRACTION (live numbers from /api/stats)
   {
     key: "traction",
     render: () => <TractionSlide />,
@@ -675,8 +713,10 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
               c: GREEN,
               items: [
                 "Rhythm Rush and Simon Memory live",
+                "Human vs AI Arena with Markov-1 (ERC-8004 registered agent)",
                 "Free play, no wallet required",
                 "Weekly seasons with Bronze, Silver, Gold badges",
+                "72-hour Arena Cups with USDC prizes",
                 "3 Week Cup with on chain G$ prizes",
                 "XP, levels, and 5 stage pet evolution",
                 "Daily missions and play streaks",
@@ -690,8 +730,8 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
               items: [
                 "Wager UI toggle inside the game flow",
                 "Achievement NFT badge mint",
-                "Challenge AI head to head",
                 "Tournament brackets",
+                "True player vs player with matchmaking",
                 "Third skill game",
               ],
             },
@@ -699,8 +739,9 @@ const SLIDES: { key: string; render: () => React.ReactNode }[] = [
               label: "HORIZON",
               c: MAGENTA,
               items: [
+                "Open developer platform — plug in your game, pay to list, access the player base",
                 "Signed oracle anti cheat at scale",
-                "Public API for third party games",
+                "Public SDK for third party game integration",
                 "Native shells for app stores",
               ],
             },

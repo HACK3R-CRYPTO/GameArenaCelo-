@@ -207,8 +207,8 @@ export default function ChallengeBanner({
       role="status"
       aria-live="polite"
       aria-label={isPending
-        ? `72-hour Arena Cup starts in ${timerLabel}.`
-        : `72-hour Arena Cup. ${challenge.myPlays} of ${challenge.minPlays} plays. ${challenge.myQualified ? "Qualified" : "Not yet qualified"}.`}
+        ? `${challenge.name} starts in ${timerLabel}.`
+        : `${challenge.name}. ${challenge.myPlays} of ${challenge.minPlays} plays. ${challenge.myQualified ? "Qualified" : "Not yet qualified"}.`}
       style={{
         borderRadius: "clamp(10px, 2.4vw, 14px)",
         padding: "2px",
@@ -240,7 +240,7 @@ export default function ChallengeBanner({
               fontWeight: 900, letterSpacing: "0.14em",
               textShadow: "0 0 10px rgba(251,191,36,0.7)",
               whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-            }}>72-HR ARENA CUP{isPending ? " · SOON" : ""}</span>
+            }}>{challenge.name.toUpperCase()}{isPending ? " · SOON" : ""}</span>
           </div>
           <div style={{
             padding: "3px clamp(8px, 2.2vw, 10px)",

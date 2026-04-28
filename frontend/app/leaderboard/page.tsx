@@ -1045,7 +1045,7 @@ function LeaderboardInner() {
                             fontSize: "clamp(14px, 4vw, 16px)",
                             fontWeight: 900, letterSpacing: "0.04em", lineHeight: 1.1,
                           }}>
-                            72-HOUR ARENA CUP
+                            {challenge.name.toUpperCase()}
                           </div>
                         </div>
                         <div style={{

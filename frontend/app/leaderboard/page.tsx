@@ -1101,8 +1101,8 @@ function LeaderboardInner() {
                           <div style={{
                             color: "rgba(254,215,170,0.7)",
                             fontSize: "9px", fontWeight: 800, letterSpacing: "0.18em",
-                          }}>LIVE TOP {challenge.topN} · {challenge.minPlays} PLAYS TO QUALIFY</div>
-                          {challenge.rankings.slice(0, challenge.topN).map((p, i) => {
+                          }}>LIVE TOP 5 · {challenge.minPlays} PLAYS TO QUALIFY</div>
+                          {challenge.rankings.slice(0, 5).map((p, i) => {
                             const isMe = address && p.wallet.toLowerCase() === address.toLowerCase();
                             const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "🏅";
                             return (

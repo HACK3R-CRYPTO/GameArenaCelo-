@@ -1418,11 +1418,11 @@ app.get('/api/streak/:address', async (req, res) => {
 // Config is hardcoded on purpose so the event is deterministic and the
 // whole team knows when it starts and stops without hunting through env
 // vars. Update these three constants to run another challenge later.
-const CHALLENGE_ID          = '2026-04-27_72h_arena_cup';
+const CHALLENGE_ID          = '2026-04-28_72h_arena_cup';
 const CHALLENGE_NAME        = '72-hr Arena Cup II';
-// Starts 12:00pm UTC Apr 27, ends 72h later at 12:00pm Apr 30.
-const CHALLENGE_START       = Math.floor(new Date('2026-04-27T12:00:00Z').getTime() / 1000);
-const CHALLENGE_END         = Math.floor(new Date('2026-04-30T12:00:00Z').getTime() / 1000);
+// Starts 12:00pm WAT Apr 28 (= 11:00 UTC), ends 72h later at 11:00 UTC May 1.
+const CHALLENGE_START       = Math.floor(new Date('2026-04-28T11:00:00Z').getTime() / 1000);
+const CHALLENGE_END         = Math.floor(new Date('2026-05-01T11:00:00Z').getTime() / 1000);
 const CHALLENGE_MIN_PLAYS   = 500;
 const CHALLENGE_TOP_N       = 2;
 const CHALLENGE_PRIZE_USDC  = 5;

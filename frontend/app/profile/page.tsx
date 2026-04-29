@@ -11,6 +11,9 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import BottomNav from "@/components/BottomNav";
 import MobileStreakChip from "@/components/MobileStreakChip";
 import ShareCard from "@/components/ShareCard";
+import { HabitatsPanel } from "@/components/HabitatsPanel";
+import { HabitatBackground } from "@/components/HabitatBackground";
+import { useHabitats } from "@/hooks/useHabitats";
 import { CONTRACT_ADDRESSES, ERC20_ABI } from "@/lib/contracts";
 import { formatUnits } from "viem";
 
@@ -114,6 +117,7 @@ function tierFromRank(rank: number): { tier: Tier; division: string } {
 const TABS = [
   { id: "stats", label: "STATS", icon: "📊" },
   { id: "matches", label: "MATCHES", icon: "⚔️" },
+  { id: "habitats", label: "HABITATS", icon: "🏛️" },
   { id: "achievements", label: "TROPHIES", icon: "🏆" },
   { id: "settings", label: "SETTINGS", icon: "⚙️" },
 ] as const;
@@ -453,10 +457,11 @@ function SettingsRow({ icon, label, color, children }: { icon: string; label: st
 }
 
 // ─── Pet Slot — compact pet display that lives inside the trainer card ────────
-function PetSlot({ pet, compact = false }: { pet: PetStage; compact?: boolean }) {
+function PetSlot({ pet, compact = false, playerLevel = 1 }: { pet: PetStage; compact?: boolean; playerLevel?: number }) {
   const isEgg = pet.id === "egg";
   const [poking, setPoking] = useState(false);
   const [bubble, setBubble] = useState<string | null>(null);
+  const { equipped: habitat } = useHabitats(playerLevel);
 
   const phrases = isEgg
     ? ["It's warm.", "Cozy in here.", "Boop!", "I hear tapping!"]
@@ -484,6 +489,8 @@ function PetSlot({ pet, compact = false }: { pet: PetStage; compact?: boolean })
         cursor: "pointer", userSelect: "none",
       }}
     >
+      {/* Habitat backdrop — sits behind everything else */}
+      <HabitatBackground habitat={habitat} radius={14} glow={true} />
       {bubble && (
         <div className="pet-bubble" style={{
           position: "absolute", top: "-10px", left: "50%", transform: "translateX(-50%)",
@@ -503,15 +510,17 @@ function PetSlot({ pet, compact = false }: { pet: PetStage; compact?: boolean })
           }} />
         </div>
       )}
-      {/* Soft ground glow */}
+      {/* Soft ground glow — keeps the pet anchored visually inside the habitat */}
       <div style={{
-        position: "absolute", bottom: "0", left: "50%", transform: "translateX(-50%)",
-        width: "85%", height: "16px",
+        position: "absolute", bottom: "6px", left: "50%", transform: "translateX(-50%)",
+        width: "85%", height: "12px",
         borderRadius: "50%",
-        background: `radial-gradient(ellipse at 50% 50%, ${pet.color}88 0%, transparent 70%)`,
+        background: `radial-gradient(ellipse at 50% 50%, ${pet.color}66 0%, transparent 70%)`,
         filter: "blur(3px)",
+        zIndex: 1,
       }} />
       <div className={idleClass} style={{
+        position: "relative", zIndex: 2,
         width: "100%", height: "100%",
         display: "flex", alignItems: "flex-end", justifyContent: "center",
         pointerEvents: "none",
@@ -519,7 +528,7 @@ function PetSlot({ pet, compact = false }: { pet: PetStage; compact?: boolean })
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={pet.src} alt={pet.name} draggable={false}
           style={{
-            width: "100%", height: "100%", objectFit: "contain",
+            width: "85%", height: "85%", objectFit: "contain",
             filter: `drop-shadow(0 0 12px ${pet.color}aa) drop-shadow(0 6px 8px rgba(0,0,0,0.5))`,
           }} />
       </div>
@@ -1178,7 +1187,7 @@ export default function ProfilePage() {
                     </div>
 
                     {/* RIGHT — Pet (compact on mobile so center gets space) */}
-                    <PetSlot pet={petForLevel(playerLevel)} compact={isMobile} />
+                    <PetSlot pet={petForLevel(playerLevel)} compact={isMobile} playerLevel={playerLevel} />
                   </div>
 
                   {/* BOTTOM ROW — combined XP / pet evolution bar (full width, dual meaning) */}
@@ -1208,7 +1217,10 @@ export default function ProfilePage() {
               {TABS.map(t => (
                 <PillTab key={t.id} label={t.label} icon={t.icon} active={activeTab === t.id}
                   compact={isMobile}
-                  iconOnly={isMobile && t.id === "settings"}
+                  // On mobile, only the active tab shows its label; everyone
+                  // else collapses to icon-only. Scales cleanly to any tab
+                  // count and keeps the active state legible at 360px.
+                  iconOnly={isMobile && activeTab !== t.id}
                   onClick={() => { if (activeTab !== t.id) playTabSwitch(); setActiveTab(t.id); }} />
               ))}
             </div>
@@ -1399,6 +1411,13 @@ export default function ProfilePage() {
                       );
                     })
                   )}
+                </div>
+              )}
+
+              {/* HABITATS TAB */}
+              {activeTab === "habitats" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <HabitatsPanel playerLevel={userMeta?.level ?? 1} />
                 </div>
               )}
 

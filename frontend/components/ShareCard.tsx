@@ -1,5 +1,9 @@
 "use client";
 
+import { HabitatBackground } from "./HabitatBackground";
+import { useHabitats } from "@/hooks/useHabitats";
+import type { HabitatTier } from "@/lib/habitats";
+
 // ─── ShareCard ────────────────────────────────────────────────────────────────
 // Shareable player profile card. Opens as a full-screen modal launched from
 // the profile page. Renders a fixed 1080×1350 (4:5) poster in a hidden DOM
@@ -51,6 +55,9 @@ const ROYAL = "#6a18c8";
 
 export default function ShareCard(props: Props) {
   const { open, onClose, username, address, level, rhythmBest, simonBest, streak, goldBadges, tierLabel, petSrc, petName, avatarUrl } = props;
+  // Habitat the player has equipped — same source the profile uses, so the
+  // share card always shows them in their actual world.
+  const { equipped: habitat } = useHabitats(level);
 
   // Two card nodes:
   //   cardRef       → off-screen, native 1080×1350, no transform (capture target)
@@ -288,6 +295,7 @@ export default function ShareCard(props: Props) {
               petSrc={petSrc}
               petName={petName}
               avatarUrl={avatarUrl}
+              habitat={habitat}
               qrDataUrl={qrDataUrl}
               StatTile={StatTile}
             />
@@ -323,6 +331,7 @@ export default function ShareCard(props: Props) {
               petSrc={petSrc}
               petName={petName}
               avatarUrl={avatarUrl}
+              habitat={habitat}
               qrDataUrl={qrDataUrl}
               StatTile={StatTile}
             />
@@ -447,7 +456,7 @@ function CardScaleFit({ cardRef }: { cardRef: React.RefObject<HTMLDivElement | n
 // has a known size and needs to rasterise identically everywhere.
 function CardBody({
   username, shortAddr, level, rhythmBest, simonBest, streak, goldBadges, tierLabel,
-  petSrc, petName, avatarUrl, qrDataUrl, StatTile,
+  petSrc, petName, avatarUrl, habitat, qrDataUrl, StatTile,
 }: {
   username: string;
   shortAddr: string;
@@ -460,6 +469,7 @@ function CardBody({
   petSrc: string;
   petName: string;
   avatarUrl: string;
+  habitat: HabitatTier;
   qrDataUrl: string;
   StatTile: (p: { icon: string; value: string | number; label: string; accent: string }) => React.JSX.Element;
 }) {
@@ -591,18 +601,21 @@ function CardBody({
           </div>
         </div>
 
-        {/* Pet portrait — the unique Game Arena brand hook */}
+        {/* Pet portrait — habitat backdrop frames the pet, making every share
+            a habitat advert. The HabitatBackground sits absolute inside; the
+            pet img stays on top with its own drop shadow. */}
         <div style={{
           width: 260,
           height: 260,
           borderRadius: 32,
-          background: `radial-gradient(circle at 50% 40%, rgba(192,38,211,0.35), transparent 70%)`,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           flexShrink: 0,
           position: "relative",
+          overflow: "hidden",
         }}>
+          <HabitatBackground habitat={habitat} radius={32} glow={true} />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={petSrc}
@@ -611,10 +624,12 @@ function CardBody({
             height={240}
             crossOrigin="anonymous"
             style={{
-              width: "88%",
-              height: "88%",
+              width: "78%",
+              height: "78%",
               objectFit: "contain",
-              filter: `drop-shadow(0 10px 24px rgba(0,0,0,0.7)) drop-shadow(0 0 40px ${MAGENTA}55)`,
+              filter: `drop-shadow(0 10px 24px rgba(0,0,0,0.8)) drop-shadow(0 0 40px ${MAGENTA}55)`,
+              position: "relative",
+              zIndex: 2,
             }}
           />
           <div style={{

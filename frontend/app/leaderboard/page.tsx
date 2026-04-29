@@ -7,6 +7,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import BottomNav from "@/components/BottomNav";
 import MobileStreakChip from "@/components/MobileStreakChip";
 import { useChallenge } from "@/components/ChallengeBanner";
+import { HabitatChip } from "@/components/HabitatChip";
 
 // ─── Splash icons ──────────────────────────────────────────────────────────────
 const D = "/splash_screen_icons/dice.png";
@@ -402,12 +403,16 @@ function PlayerRow({
         </div>
         {/* Name + tier subtitle (Wild Rift style — tier explicit under the name) */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            color: isMe ? color : "white",
-            fontSize: "12px", fontWeight: 800, lineHeight: 1.15,
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>
-            {isMe ? "YOU" : fmtName(entry.player, entry.username)}
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <HabitatChip address={entry.player} size={18} />
+            <div style={{
+              color: isMe ? color : "white",
+              fontSize: "12px", fontWeight: 800, lineHeight: 1.15,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              minWidth: 0, flex: 1,
+            }}>
+              {isMe ? "YOU" : fmtName(entry.player, entry.username)}
+            </div>
           </div>
           <div style={{
             color: color, fontSize: "8.5px", fontWeight: 800,

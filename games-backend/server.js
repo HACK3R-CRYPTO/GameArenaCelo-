@@ -181,6 +181,31 @@ if (provider && SOLO_WAGER_ADDR && VALIDATOR_KEY) {
   console.log('ℹ️  SOLO_WAGER_ADDRESS or VALIDATOR_PRIVATE_KEY not set — wager resolution disabled');
 }
 
+// ─── Habitat Registry — paid habitat tier ownership ──────────────────────────
+const HABITAT_REGISTRY_ADDR = process.env.HABITAT_REGISTRY_ADDRESS || '';
+const HABITAT_PAID_TIERS    = [6, 7, 8, 9, 10];
+const HABITAT_FREE_TIERS = [
+  { id: 1, unlockLevel: 1  },
+  { id: 2, unlockLevel: 5  },
+  { id: 3, unlockLevel: 15 },
+  { id: 4, unlockLevel: 30 },
+  { id: 5, unlockLevel: 50 },
+];
+const HABITAT_REGISTRY_ABI = [
+  'function ownsHabitat(address player, uint8 tier) external view returns (bool)',
+  'function playerUbiDonated(address player) external view returns (uint256)',
+];
+
+let habitatContract = null;
+if (provider && HABITAT_REGISTRY_ADDR) {
+  try {
+    habitatContract = new ethers.Contract(HABITAT_REGISTRY_ADDR, HABITAT_REGISTRY_ABI, provider);
+    console.log(`🏛️  Habitat registry: ${HABITAT_REGISTRY_ADDR}`);
+  } catch (e) {
+    console.warn('⚠️  Habitat registry not configured:', e.message);
+  }
+}
+
 // Event interface for parsing on-chain ScoreRecorded logs. Built once,
 // reused by every indexOnChainScores tick. (Previously instantiated
 // inside the cron body on each run — minor garbage but unnecessary.)
@@ -1380,6 +1405,128 @@ app.get('/api/user/:address', async (req, res) => {
     streak: u.play_streak || 0,
     playedToday: u.last_play_date === today,
   });
+});
+
+// ─── Habitat helpers ─────────────────────────────────────────────────────
+function freeTierForLevel(level) {
+  let tier = HABITAT_FREE_TIERS[0].id;
+  for (const t of HABITAT_FREE_TIERS) {
+    if (level >= t.unlockLevel) tier = t.id;
+  }
+  return tier;
+}
+
+// In-memory cache of paid tier ownership per wallet. Chain reads are
+// rare-changing (only on unlock), so a 60s TTL keeps the leaderboard
+// indicator endpoint fast even when many wallets are queried at once.
+const habitatCache = new Map(); // wallet → { ownedPaidTiers: number[], ubiDonated: string, at: ms }
+const HABITAT_CACHE_TTL_MS = 60_000;
+
+async function fetchPaidOwnership(addr) {
+  const cached = habitatCache.get(addr);
+  if (cached && Date.now() - cached.at < HABITAT_CACHE_TTL_MS) return cached;
+
+  if (!habitatContract) {
+    return { ownedPaidTiers: [], ubiDonated: '0', at: Date.now() };
+  }
+
+  try {
+    // Batch all paid tier checks + donation read in parallel.
+    const [ownsResults, ubi] = await Promise.all([
+      Promise.all(HABITAT_PAID_TIERS.map(tier => habitatContract.ownsHabitat(addr, tier))),
+      habitatContract.playerUbiDonated(addr),
+    ]);
+    const ownedPaidTiers = HABITAT_PAID_TIERS.filter((_, i) => ownsResults[i] === true);
+    const result = { ownedPaidTiers, ubiDonated: ubi.toString(), at: Date.now() };
+    habitatCache.set(addr, result);
+    return result;
+  } catch (e) {
+    console.warn(`Habitat ownership read failed for ${addr}:`, e?.message || e);
+    return { ownedPaidTiers: [], ubiDonated: '0', at: Date.now() };
+  }
+}
+
+// ─── GET /api/habitat/:address — combined free + paid + equipped ────────────
+// One read for any third-party (leaderboard rows, share cards, dashboards).
+// Returns the player's level-derived free tier, on-chain owned paid tiers,
+// their currently equipped choice, and total UBI contribution.
+app.get('/api/habitat/:address', async (req, res) => {
+  const addr = req.params.address.toLowerCase();
+  if (!/^0x[0-9a-f]{40}$/.test(addr)) return res.status(400).json({ error: 'Invalid address' });
+
+  // Level from XP (same logic as /api/user)
+  const { data: userRows } = await supabase
+    .from('users')
+    .select('xp, equipped_habitat')
+    .eq('wallet_address', addr)
+    .limit(1);
+  const xp = userRows?.[0]?.xp || 0;
+  const level = levelFromXp(xp);
+  const freeTier = freeTierForLevel(level);
+
+  // Paid ownership (chain) + UBI donation total
+  const { ownedPaidTiers, ubiDonated } = await fetchPaidOwnership(addr);
+
+  // Equipped choice. Falls back to highest paid owned, otherwise free tier.
+  const stored = userRows?.[0]?.equipped_habitat || null;
+  const validStored =
+    stored != null &&
+    ((stored >= 6 && ownedPaidTiers.includes(stored)) ||
+     (stored >= 1 && stored <= 5 && stored <= freeTier));
+  const equipped = validStored
+    ? stored
+    : (ownedPaidTiers.length > 0 ? Math.max(...ownedPaidTiers) : freeTier);
+
+  res.json({
+    address: addr,
+    level,
+    freeTier,
+    ownedPaidTiers,
+    equipped,
+    ubiDonated,
+  });
+});
+
+// ─── POST /api/habitat/equip — persist player's equipped tier choice ────────
+// Stored in users.equipped_habitat so the choice travels with the wallet
+// across devices. Validates ownership before writing.
+app.post('/api/habitat/equip', async (req, res) => {
+  const { address, tier } = req.body || {};
+  if (!address || typeof tier !== 'number') {
+    return res.status(400).json({ error: 'address and tier required' });
+  }
+  const addr = String(address).toLowerCase();
+  if (!/^0x[0-9a-f]{40}$/.test(addr)) return res.status(400).json({ error: 'Invalid address' });
+  if (tier < 1 || tier > 255) return res.status(400).json({ error: 'Invalid tier' });
+
+  // Validate the player can actually equip this tier
+  const { data: userRows } = await supabase
+    .from('users')
+    .select('xp')
+    .eq('wallet_address', addr)
+    .limit(1);
+  const xp = userRows?.[0]?.xp || 0;
+  const level = levelFromXp(xp);
+  const freeTier = freeTierForLevel(level);
+
+  if (tier <= 5) {
+    // Free tier: must be reached by level
+    if (tier > freeTier) return res.status(403).json({ error: 'Free tier not yet unlocked' });
+  } else {
+    // Paid tier: must own on-chain
+    const { ownedPaidTiers } = await fetchPaidOwnership(addr);
+    if (!ownedPaidTiers.includes(tier)) {
+      return res.status(403).json({ error: 'Paid tier not owned' });
+    }
+  }
+
+  // Upsert: row may not exist yet for new players
+  const { error } = await supabase
+    .from('users')
+    .upsert({ wallet_address: addr, equipped_habitat: tier }, { onConflict: 'wallet_address' });
+  if (error) return res.status(500).json({ error: 'Persist failed' });
+
+  res.json({ success: true, equipped: tier });
 });
 
 // ─── GET /api/streak/:address ────────────────────────────────────────────

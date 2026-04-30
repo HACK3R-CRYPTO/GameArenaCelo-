@@ -102,6 +102,33 @@ function rankChangeNotification(opponent, newRank, game) {
   };
 }
 
+// "You're being chased" — sent to the higher-ranked player when an opponent
+// is close behind. Defensive loss aversion. Fires when the gap shrinks
+// inside a threshold but BEFORE displacement actually happens.
+function rankChasingNotification(opponentName, gap, yourRank, game) {
+  const gameLabel = game === 'rhythm' ? 'Rhythm Rush' : 'Simon Memory';
+  return {
+    title: `⚠️ Someone's coming for #${yourRank}`,
+    body: `${opponentName} is just ${gap.toLocaleString()} pts behind you on ${gameLabel}. Defend it.`,
+    tag: `close-rank-chase-${game}-${new Date().toISOString().slice(0,10)}`,
+    url: `/leaderboard?game=${game}`,
+    requireInteraction: true,
+  };
+}
+
+// "You're 1 point away from #N" — sent to the lower-ranked player when
+// they're close to climbing. Offensive call-to-action.
+function rankClimbingNotification(targetName, gap, targetRank, game) {
+  const gameLabel = game === 'rhythm' ? 'Rhythm Rush' : 'Simon Memory';
+  return {
+    title: `🎯 ${gap.toLocaleString()} pts from #${targetRank}`,
+    body: `Take ${targetName}'s spot on ${gameLabel}. One round could do it.`,
+    tag: `close-rank-climb-${game}-${new Date().toISOString().slice(0,10)}`,
+    url: `/leaderboard?game=${game}`,
+    requireInteraction: true,
+  };
+}
+
 // Achievement unlocked — fired inline from submit-score, not via cron.
 function achievementNotification(name, icon) {
   return {
@@ -287,6 +314,8 @@ module.exports = {
   streakNotification,
   cupDeadlineNotification,
   rankChangeNotification,
+  rankChasingNotification,
+  rankClimbingNotification,
   reengagementNotification,
   achievementNotification,
   announcementNotification,

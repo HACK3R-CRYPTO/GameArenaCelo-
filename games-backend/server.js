@@ -604,6 +604,15 @@ function cacheSet(key, value, ttlMs) {
   return value;
 }
 
+// Drop every cache key matching a prefix. Used after a score saves so the
+// player's rank lookup reads fresh data and any new leaderboard request
+// reflects the score they just submitted.
+function cacheInvalidatePrefix(prefix) {
+  for (const k of memCache.keys()) {
+    if (k.startsWith(prefix)) memCache.delete(k);
+  }
+}
+
 async function getLeaderboard(game, limit = 50, seasonFilter = true) {
   const cacheKey = `lb:${game}:${seasonFilter ? 'season' : 'all'}:${limit}`;
   const cached = cacheGet(cacheKey);
@@ -959,6 +968,15 @@ app.post('/api/submit-score', requireSecret, gameSubmitLimiter, async (req, res)
     wager_id: wagerId || null,
     tx_hash: txHash,
   });
+
+  // Bust caches so this player's rank is computed against the score they
+  // just saved, not a 30s-stale leaderboard. Without this, post-submit
+  // rank lookups returned -1 → 0 → the rank tile rendered empty on the
+  // results screen, and global stats lagged by a full TTL window.
+  cacheInvalidatePrefix(`lb:${game}`);
+  cacheInvalidatePrefix('act:');
+  memCache.delete('stats:global');
+  memCache.delete('seasons:global');
 
   // Award XP — base for playing + bonuses for win and new personal best
   const winThreshold = WIN_THRESHOLD[game] || Infinity;

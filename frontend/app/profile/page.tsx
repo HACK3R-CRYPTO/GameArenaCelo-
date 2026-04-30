@@ -127,9 +127,6 @@ type TabId = typeof TABS[number]["id"];
 // ─── Match types & helpers ────────────────────────────────────────────────────
 type ActivityRow = { player: string; game: string; score: number; tx_hash: string; timestamp: number; username?: string | null };
 
-// Win threshold per game (matches the wager contract logic)
-const WIN_THRESHOLD: Record<string, number> = { rhythm: 350, simon: 7 };
-
 function timeAgo(ts: number) {
   const diff = Date.now() / 1000 - ts;
   if (diff < 60) return "just now";
@@ -1390,36 +1387,25 @@ function ProfileInner() {
                   ) : (
                     matches.map((m, i) => {
                       const display = GAME_DISPLAY[m.game] || { name: m.game.toUpperCase(), icon: "🎮" };
-                      const threshold = WIN_THRESHOLD[m.game] ?? 0;
-                      const isWin = m.score >= threshold;
-                      const color = isWin ? "#22c55e" : "#ef4444";
-                      const result = isWin ? "WIN" : "LOSS";
                       return (
                         <div key={`${m.tx_hash}-${i}`} style={{
                           display: "flex", gap: "12px", alignItems: "center",
                           borderRadius: "14px",
                           background: "linear-gradient(90deg, rgba(20,10,50,0.85) 0%, rgba(10,5,30,0.9) 100%)",
-                          border: `1.5px solid ${color}44`,
-                          boxShadow: `0 0 14px ${color}22, 0 6px 16px rgba(0,0,0,0.6)`,
+                          border: "1.5px solid rgba(160,100,255,0.28)",
+                          boxShadow: "0 0 14px rgba(160,100,255,0.12), 0 6px 16px rgba(0,0,0,0.6)",
                           padding: "10px 14px",
                         }}>
                           <div style={{
                             width: "42px", height: "42px", borderRadius: "12px", flexShrink: 0,
-                            background: `radial-gradient(circle at 35% 30%, ${color}cc, ${color}44)`,
-                            border: `1.5px solid ${color}77`,
+                            background: "radial-gradient(circle at 35% 30%, rgba(160,100,255,0.85), rgba(160,100,255,0.25))",
+                            border: "1.5px solid rgba(160,100,255,0.55)",
                             display: "flex", alignItems: "center", justifyContent: "center",
-                            fontSize: "20px", boxShadow: `0 0 10px ${color}77`,
+                            fontSize: "20px", boxShadow: "0 0 10px rgba(160,100,255,0.5)",
                           }}>{display.icon}</div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ color: "white", fontSize: "13px", fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{display.name}</div>
                             <div style={{ color: "rgba(180,150,255,0.55)", fontSize: "10px", fontWeight: 700, marginTop: "2px" }}>{timeAgo(m.timestamp)}</div>
-                          </div>
-                          <div style={{
-                            padding: "4px 10px", borderRadius: "10px",
-                            background: isWin ? "rgba(34,197,94,0.18)" : "rgba(239,68,68,0.18)",
-                            border: `1.5px solid ${color}77`, flexShrink: 0,
-                          }}>
-                            <span style={{ fontSize: "10px", fontWeight: 900, color, letterSpacing: "0.1em" }}>{result}</span>
                           </div>
                           <div style={{
                             color: "#fbbf24", fontSize: "14px", fontWeight: 900,

@@ -13,6 +13,7 @@ import { CONTRACT_ADDRESSES, GAME_PASS_ABI, celoFeeSpread } from "@/lib/contract
 import { hydrateAchievement } from "@/lib/achievements";
 import LevelUpToast from "@/components/LevelUpToast";
 import PetEvolveToast from "@/components/PetEvolveToast";
+import { PushOptInModal } from "@/components/PushOptInModal";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 
@@ -675,6 +676,17 @@ export default function SimonGamePage() {
         pet={petEvolveToPet}
         newLevel={petEvolveAtLevel}
         onClose={() => setPetEvolveToPet(null)}
+      />
+
+      {/* ═══ PUSH OPT-IN — fires after a meaningful win so the ask lands
+            after value is delivered, not on first paint. Only ever shown
+            once per device via localStorage gating inside the modal. ═══ */}
+      <PushOptInModal
+        walletAddress={address}
+        trigger={!!submitResult && (
+          (submitResult.isNewPb ?? false) ||
+          (submitResult.leveledUp ?? false)
+        )}
       />
     </div>
   );

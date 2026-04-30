@@ -12,6 +12,7 @@ import { CONTRACT_ADDRESSES, GAME_PASS_ABI, celoFeeSpread } from "@/lib/contract
 import { hydrateAchievement } from "@/lib/achievements";
 import LevelUpToast from "@/components/LevelUpToast";
 import PetEvolveToast from "@/components/PetEvolveToast";
+import { PushOptInModal } from "@/components/PushOptInModal";
 import NoteCanvas, { type NoteCanvasHandle } from "@/components/rhythm/NoteCanvas";
 
 // Only used for browser-safe READ endpoints (user level lookup). Write paths
@@ -1307,6 +1308,15 @@ export default function RhythmGamePage() {
         pet={petEvolveToPet}
         newLevel={petEvolveAtLevel}
         onClose={() => setPetEvolveToPet(null)}
+      />
+
+      {/* ═══ PUSH OPT-IN — asks after a meaningful win, once per device ═══ */}
+      <PushOptInModal
+        walletAddress={address}
+        trigger={!!submitResult && (
+          (submitResult.isNewPb ?? false) ||
+          (submitResult.leveledUp ?? false)
+        )}
       />
     </div>
   );

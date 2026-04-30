@@ -2193,6 +2193,104 @@ async function indexOnChainScores() {
   }
 }
 
+// ─── Web Push Notifications ──────────────────────────────────────────────────
+// Duolingo-style engagement: streak warnings (loss aversion), cup deadlines,
+// re-engagement after lapse. Pet-as-narrator copy lives in lib/push.js.
+const push = require('./lib/push');
+
+// Public VAPID key for the frontend to subscribe with.
+app.get('/api/push/vapid-key', (_, res) => {
+  res.json({ publicKey: process.env.VAPID_PUBLIC_KEY || '' });
+});
+
+// Player subscribes — body: { walletAddress, subscription: { endpoint, keys } }.
+app.post('/api/push/subscribe', async (req, res) => {
+  const { walletAddress, subscription } = req.body || {};
+  if (!walletAddress || !subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
+    return res.status(400).json({ error: 'Missing fields' });
+  }
+  if (!/^0x[0-9a-fA-F]{40}$/.test(walletAddress)) {
+    return res.status(400).json({ error: 'Invalid address' });
+  }
+  const ok = await push.saveSubscription(supabase, walletAddress, subscription, req.headers['user-agent']);
+  if (!ok) return res.status(500).json({ error: 'Save failed' });
+  res.json({ success: true });
+});
+
+// Player unsubscribes a specific endpoint.
+app.post('/api/push/unsubscribe', async (req, res) => {
+  const { endpoint } = req.body || {};
+  if (!endpoint) return res.status(400).json({ error: 'Missing endpoint' });
+  await push.deleteSubscription(supabase, endpoint);
+  res.json({ success: true });
+});
+
+// Notification preferences — players can mute categories.
+app.get('/api/push/prefs/:address', async (req, res) => {
+  const addr = req.params.address.toLowerCase();
+  const { data } = await supabase
+    .from('notification_prefs')
+    .select('streak_warnings, cup_deadlines, rank_changes, reengagement')
+    .eq('wallet_address', addr)
+    .limit(1);
+  res.json(data?.[0] || {
+    streak_warnings: true, cup_deadlines: true, rank_changes: true, reengagement: true,
+  });
+});
+
+app.post('/api/push/prefs', async (req, res) => {
+  const { walletAddress, streak_warnings, cup_deadlines, rank_changes, reengagement } = req.body || {};
+  if (!walletAddress) return res.status(400).json({ error: 'Missing walletAddress' });
+  await supabase.from('notification_prefs').upsert({
+    wallet_address: walletAddress.toLowerCase(),
+    streak_warnings: !!streak_warnings,
+    cup_deadlines:   !!cup_deadlines,
+    rank_changes:    !!rank_changes,
+    reengagement:    !!reengagement,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'wallet_address' });
+  res.json({ success: true });
+});
+
+// ─── Streak warning cron ─────────────────────────────────────────────────────
+// Fires every hour. Finds players with active streaks who haven't played
+// today, sends one notification per day per player, pet-stage aware copy.
+async function sendStreakWarnings() {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    // Pull active streakers who haven't played today and have streak >= 1
+    const { data: candidates } = await supabase
+      .from('users')
+      .select('wallet_address, play_streak, xp, last_play_date')
+      .gte('play_streak', 1)
+      .neq('last_play_date', today);
+
+    if (!candidates || candidates.length === 0) return;
+
+    let sent = 0;
+    for (const u of candidates) {
+      // Skip if user opted out of streak warnings
+      const { data: prefs } = await supabase
+        .from('notification_prefs')
+        .select('streak_warnings')
+        .eq('wallet_address', u.wallet_address)
+        .limit(1);
+      if (prefs && prefs[0] && prefs[0].streak_warnings === false) continue;
+
+      const stage = push.petStage(levelFromXp(u.xp || 0));
+      const payload = push.streakNotification(stage, u.play_streak);
+      const ok = await push.sendToWallet(supabase, u.wallet_address, 'streak_warning', payload);
+      if (ok) sent++;
+    }
+    if (sent > 0) console.log(`🔔 Streak warnings sent to ${sent} wallets`);
+  } catch (e) {
+    console.warn('streak warning cron failed:', e?.message || e);
+  }
+}
+
+// Run every hour. Cheap query; subscriptions are sparse early on.
+setInterval(sendStreakWarnings, 60 * 60 * 1000);
+
 // Seal seasons on startup and every hour
 sealCompletedSeasons();
 setInterval(sealCompletedSeasons, 60 * 60 * 1000);

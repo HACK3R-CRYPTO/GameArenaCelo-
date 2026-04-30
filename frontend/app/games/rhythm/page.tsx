@@ -1310,13 +1310,12 @@ export default function RhythmGamePage() {
         onClose={() => setPetEvolveToPet(null)}
       />
 
-      {/* ═══ PUSH OPT-IN — asks after a meaningful win, once per device ═══ */}
+      {/* ═══ PUSH OPT-IN — asks after any successful submit, once per device ═══
+              The modal's own localStorage gate prevents nagging, so the trigger
+              just needs to mark "you finished a game and your score saved." */}
       <PushOptInModal
         walletAddress={address}
-        trigger={!!submitResult && (
-          (submitResult.isNewPb ?? false) ||
-          (submitResult.leveledUp ?? false)
-        )}
+        trigger={!!submitResult}
       />
     </div>
   );

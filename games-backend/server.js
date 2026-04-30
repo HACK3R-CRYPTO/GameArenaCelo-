@@ -1027,6 +1027,19 @@ app.post('/api/submit-score', requireSecret, gameSubmitLimiter, async (req, res)
     console.warn('mission progress update failed:', e.message);
   }
 
+  // Wager resolved — notify the player of their outcome. Only fires when the
+  // on-chain resolveWager succeeded (we have a tx hash) so we don't ping on
+  // pending or failed resolutions. Won path leads with the wagered amount;
+  // lost path is gentle. Per-wager category bypasses same-day dedup so a
+  // player who runs multiple wagers gets pinged for each.
+  if (wagerId && wagerTxHash) {
+    const gameLabel = game === 'rhythm' ? 'Rhythm Rush' : 'Simon Memory';
+    const payload = isWin
+      ? push.wagerWonNotification(wagered, gameLabel)
+      : push.wagerLostNotification(gameLabel);
+    push.sendToWallet(supabase, lower, `wager_${wagerId}`, payload).catch(() => {});
+  }
+
   // Check + unlock any new achievements for this player. Rhythm-specific skill
   // flags (fullCombo, allPerfect) come from the frontend and unlock rhythm_fc /
   // rhythm_ap respectively. The backend trusts the frontend for these because
@@ -2235,6 +2248,9 @@ app.get('/api/push/vapid-key', (_, res) => {
 });
 
 // Player subscribes — body: { walletAddress, subscription: { endpoint, keys } }.
+// On the wallet's FIRST subscription ever, fires a one-time welcome ping so
+// they get an instant payoff for granting permission. Re-subscribes on new
+// devices stay silent (zero existing rows = first; any rows = returning).
 app.post('/api/push/subscribe', async (req, res) => {
   const { walletAddress, subscription } = req.body || {};
   if (!walletAddress || !subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
@@ -2243,8 +2259,34 @@ app.post('/api/push/subscribe', async (req, res) => {
   if (!/^0x[0-9a-fA-F]{40}$/.test(walletAddress)) {
     return res.status(400).json({ error: 'Invalid address' });
   }
+
+  // Has this wallet ever subscribed before? Check before save so a fresh
+  // wallet with zero rows is unambiguous.
+  const lower = walletAddress.toLowerCase();
+  const { data: existing } = await supabase
+    .from('push_subscriptions')
+    .select('endpoint')
+    .eq('wallet_address', lower)
+    .limit(1);
+  const isFirstSubscription = !existing || existing.length === 0;
+
   const ok = await push.saveSubscription(supabase, walletAddress, subscription, req.headers['user-agent']);
   if (!ok) return res.status(500).json({ error: 'Save failed' });
+
+  // Fire welcome only on first-ever subscription. Async so the HTTP
+  // response isn't blocked by a slow web push round-trip.
+  if (isFirstSubscription) {
+    (async () => {
+      try {
+        const username = await resolveUsername(walletAddress);
+        const payload = push.welcomeNotification(username);
+        await push.sendToWallet(supabase, walletAddress, 'welcome', payload);
+      } catch (e) {
+        console.warn('welcome ping failed:', e.message);
+      }
+    })();
+  }
+
   res.json({ success: true });
 });
 
@@ -2459,6 +2501,170 @@ async function sendCloseRankPings() {
 }
 
 setInterval(sendCloseRankPings, 60 * 60 * 1000);
+
+// ─── Cup-starting cron ───────────────────────────────────────────────────────
+// Fires twice per cup window: ~24h before CHALLENGE_START and ~1h before.
+// Targets every subscribed wallet (respects reengagement mute since cup
+// announcements are promo-grade). Cron runs every 15 min so both 60-minute
+// firing windows are reliably caught. notification_log dedup keyed by
+// (wallet, category, sent_on=today) keeps each player from getting two
+// 24h pings on the same day — the 1h ping lands on cup-day so it gets a
+// fresh log row.
+async function sendCupStartingPings() {
+  try {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const secsToStart = CHALLENGE_START - nowSec;
+    // 24h window: (23h, 24h] before start
+    const in24hWindow = secsToStart > 23 * 3600 && secsToStart <= 24 * 3600;
+    // 1h window: (0, 1h] before start
+    const in1hWindow  = secsToStart > 0          && secsToStart <= 3600;
+    if (!in24hWindow && !in1hWindow) return;
+
+    const totalPool = CHALLENGE_TOP_N * CHALLENGE_PRIZE_USDC;
+    const durationHours = Math.round((CHALLENGE_END - CHALLENGE_START) / 3600);
+    const payload = in24hWindow
+      ? push.cupStarting24hNotification(CHALLENGE_NAME, totalPool, durationHours)
+      : push.cupStarting1hNotification(CHALLENGE_NAME, totalPool);
+    const category = in24hWindow
+      ? `cup_start_24h_${CHALLENGE_ID}`
+      : `cup_start_1h_${CHALLENGE_ID}`;
+
+    // Unique wallets across all subscriptions
+    const { data: subs } = await supabase
+      .from('push_subscriptions')
+      .select('wallet_address');
+    const wallets = [...new Set((subs || []).map(s => s.wallet_address))];
+    if (wallets.length === 0) return;
+
+    // Honor reengagement mute (same toggle the broadcast endpoint respects)
+    const { data: prefs } = await supabase
+      .from('notification_prefs')
+      .select('wallet_address, reengagement');
+    const muted = new Set((prefs || []).filter(p => p.reengagement === false).map(p => p.wallet_address));
+
+    let sent = 0;
+    for (const w of wallets) {
+      if (muted.has(w)) continue;
+      const ok = await push.sendToWallet(supabase, w, category, payload);
+      if (ok) sent++;
+    }
+    if (sent > 0) console.log(`🏁 Cup-starting (${in24hWindow ? '24h' : '1h'}) pings sent to ${sent} wallets`);
+  } catch (e) {
+    console.warn('cup-starting cron failed:', e?.message || e);
+  }
+}
+
+setInterval(sendCupStartingPings, 15 * 60 * 1000);
+
+// ─── Season-ending cron ──────────────────────────────────────────────────────
+// Fires every 15 min. In the final hour of the weekly season, pings every
+// subscribed wallet with rank-aware copy: top-3 get "hold the podium",
+// everyone else gets "last chance to climb". Best rank across both games
+// wins (lower number = better). Category includes season number so the
+// same player gets pinged once per season, not blocked across weeks.
+async function sendSeasonEndingPings() {
+  try {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const seasonNum = currentSeasonNumber();
+    const seasonStart = SEASON_EPOCH + (seasonNum - 1) * SEASON_DAYS * 86400;
+    const seasonEnd   = seasonStart + SEASON_DAYS * 86400;
+    const minsLeft = Math.floor((seasonEnd - nowSec) / 60);
+    if (minsLeft <= 0 || minsLeft > 60) return;
+
+    // Build wallet → best-rank map across both games (top 50 each)
+    const rankMap = new Map();
+    for (const game of ['rhythm', 'simon']) {
+      const gameTypeInt = game === 'rhythm' ? 0 : 1;
+      let board = [];
+      try {
+        board = await subgraph.leaderboard(gameTypeInt, seasonStart, 50);
+      } catch (_) { continue; }
+      board.forEach((e, idx) => {
+        if (!e?.wallet_address) return;
+        const w = e.wallet_address.toLowerCase();
+        const rank = idx + 1;
+        const prev = rankMap.get(w);
+        if (prev == null || rank < prev) rankMap.set(w, rank);
+      });
+    }
+
+    const { data: subs } = await supabase
+      .from('push_subscriptions')
+      .select('wallet_address');
+    const wallets = [...new Set((subs || []).map(s => s.wallet_address))];
+    if (wallets.length === 0) return;
+
+    const category = `season_ending_${seasonNum}`;
+    let sent = 0;
+    for (const w of wallets) {
+      const rank = rankMap.get(w) || 0;
+      const payload = push.seasonEndingNotification(rank);
+      const ok = await push.sendToWallet(supabase, w, category, payload);
+      if (ok) sent++;
+    }
+    if (sent > 0) console.log(`⌛ Season-ending pings sent to ${sent} wallets (season ${seasonNum})`);
+  } catch (e) {
+    console.warn('season-ending cron failed:', e?.message || e);
+  }
+}
+
+setInterval(sendSeasonEndingPings, 15 * 60 * 1000);
+
+// ─── Mission-expiring cron ───────────────────────────────────────────────────
+// Fires every 15 min. In the (30, 60] minute window before UTC midnight,
+// pings any subscribed player who still has unclaimed mission XP on the
+// table for today. Sums XP from completed-but-unclaimed AND incomplete
+// missions (incomplete are still earnable in that window). Once-per-day
+// dedup via notification_log so the cron's repeated ticks don't spam.
+async function sendMissionExpiringPings() {
+  try {
+    const now = new Date();
+    const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+    const minsToMidnight = Math.floor((tomorrow.getTime() - now.getTime()) / 60000);
+    if (minsToMidnight <= 30 || minsToMidnight > 60) return;
+
+    const today = now.toISOString().slice(0, 10);
+
+    // Pull today's missions where the player still has XP on the table
+    const { data: rows } = await supabase
+      .from('daily_missions')
+      .select('wallet, reward_xp, completed, claimed')
+      .eq('date', today)
+      .eq('claimed', false);
+    if (!rows || rows.length === 0) return;
+
+    // Sum unclaimed XP per wallet (only completed missions count as earned-
+    // but-unclaimed — incomplete ones are quick reminders, XP shown as 0)
+    const earned = new Map();
+    const hasIncomplete = new Map();
+    for (const r of rows) {
+      if (r.completed) earned.set(r.wallet, (earned.get(r.wallet) || 0) + (r.reward_xp || 0));
+      else hasIncomplete.set(r.wallet, true);
+    }
+
+    // Limit to subscribed wallets only — no point querying for non-subscribers
+    const { data: subs } = await supabase
+      .from('push_subscriptions')
+      .select('wallet_address');
+    const subscribed = new Set((subs || []).map(s => s.wallet_address));
+    if (subscribed.size === 0) return;
+
+    let sent = 0;
+    const candidates = new Set([...earned.keys(), ...hasIncomplete.keys()]);
+    for (const wallet of candidates) {
+      if (!subscribed.has(wallet)) continue;
+      const unclaimedXp = earned.get(wallet) || 0;
+      const payload = push.missionExpiringNotification(unclaimedXp);
+      const ok = await push.sendToWallet(supabase, wallet, 'mission_expire', payload);
+      if (ok) sent++;
+    }
+    if (sent > 0) console.log(`🎯 Mission-expiring pings sent to ${sent} wallets`);
+  } catch (e) {
+    console.warn('mission-expiring cron failed:', e?.message || e);
+  }
+}
+
+setInterval(sendMissionExpiringPings, 15 * 60 * 1000);
 
 // ─── Re-engagement cron — lapsed-user pings ──────────────────────────────────
 // Runs every 6 hours. Targets users who last played exactly 1, 3, 7, or 14

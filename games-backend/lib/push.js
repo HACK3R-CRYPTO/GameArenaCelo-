@@ -150,6 +150,96 @@ function announcementNotification({ title, body, url, tag }) {
   };
 }
 
+// ─── New trigger copy ────────────────────────────────────────────────────────
+
+// Welcome — fired ONCE the first time a wallet subscribes. Confirms the
+// permission grant worked + sets expectations so they don't immediately
+// turn it off. Top retention apps all do this.
+function welcomeNotification(username) {
+  const name = username || 'Player';
+  return {
+    title: '🔔 You\'re in',
+    body: `${name}, we'll only ping you when it matters — streak risk, cup deadlines, rank changes.`,
+    tag: 'welcome',
+    url: '/games',
+  };
+}
+
+// Wager resolved — won or lost. Won path leads with the payout amount;
+// lost path is gentler and turns it into a re-engagement nudge.
+function wagerWonNotification(amount, gameLabel) {
+  return {
+    title: `🎉 You won ${amount} G$`,
+    body: `${gameLabel} wager paid out. Keep the streak going?`,
+    tag: `wager-won-${Date.now()}`,
+    url: '/profile?tab=matches',
+    requireInteraction: true,
+  };
+}
+function wagerLostNotification(gameLabel) {
+  return {
+    title: '😤 Tough one',
+    body: `${gameLabel} wager didn't pay. One more round to bounce back?`,
+    tag: `wager-lost-${Date.now()}`,
+    url: '/games',
+  };
+}
+
+// New cup starting — fires twice per cup window: 24 hours out and 1 hour
+// out. Different copy each time so the second feels urgent, not redundant.
+function cupStarting24hNotification(name, prizePool, durationHours) {
+  return {
+    title: '⏰ Cup tomorrow',
+    body: `${name} starts in 24h · $${prizePool} pool · ${durationHours}h to qualify.`,
+    tag: `cup-start-24h`,
+    url: '/leaderboard',
+  };
+}
+function cupStarting1hNotification(name, prizePool) {
+  return {
+    title: '🏁 Cup starts in 1 hour',
+    body: `${name} kicks off · $${prizePool} on the line · be first to qualify.`,
+    tag: `cup-start-1h`,
+    url: '/leaderboard',
+    requireInteraction: true,
+  };
+}
+
+// Season ending in 1 hour — different from cup deadline. Targets weekly
+// season's badge/podium reset moment.
+function seasonEndingNotification(rank) {
+  if (rank > 0 && rank <= 3) {
+    return {
+      title: '🥇 Season ends in 1 hour',
+      body: `You're #${rank} — hold for the gold/silver/bronze badge.`,
+      tag: 'season-ending',
+      url: '/leaderboard',
+      requireInteraction: true,
+    };
+  }
+  return {
+    title: '⌛ Season ends in 1 hour',
+    body: rank > 0
+      ? `You're #${rank}. Last chance to climb the podium.`
+      : 'Last chance to score before the season locks.',
+    tag: 'season-ending',
+    url: '/leaderboard',
+  };
+}
+
+// Daily mission about to expire — sent 30-60 min before UTC midnight to
+// players with unclaimed mission XP still on the table.
+function missionExpiringNotification(unclaimedXp) {
+  return {
+    title: '🎯 Missions reset in 30 min',
+    body: unclaimedXp > 0
+      ? `Claim your ${unclaimedXp} XP before they're gone.`
+      : 'Quick round? Three new missions waiting tomorrow.',
+    tag: 'mission-expire',
+    url: '/games',
+  };
+}
+
 // Re-engagement, escalating by days lapsed. Mirrors Duolingo's escalation
 // playbook: gentle nudge → stage-specific guilt-trip → "you're missing
 // out" → guilt-paradox farewell. After day 14 we stay silent — we don't
@@ -319,6 +409,13 @@ module.exports = {
   reengagementNotification,
   achievementNotification,
   announcementNotification,
+  welcomeNotification,
+  wagerWonNotification,
+  wagerLostNotification,
+  cupStarting24hNotification,
+  cupStarting1hNotification,
+  seasonEndingNotification,
+  missionExpiringNotification,
   saveSubscription,
   getSubscriptions,
   deleteSubscription,

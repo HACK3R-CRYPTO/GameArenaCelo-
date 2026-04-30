@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState, useEffect } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useAccount, useReadContract, useBalance } from "wagmi";
 import { useSelfVerification } from "@/contexts/SelfVerificationContext";
@@ -759,15 +759,21 @@ function PetCard({ pet, playerLevel }: { pet: PetStage; playerLevel: number }) {
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
-export default function ProfilePage() {
+function ProfileInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { logout, authenticated } = usePrivy();
   // Mobile swaps the 68px left sidebar for a fixed bottom tab bar.
   const isMobile = useIsMobile();
   const { address } = useAccount();
   const { isVerified, entitlement, claimG$ } = useSelfVerification();
 
-  const [activeTab, setActiveTab] = useState<TabId>("stats");
+  // Initial tab honors ?tab=habitats deep link from the games page UBI card.
+  const initialTab: TabId = (() => {
+    const t = searchParams.get("tab");
+    return (TABS.some(x => x.id === t) ? t : "stats") as TabId;
+  })();
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
 
   // Settings — persisted in localStorage via useAudioSettings hook.
   // Every game on the platform reads from the same source, so changes here
@@ -1705,5 +1711,15 @@ export default function ProfilePage() {
         />
       )}
     </div>
+  );
+}
+
+// useSearchParams requires a Suspense boundary in app router; same pattern
+// used on /verify, /mint, /leaderboard.
+export default function ProfilePage() {
+  return (
+    <Suspense>
+      <ProfileInner />
+    </Suspense>
   );
 }

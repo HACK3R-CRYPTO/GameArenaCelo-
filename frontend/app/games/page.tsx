@@ -235,9 +235,14 @@ export default function GamesPage() {
   const { isVerified, entitlement, claimG$ } = useSelfVerification();
   const claimableG = entitlement && Number(entitlement) > 0;
 
-  // Global stats for the top pills (PLAYERS / GAMES / POT)
-  const [stats, setStats] = useState<{ totalUsers: number; totalGames: number; estimatedPrizePot: string }>({
+  // Global stats for the top pills (PLAYERS / GAMES / POT) and the
+  // community UBI impact card below the events strip.
+  const [stats, setStats] = useState<{
+    totalUsers: number; totalGames: number; estimatedPrizePot: string;
+    totalUbiDonatedG: string; totalTreasuryG: string; totalHabitatUnlocks: number;
+  }>({
     totalUsers: 0, totalGames: 0, estimatedPrizePot: "0",
+    totalUbiDonatedG: "0", totalTreasuryG: "0", totalHabitatUnlocks: 0,
   });
   useEffect(() => {
     fetch(`${BACKEND_URL}/api/stats`)
@@ -246,14 +251,40 @@ export default function GamesPage() {
         totalUsers: d.totalUsers || 0,
         totalGames: d.totalGames || 0,
         estimatedPrizePot: d.estimatedPrizePot || "0",
+        totalUbiDonatedG: d.totalUbiDonatedG || "0",
+        totalTreasuryG: d.totalTreasuryG || "0",
+        totalHabitatUnlocks: d.totalHabitatUnlocks || 0,
       }))
       .catch(() => {});
   }, []);
+
 
   // EVENTS data — real season countdown + 3-week competition state
   type EventCard = { icon: string; color: string; title: string; subtitle: string; onClick?: () => void };
   const [seasonInfo, setSeasonInfo] = useState<{ season: number; endsAt: number } | null>(null);
   const [compInfo, setCompInfo] = useState<{ weeksLeft: number; total: number } | null>(null);
+
+  // Community UBI total — read directly from the Goldsky subgraph so the
+  // event card surfaces an honest "we routed X G$ to UBI" message even
+  // when the backend is offline.
+  const [ubiTotal, setUbiTotal] = useState<{ amount: string; unlocks: number } | null>(null);
+  useEffect(() => {
+    const SUBGRAPH = process.env.NEXT_PUBLIC_SUBGRAPH_URL ||
+      "https://api.goldsky.com/api/public/project_cmoksri59dxju01rs5d317ax0/subgraphs/gamearena/1.0.0/gn";
+    fetch(SUBGRAPH, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: `{ globalStat(id: "global") { totalUbiDonatedG totalHabitatUnlocks } }` }),
+    })
+      .then(r => r.json())
+      .then(j => {
+        const g = j?.data?.globalStat;
+        if (!g) return;
+        const whole = BigInt(g.totalUbiDonatedG || "0") / 10n ** 18n;
+        setUbiTotal({ amount: Number(whole).toLocaleString(), unlocks: Number(g.totalHabitatUnlocks || 0) });
+      })
+      .catch(() => {});
+  }, []);
 
   // 72-hour Arena Challenge — shared hook polls /api/challenge every 30s
   // and returns null when the event is not active, so the banner below
@@ -498,6 +529,14 @@ export default function GamesPage() {
               title: "Daily G$ ready to claim",
               subtitle: `${(Number(entitlement) / 1e18).toFixed(2)} G$ · Tap to claim`,
               onClick: () => claimG$(),
+            });
+          }
+          if (ubiTotal && Number(ubiTotal.amount.replace(/,/g, "")) > 0) {
+            events.push({
+              icon: "🌍", color: "#86efac",
+              title: `${ubiTotal.amount} G$ funded for UBI`,
+              subtitle: `${ubiTotal.unlocks} habitat${ubiTotal.unlocks === 1 ? "" : "s"} unlocked · Verified on Celo`,
+              onClick: () => router.push("/profile?tab=habitats"),
             });
           }
           if (events.length === 0) {

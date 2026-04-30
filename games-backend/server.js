@@ -1166,6 +1166,14 @@ app.get('/api/stats', async (_, res) => {
   const simonPlayers   = g ? Number(g.totalSimonPlays)   : 0;
   const totalWagered   = g ? Number(BigInt(g.totalWageredG || '0') / 10n ** 16n) / 100 : 0;
 
+  // UBI impact — the cumulative G$ GameArena has routed to GoodCollective
+  // through habitat unlocks. Surfaced as the "community impact" number on
+  // the Games page so players see what their donations have built.
+  // Both fields stay as raw 18-decimal strings; the frontend formats them.
+  const totalUbiDonatedG  = g ? (g.totalUbiDonatedG  || '0') : '0';
+  const totalTreasuryG    = g ? (g.totalTreasuryG    || '0') : '0';
+  const totalHabitatUnlocks = g ? Number(g.totalHabitatUnlocks) : 0;
+
   // Season-active users — one tiny subgraph query for current season scores
   let seasonUsers = 0;
   try {
@@ -1206,6 +1214,10 @@ app.get('/api/stats', async (_, res) => {
     currentSeason: season,
     seasonEndsAt: end,
     estimatedPrizePot,
+    // UBI impact (raw 18-decimal G$ strings; frontend formats)
+    totalUbiDonatedG,
+    totalTreasuryG,
+    totalHabitatUnlocks,
   };
   cacheSet('stats:global', payload, MEM_TTL.global);
   res.json(payload);
@@ -1966,12 +1978,18 @@ app.get('/api/competition', async (_, res) => {
   );
 
   const current = currentSeasonNumber();
-  const weeksLeft = COMPETITION_WEEKS.filter(w => w > current).length;
+  // Count the current week as remaining if we're inside the competition
+  // window. Without this, weeksLeft hits 0 during the final active week
+  // and the frontend hides the cup card while it should still be live.
+  const weeksLeft = COMPETITION_WEEKS.filter(w => w >= current).length;
   const { start: compStart } = seasonBounds(COMPETITION_WEEKS[0]);
   const { end: compEnd }     = seasonBounds(COMPETITION_WEEKS[COMPETITION_WEEKS.length - 1]);
 
   const nowSec = Math.floor(Date.now() / 1000);
-  if (weeksLeft === 0) await freezeCompetitionIfNeeded(nowSec, rankings, compEnd, compStart);
+  // Freeze when the entire window has fully passed (current is past the last week).
+  if (current > COMPETITION_WEEKS[COMPETITION_WEEKS.length - 1]) {
+    await freezeCompetitionIfNeeded(nowSec, rankings, compEnd, compStart);
+  }
 
   res.json({
     weeks: COMPETITION_WEEKS,

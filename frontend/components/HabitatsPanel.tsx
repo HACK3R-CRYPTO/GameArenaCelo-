@@ -3,14 +3,16 @@
 import { useState } from "react";
 import { HABITATS, type HabitatTier, formatG$ } from "@/lib/habitats";
 import { HabitatBackground } from "./HabitatBackground";
+import { SocialImpactSection } from "./SocialImpactSection";
 import { useHabitats } from "@/hooks/useHabitats";
 import { useIsMobile } from "@/hooks/useIsMobile";
 
 // ─── HabitatsPanel ────────────────────────────────────────────────────────────
 // Gallery of all 10 habitats. Free tiers render as "unlocked at level X".
 // Paid tiers render as "donate Y G$ to unlock" with a confirm modal flow
-// that splits 85% to the GoodCollective UBI pool and 15% to the GameArena
-// treasury.
+// where each donation routes a portion to the GoodCollective UBI pool
+// (verifiable on Celo) without exposing the exact split in the UI —
+// players see magnitude, not internal accounting.
 //
 // Tap a tier card → modal opens → confirm donation → wagmi handles
 // approve + unlock → state refreshes → modal closes.
@@ -56,25 +58,20 @@ export function HabitatsPanel({ playerLevel = 1 }: { playerLevel?: number }) {
 
   return (
     <div style={{ width: "100%" }}>
-      {/* Section header + impact stats */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "12px", flexWrap: "wrap" }}>
-        <div>
-          <div style={{ color: "white", fontSize: "16px", fontWeight: 900, letterSpacing: "0.04em" }}>
-            HABITATS
-          </div>
-          <div style={{ color: "rgba(200,180,255,0.65)", fontSize: "10px", marginTop: "2px" }}>
-            Where your pet lives. Free tiers unlock with level. Paid tiers fund UBI.
-          </div>
+      {/* Social impact storytelling — eyebrow + Social Impact title +
+          three-sentence narrative + community/personal stats. Lives at the
+          top of the Habitats tab so the UBI story frames every habitat
+          decision below it. The split (UBI vs treasury) is intentionally
+          hidden — players see scale, not accounting. */}
+      <SocialImpactSection myUbiG={ubiDonated} />
+
+      {/* Habitat collection header — short, just identifies the grid */}
+      <div style={{ marginBottom: "12px" }}>
+        <div style={{ color: "white", fontSize: "16px", fontWeight: 900, letterSpacing: "0.04em" }}>
+          HABITATS
         </div>
-        <div style={{
-          padding: "6px 12px", borderRadius: "10px",
-          background: "rgba(251,191,36,0.1)",
-          border: "1px solid rgba(251,191,36,0.35)",
-        }}>
-          <div style={{ color: "rgba(254,215,170,0.7)", fontSize: "8px", fontWeight: 800, letterSpacing: "0.14em" }}>UBI DONATED</div>
-          <div style={{ color: "#fbbf24", fontSize: "13px", fontWeight: 900 }}>
-            {formatG$(ubiDonated)} G$
-          </div>
+        <div style={{ color: "rgba(200,180,255,0.65)", fontSize: "10px", marginTop: "2px" }}>
+          Free tiers unlock with level. Paid tiers grow the community pool.
         </div>
       </div>
 
@@ -239,8 +236,8 @@ export function HabitatsPanel({ playerLevel = 1 }: { playerLevel?: number }) {
                     <div style={{ fontSize: "40px" }}>🎉</div>
                     <div style={{ color: "white", fontSize: "16px", fontWeight: 900, marginTop: "6px" }}>UNLOCKED</div>
                     <div style={{ color: "rgba(200,180,255,0.7)", fontSize: "11px", marginTop: "4px", lineHeight: 1.4 }}>
-                      You contributed {formatG$((modal.costG$ ?? 0n) * 8500n / 10000n)} G$ to GoodDollar UBI.
-                      The rest funds GameArena platform ops.
+                      Your unlock helped grow our community UBI pool.
+                      Thank you for being part of it.
                     </div>
                     <button onClick={closeModal} style={{
                       marginTop: "14px",
@@ -252,31 +249,36 @@ export function HabitatsPanel({ playerLevel = 1 }: { playerLevel?: number }) {
                   </div>
                 ) : (
                   <>
-                    {/* Cost breakdown */}
+                    {/* Cost row + impact line. Internal split (UBI vs treasury)
+                        is intentionally hidden — players see the magnitude,
+                        not the accounting. The contract handles the split
+                        on-chain and Celoscan keeps it verifiable for anyone
+                        who wants to inspect. Same pattern Focus Pet uses. */}
                     <div style={{
-                      padding: "10px 12px", borderRadius: "10px",
-                      background: "rgba(0,0,0,0.35)",
-                      border: "1px solid rgba(255,255,255,0.1)",
+                      padding: "12px 14px", borderRadius: "12px",
+                      background: "rgba(34,197,94,0.06)",
+                      border: "1px solid rgba(34,197,94,0.25)",
                       marginBottom: "12px",
                     }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                        <span style={{ color: "rgba(255,255,255,0.8)", fontSize: "12px", fontWeight: 700 }}>Total cost</span>
-                        <span style={{ color: "white", fontSize: "16px", fontWeight: 900 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ color: "rgba(255,255,255,0.75)", fontSize: "11px", fontWeight: 700 }}>Total</span>
+                        <span style={{ color: "white", fontSize: "18px", fontWeight: 900 }}>
                           {formatG$(modal.costG$ ?? 0n)} G$
                         </span>
                       </div>
-                      <div style={{ height: "1px", background: "rgba(255,255,255,0.08)", margin: "8px 0" }} />
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px" }}>
-                        <span style={{ color: "rgba(134,239,172,0.85)" }}>→ GoodDollar UBI (85%)</span>
-                        <span style={{ color: "#86efac", fontWeight: 800 }}>
-                          {formatG$((modal.costG$ ?? 0n) * 8500n / 10000n)} G$
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "8px" }}>
+                        <span style={{ fontSize: 12 }}>🌍</span>
+                        <span style={{ color: "rgba(220,255,225,0.75)", fontSize: "10.5px", fontWeight: 700, lineHeight: 1.4 }}>
+                          Funds GoodDollar Universal Basic Income
                         </span>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", marginTop: "3px" }}>
-                        <span style={{ color: "rgba(254,215,170,0.7)" }}>→ GameArena platform (15%)</span>
-                        <span style={{ color: "#fde68a", fontWeight: 800 }}>
-                          {formatG$((modal.costG$ ?? 0n) * 1500n / 10000n)} G$
-                        </span>
+                        <span style={{
+                          marginLeft: "auto",
+                          padding: "2px 7px", borderRadius: "999px",
+                          background: "rgba(255,255,255,0.05)",
+                          border: "1px solid rgba(255,255,255,0.1)",
+                          color: "#86efac", fontSize: "8.5px", fontWeight: 900,
+                          letterSpacing: "0.1em",
+                        }}>✓ ON CELO</span>
                       </div>
                     </div>
 

@@ -1052,8 +1052,39 @@ app.post('/api/submit-score', requireSecret, gameSubmitLimiter, async (req, res)
     const seasonStart = SEASON_EPOCH + (season - 1) * SEASON_DAYS * 86400;
     const gameTypeInt = game === 'rhythm' ? 0 : 1;
     rank = await subgraph.seasonRank(lower, score, gameTypeInt, seasonStart);
+
+    // Rank change notification — only fires if submitter just landed in
+    // top-3 (the dramatic moment). We simulate the after-state since the
+    // subgraph hasn't indexed the new tx yet.
+    if (rank > 0 && rank <= 3) {
+      try {
+        const before = await subgraph.leaderboard(gameTypeInt, seasonStart, 50);
+        const without = before.filter(e => e.wallet_address !== lower);
+        const after = [...without, {
+          wallet_address: lower,
+          score,
+          username: null,
+          created_at: new Date().toISOString(),
+          tx_hash: txHash,
+        }].sort((a, b) => b.score - a.score);
+        // Fire-and-forget; don't block the response on notification delivery
+        notifyRankDisplacement(game, lower, before, after).catch(() => {});
+      } catch (_) { /* best-effort */ }
+    }
   } catch (e) {
     console.warn('rank lookup failed:', e?.message || e);
+  }
+
+  // Achievement notifications — one per new unlock. Fires inline since the
+  // unlock list is right here. Players who are subscribed to push get an
+  // immediate ding when they earn a trophy.
+  if (newAchievements && newAchievements.length > 0) {
+    for (const a of newAchievements) {
+      const payload = push.achievementNotification(a.name || a.id, a.icon);
+      // Per-day dedup category includes the achievement id so multiple
+      // unlocks in one day each fire (rare but possible).
+      push.sendToWallet(supabase, lower, `achievement_${a.id || a.name}`, payload).catch(() => {});
+    }
   }
 
   console.log(`✅ [${game}] ${lower.slice(0, 8)}... → ${score} pts (rank #${rank}) +${xpEarned} XP ${txHash ? `tx: ${txHash.slice(0, 10)}...` : ''}`);
@@ -2252,6 +2283,92 @@ app.post('/api/push/prefs', async (req, res) => {
   res.json({ success: true });
 });
 
+// ─── Admin broadcast — game updates / new feature announcements ─────────────
+// Protected with INTERNAL_SECRET so only the team can call it. Honors
+// per-wallet reengagement mute so players who muted promos stay quiet.
+//
+// Example:
+//   curl -X POST https://.../api/push/broadcast \
+//     -H "x-internal-secret: $INTERNAL_SECRET" \
+//     -H "Content-Type: application/json" \
+//     -d '{"title":"🏆 New Cup Live","body":"$10 pool, 72hr","url":"/leaderboard"}'
+app.post('/api/push/broadcast', requireSecret, async (req, res) => {
+  const { title, body, url, tag } = req.body || {};
+  if (!title || !body) return res.status(400).json({ error: 'title and body required' });
+  const payload = push.announcementNotification({ title, body, url, tag });
+  const result = await push.sendBroadcast(supabase, payload);
+  console.log(`📣 Broadcast: sent ${result.sent}, skipped (muted) ${result.skipped}, cleaned ${result.cleaned}`);
+  res.json({ success: true, ...result });
+});
+
+// ─── Cup deadline cron ───────────────────────────────────────────────────────
+// Fires every 15 min during a cup window. ~1 hour before cup ends, sends
+// one notification per cup per player to anyone who has played at least
+// once but isn't already top-N qualified. Encourages a final push.
+async function sendCupDeadlineWarnings() {
+  try {
+    const nowSec = Math.floor(Date.now() / 1000);
+    // Only fire while in the 60-minute pre-end window
+    const minsLeft = Math.floor((CHALLENGE_END - nowSec) / 60);
+    if (minsLeft <= 0 || minsLeft > 60) return;
+    if (nowSec < CHALLENGE_START) return;
+
+    // Pull current cup standings via the existing cache path
+    const { ranked } = challengeCache.at && Date.now() - challengeCache.at < CHALLENGE_CACHE_TTL_MS
+      ? challengeCache
+      : await rebuildChallengeCache();
+    if (!ranked || ranked.length === 0) return;
+
+    const totalPool = CHALLENGE_TOP_N * CHALLENGE_PRIZE_USDC;
+    let sent = 0;
+    for (let i = 0; i < ranked.length; i++) {
+      const r = ranked[i];
+      const rank = i + 1;
+      // Only ping people in striking distance — top 20 for the cup, not deep tail
+      if (rank > 20) break;
+      const payload = push.cupDeadlineNotification(rank, CHALLENGE_TOP_N, totalPool);
+      const ok = await push.sendToWallet(supabase, r.wallet, 'cup_deadline', payload);
+      if (ok) sent++;
+    }
+    if (sent > 0) console.log(`🏆 Cup deadline pings sent to ${sent} wallets`);
+  } catch (e) {
+    console.warn('cup deadline cron failed:', e?.message || e);
+  }
+}
+
+// ─── Rank change — top-3 displacement only ──────────────────────────────────
+// Called inline from /api/submit-score after a new score lands. Compares
+// the leaderboard before and after the new entry: if someone got bumped
+// off a top-3 spot, ping them. We only fire for podium displacement since
+// that's the emotionally meaningful moment — not bumping someone from #47
+// to #48.
+async function notifyRankDisplacement(game, submitterAddr, leaderboardBefore, leaderboardAfter) {
+  try {
+    if (!leaderboardBefore || leaderboardBefore.length === 0) return;
+    if (!leaderboardAfter || leaderboardAfter.length === 0) return;
+
+    // Find players who were in top-3 before AND no longer in top-3 after
+    const beforeTop3 = leaderboardBefore.slice(0, 3).map(e => e.wallet_address?.toLowerCase());
+    const afterTop3 = new Set(leaderboardAfter.slice(0, 3).map(e => e.wallet_address?.toLowerCase()));
+
+    for (const wallet of beforeTop3) {
+      if (!wallet) continue;
+      if (afterTop3.has(wallet)) continue;             // still top-3, no displacement
+      if (wallet === submitterAddr.toLowerCase()) continue; // skip the submitter
+
+      // Find their new rank (or absent → fall to #4)
+      const newIdx = leaderboardAfter.findIndex(e => e.wallet_address?.toLowerCase() === wallet);
+      const newRank = newIdx >= 0 ? newIdx + 1 : 4;
+
+      const submitterName = await resolveUsername(submitterAddr) || 'Someone';
+      const payload = push.rankChangeNotification(submitterName, newRank, game);
+      await push.sendToWallet(supabase, wallet, 'rank_change', payload);
+    }
+  } catch (e) {
+    console.warn('rank displacement notify failed:', e?.message || e);
+  }
+}
+
 // ─── Streak warning cron ─────────────────────────────────────────────────────
 // Fires every hour. Finds players with active streaks who haven't played
 // today, sends one notification per day per player, pet-stage aware copy.
@@ -2290,6 +2407,8 @@ async function sendStreakWarnings() {
 
 // Run every hour. Cheap query; subscriptions are sparse early on.
 setInterval(sendStreakWarnings, 60 * 60 * 1000);
+// Cup deadline cron — every 15 min so the 1-hour-before-end window is always caught
+setInterval(sendCupDeadlineWarnings, 15 * 60 * 1000);
 
 // Seal seasons on startup and every hour
 sealCompletedSeasons();

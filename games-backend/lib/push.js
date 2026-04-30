@@ -123,23 +123,48 @@ function announcementNotification({ title, body, url, tag }) {
   };
 }
 
-// Re-engagement, escalating by days lapsed.
-function reengagementNotification(stage, daysLapsed) {
+// Re-engagement, escalating by days lapsed. Mirrors Duolingo's escalation
+// playbook: gentle nudge → stage-specific guilt-trip → "you're missing
+// out" → guilt-paradox farewell. After day 14 we stay silent — we don't
+// chase dead users forever.
+function reengagementNotification(stage, daysLapsed, username) {
+  const name = username || 'Player';
   if (daysLapsed === 1) {
-    return { title: '🥚 Your pet misses you', body: 'Quick round? Less than a minute.', tag: 're-d1', url: '/games' };
-  }
-  if (daysLapsed === 3) {
-    const titles = {
-      egg: '🥚 Still cold in here',
-      baby: '🟢 Bored. Come play.',
-      teen: '🟣 Forest is silent without you',
-      crystal: '💎 The cave is dark',
+    const day1 = {
+      egg: '🥚 Your egg is getting cold',
+      baby: '🟢 Slime is asleep',
+      teen: '🟣 Forest got quieter',
+      crystal: '💎 Crystal stopped glowing',
       king: '👑 The throne is empty',
     };
-    return { title: titles[stage] || titles.baby, body: '3 days away. Come back?', tag: 're-d3', url: '/games' };
+    return {
+      title: day1[stage] || day1.baby,
+      body: `${name}, quick round? Less than a minute keeps the pet alive.`,
+      tag: 're-d1', url: '/games',
+    };
+  }
+  if (daysLapsed === 3) {
+    return {
+      title: '⏰ 3 days away',
+      body: 'Other players are climbing the leaderboard. Pick a game and jump back in.',
+      tag: 're-d3', url: '/games',
+    };
   }
   if (daysLapsed === 7) {
-    return { title: '✨ A week away', body: 'New cups, new players, new prizes. Come see.', tag: 're-d7', url: '/games' };
+    return {
+      title: '✨ A week away from GameArena',
+      body: 'New cups, new players, new prizes. Come see what you missed.',
+      tag: 're-d7', url: '/games',
+    };
+  }
+  if (daysLapsed === 14) {
+    // Duolingo's killer message. Permission to stop ironically pulls people back.
+    return {
+      title: '🥺 These reminders aren\'t working',
+      body: `We'll stop bugging you, ${name}. One last round before we go quiet?`,
+      tag: 're-d14', url: '/games',
+      requireInteraction: true,
+    };
   }
   return null;
 }

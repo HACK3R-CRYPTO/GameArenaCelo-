@@ -2410,6 +2410,56 @@ setInterval(sendStreakWarnings, 60 * 60 * 1000);
 // Cup deadline cron — every 15 min so the 1-hour-before-end window is always caught
 setInterval(sendCupDeadlineWarnings, 15 * 60 * 1000);
 
+// ─── Close-rank cron — predictive "you're about to be passed" / "1 point
+//     away from #N" pings. Fires hourly. Scans top-5 of each game; for any
+//     adjacent pair whose gap is small (under 10% of the higher score, or
+//     under 1000 absolute pts, whichever is larger), sends:
+//       · "Someone's coming for your #N" to the higher-ranked player
+//       · "X pts from #N" to the lower-ranked player
+//     Once-per-day dedup per game per direction so the same pair doesn't
+//     ping repeatedly. Top-5 only — we don't ping deep-tail churn.
+async function sendCloseRankPings() {
+  try {
+    const seasonStart = SEASON_EPOCH + (currentSeasonNumber() - 1) * SEASON_DAYS * 86400;
+    for (const game of ['rhythm', 'simon']) {
+      const gameTypeInt = game === 'rhythm' ? 0 : 1;
+      let board = [];
+      try {
+        board = await subgraph.leaderboard(gameTypeInt, seasonStart, 5);
+      } catch (_) { continue; }
+      if (!board || board.length < 2) continue;
+
+      for (let i = 0; i < board.length - 1; i++) {
+        const higher = board[i];
+        const lower  = board[i + 1];
+        if (!higher?.wallet_address || !lower?.wallet_address) continue;
+        const gap = higher.score - lower.score;
+        if (gap <= 0) continue;
+        // Threshold: smaller of (10% of higher score) or 1000 pts. Means
+        // tight pairs always trigger; massive blowouts never do.
+        const threshold = Math.max(1000, Math.floor(higher.score * 0.10));
+        if (gap > threshold) continue;
+
+        // Resolve usernames once for both sides
+        const higherName = higher.username || (await resolveUsername(higher.wallet_address)) || 'Someone';
+        const lowerName  = lower.username  || (await resolveUsername(lower.wallet_address))  || 'Someone';
+
+        // Higher player gets the chase warning
+        const chasePayload = push.rankChasingNotification(lowerName, gap, i + 1, game);
+        push.sendToWallet(supabase, higher.wallet_address, `close_rank_chase_${game}`, chasePayload).catch(() => {});
+
+        // Lower player gets the climb call-to-action
+        const climbPayload = push.rankClimbingNotification(higherName, gap, i + 1, game);
+        push.sendToWallet(supabase, lower.wallet_address, `close_rank_climb_${game}`, climbPayload).catch(() => {});
+      }
+    }
+  } catch (e) {
+    console.warn('close-rank cron failed:', e?.message || e);
+  }
+}
+
+setInterval(sendCloseRankPings, 60 * 60 * 1000);
+
 // ─── Re-engagement cron — lapsed-user pings ──────────────────────────────────
 // Runs every 6 hours. Targets users who last played exactly 1, 3, 7, or 14
 // days ago (Duolingo escalation pattern). Once-per-day dedup via

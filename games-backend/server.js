@@ -977,13 +977,18 @@ app.post('/api/submit-score', requireSecret, gameSubmitLimiter, async (req, res)
     });
   }
 
-  // Read previous best for this game so we can detect a new personal best after saving
+  // Read previous best for this game IN THE CURRENT SEASON. PBs are a
+  // per-season concept — saves are already scoped to season_number, so the
+  // comparison should match. An all-time query would let last season's high
+  // score lock the player out of the "🏆 New PB!" celebration + XP_NEW_PB
+  // bonus + opt-in trigger forever, which is the wrong reward shape.
   const lower = playerAddress.toLowerCase();
   const { data: prevRows } = await supabase
     .from('scores')
     .select('score')
     .eq('wallet_address', lower)
     .eq('game', game)
+    .eq('season_number', season)
     .order('score', { ascending: false })
     .limit(1);
   const prevBest = (prevRows && prevRows.length > 0) ? (prevRows[0].score || 0) : 0;

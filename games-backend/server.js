@@ -1538,7 +1538,7 @@ app.get('/api/user/:address', async (req, res) => {
     return res.json({
       address: addr,
       xp: 0, level: p.level, xpInLevel: p.xpInLevel, xpToNext: p.xpToNext,
-      streak: 0, playedToday: false,
+      streak: 0, playedToday: false, lastPlayDate: null,
     });
   }
 
@@ -1554,6 +1554,9 @@ app.get('/api/user/:address', async (req, res) => {
     xpToNext: p.xpToNext,
     streak: u.play_streak || 0,
     playedToday: u.last_play_date === today,
+    // ISO date "YYYY-MM-DD" or null for never-played. Powers the pet mood
+    // derivation (sleepy/sad/worried) on the frontend without an extra round-trip.
+    lastPlayDate: u.last_play_date || null,
   });
 });
 

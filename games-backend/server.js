@@ -2722,4 +2722,9 @@ setInterval(indexOnChainScores, 5 * 60 * 1000);
 
 app.listen(PORT, () => {
   console.log(`🎮 Games backend on http://localhost:${PORT} — Season ${currentSeasonNumber()}`);
+  // Surface whether on-chain addresses came from env or a hardcoded fallback,
+  // so a missing Railway env var is loud in the deploy logs instead of silent.
+  console.log(`📍 GAME_PASS_ADDRESS:        ${process.env.GAME_PASS_ADDRESS ? 'env' : `fallback (${GAME_PASS_ADDR})`}`);
+  console.log(`📍 SOLO_WAGER_ADDRESS:      ${process.env.SOLO_WAGER_ADDRESS ? 'env' : 'unset'}`);
+  console.log(`📍 HABITAT_REGISTRY_ADDRESS: ${process.env.HABITAT_REGISTRY_ADDRESS ? 'env' : 'unset'}`);
 });

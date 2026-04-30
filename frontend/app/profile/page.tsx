@@ -13,6 +13,7 @@ import MobileStreakChip from "@/components/MobileStreakChip";
 import ShareCard from "@/components/ShareCard";
 import { HabitatsPanel } from "@/components/HabitatsPanel";
 import { HabitatBackground } from "@/components/HabitatBackground";
+import { NotificationSettings } from "@/components/NotificationSettings";
 import { useHabitats } from "@/hooks/useHabitats";
 import { CONTRACT_ADDRESSES, ERC20_ABI } from "@/lib/contracts";
 import { formatUnits } from "viem";
@@ -1601,12 +1602,21 @@ function ProfileInner() {
               {/* SETTINGS TAB */}
               {activeTab === "settings" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  {/* AUDIO */}
+                  {/* NOTIFICATIONS */}
                   <div style={{
                     fontSize: "10px", fontWeight: 900, letterSpacing: "0.2em",
                     color: "rgba(200,180,255,0.8)",
                     textShadow: "0 0 14px rgba(160,100,255,0.8)",
                     paddingLeft: "4px",
+                  }}>── NOTIFICATIONS ──</div>
+                  <NotificationSettings />
+
+                  {/* AUDIO */}
+                  <div style={{
+                    fontSize: "10px", fontWeight: 900, letterSpacing: "0.2em",
+                    color: "rgba(200,180,255,0.8)",
+                    textShadow: "0 0 14px rgba(160,100,255,0.8)",
+                    paddingLeft: "4px", marginTop: "6px",
                   }}>── AUDIO ──</div>
                   <SettingsRow icon="🎵" label="Music" color="#a78bfa">
                     <div style={{ display: "flex", alignItems: "center", gap: "10px", width: "180px" }}>

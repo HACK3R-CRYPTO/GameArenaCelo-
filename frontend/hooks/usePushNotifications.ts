@@ -5,15 +5,11 @@ import { useCallback, useEffect, useState } from "react";
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 const VAPID_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
 
-// Browser support check — we never prompt on iOS Safari pre-16.4 since web
-// push doesn't work there. Android Chrome and modern desktop browsers are
-// the primary target.
 function isSupported(): boolean {
   if (typeof window === "undefined") return false;
   return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 }
 
-// VAPID public key needs to be a Uint8Array for the browser API.
 function urlBase64ToUint8Array(base64: string): Uint8Array {
   const padding = "=".repeat((4 - (base64.length % 4)) % 4);
   const padded = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -25,47 +21,83 @@ function urlBase64ToUint8Array(base64: string): Uint8Array {
 
 export type PushState = "unsupported" | "default" | "granted" | "denied" | "subscribing" | "subscribed";
 
+// Browser-level constraint: the FIRST permission grant requires a user
+// gesture (click/tap). We can't bypass that — every browser enforces it.
+// BUT once a user grants permission on our domain, the permission stays
+// "granted" forever. If they later lose their subscription (cleared cache,
+// new device, etc.) we silently re-attach without prompting. That's the
+// "auto" behavior — automatic for everyone after their first opt-in tap.
+async function silentlyResubscribeIfPossible(walletAddress: string): Promise<boolean> {
+  if (!isSupported() || !VAPID_KEY || !walletAddress) return false;
+  if (Notification.permission !== "granted") return false;
+  try {
+    const reg = await navigator.serviceWorker.register("/sw.js");
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const key = urlBase64ToUint8Array(VAPID_KEY);
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: key as unknown as BufferSource,
+      });
+    }
+    await fetch(`${BACKEND_URL}/api/push/subscribe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ walletAddress, subscription: sub.toJSON() }),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function usePushNotifications(walletAddress?: string) {
   const [state, setState] = useState<PushState>("default");
 
   // Initial state — read browser permission + check existing subscription.
+  // If permission is already granted but no subscription exists (cleared
+  // cache, new device), silently re-subscribe in the background. No prompt.
   useEffect(() => {
     if (!isSupported()) { setState("unsupported"); return; }
     const perm = Notification.permission;
     if (perm === "denied")  { setState("denied"); return; }
     if (perm === "granted") {
-      // Already granted — verify there's an active subscription.
       navigator.serviceWorker.getRegistration().then(async (reg) => {
         if (!reg) { setState("granted"); return; }
         const sub = await reg.pushManager.getSubscription();
-        setState(sub ? "subscribed" : "granted");
+        if (sub) {
+          setState("subscribed");
+          return;
+        }
+        // No subscription but permission granted — silently re-attach.
+        if (walletAddress) {
+          const ok = await silentlyResubscribeIfPossible(walletAddress);
+          setState(ok ? "subscribed" : "granted");
+        } else {
+          setState("granted");
+        }
       });
       return;
     }
     setState("default");
-  }, []);
+  }, [walletAddress]);
 
+  // First-time subscribe — must be called from a user gesture handler.
   const subscribe = useCallback(async (): Promise<boolean> => {
     if (!isSupported() || !VAPID_KEY) return false;
     if (!walletAddress) return false;
     setState("subscribing");
 
     try {
-      // 1. Make sure the service worker is registered
       const reg = await navigator.serviceWorker.register("/sw.js");
-
-      // 2. Ask the browser for permission (this is the OS-level prompt)
       const perm = await Notification.requestPermission();
       if (perm !== "granted") {
         setState(perm === "denied" ? "denied" : "default");
         return false;
       }
 
-      // 3. Subscribe with the backend's VAPID public key
       let sub = await reg.pushManager.getSubscription();
       if (!sub) {
-        // Cast through BufferSource — the browser accepts Uint8Array but the
-        // TS lib type is overly strict about ArrayBuffer vs ArrayBufferLike.
         const key = urlBase64ToUint8Array(VAPID_KEY);
         sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
@@ -73,7 +105,6 @@ export function usePushNotifications(walletAddress?: string) {
         });
       }
 
-      // 4. Hand the subscription to our backend so it can send pushes
       const r = await fetch(`${BACKEND_URL}/api/push/subscribe`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -90,6 +121,9 @@ export function usePushNotifications(walletAddress?: string) {
     }
   }, [walletAddress]);
 
+  // Turn notifications off for THIS device. Unsubscribes locally + removes
+  // the row from our backend. Does NOT revoke browser permission, so the
+  // player can flip it back on later with one tap (no re-prompt).
   const unsubscribe = useCallback(async () => {
     if (!isSupported()) return;
     const reg = await navigator.serviceWorker.getRegistration();

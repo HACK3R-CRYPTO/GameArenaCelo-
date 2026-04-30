@@ -132,23 +132,6 @@ type CompetitionData = {
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 
-// ─── Dummy data for preview ────────────────────────────────────────────────────
-const DUMMY_ENTRIES: Entry[] = [
-  { player: "0xronayan0000000000000000000000000000a001", username: "Ronayan", score: 985, timestamp: 0 },
-  { player: "0xmarina00000000000000000000000000000a002", username: "Marina", score: 942, timestamp: 0 },
-  { player: "0xnedahom0000000000000000000000000000a003", username: "Nedahom", score: 918, timestamp: 0 },
-  { player: "0xamanko00000000000000000000000000000a004", username: "Amanko", score: 870, timestamp: 0 },
-  { player: "0xnichaina000000000000000000000000000a005", username: "Nichaina", score: 844, timestamp: 0 },
-  { player: "0xbottak00000000000000000000000000000a006", username: "Bottak", score: 821, timestamp: 0 },
-  { player: "0xlumos000000000000000000000000000000a007", username: "lumos", score: 796, timestamp: 0 },
-  { player: "0xminimie0000000000000000000000000000a008", username: "Minimie", score: 754, timestamp: 0 },
-  { player: "0xzuruonyx000000000000000000000000000a009", username: "zuruonyx", score: 720, timestamp: 0 },
-  { player: "0xdevairmd000000000000000000000000000a010", username: "Devairmd", score: 688, timestamp: 0 },
-  { player: "0xmarvysmind00000000000000000000000000a011", username: "Marvysmind", score: 651, timestamp: 0 },
-  { player: "0xprince000000000000000000000000000000a012", username: "prince", score: 613, timestamp: 0 },
-  { player: "0xsshdopey000000000000000000000000000a013", username: "sshdopey", score: 590, timestamp: 0 },
-];
-
 function fmtName(addr: string, username?: string | null) {
   if (username) return username;
   return `${addr.slice(0, 4)}...${addr.slice(-3)}`;
@@ -471,7 +454,7 @@ function LeaderboardInner() {
   // 72-hour Arena Cup — shared hook returns null outside the event window,
   // so the banner below only renders while the challenge is live.
   const challenge = useChallenge(address);
-  const [entries, setEntries] = useState<Entry[]>(DUMMY_ENTRIES);
+  const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(false);
   const [streak, setStreak] = useState<{ streak: number; playedToday: boolean } | null>(null);
 
@@ -553,10 +536,12 @@ function LeaderboardInner() {
     try {
       const res = await fetch(`${BACKEND_URL}/api/leaderboard?game=${gameTab}&offset=0&limit=20`);
       const data = await res.json();
-      const fetched = data.leaderboard || [];
-      setEntries(fetched.length > 0 ? fetched : DUMMY_ENTRIES);
+      // Real entries only — never silently swap in DUMMY_ENTRIES. Showing
+      // fake names ("Ronayan", "Marina") was confusing real players who
+      // could not find themselves on the board. Empty state is honest.
+      setEntries(data.leaderboard || []);
     } catch {
-      setEntries(DUMMY_ENTRIES);
+      setEntries([]);
     } finally {
       setLoading(false);
     }
@@ -760,9 +745,44 @@ function LeaderboardInner() {
                 {loading ? (
                   <div style={{ padding: "60px", color: "rgba(200,180,255,0.5)", fontSize: "11px", letterSpacing: "0.15em" }}>LOADING...</div>
                 ) : entries.length === 0 ? (
-                  <div style={{ padding: "40px", textAlign: "center" }}>
-                    <div style={{ fontSize: "40px", marginBottom: "10px" }}>🎮</div>
-                    <div style={{ color: "rgba(200,180,255,0.5)", fontSize: "11px", letterSpacing: "0.15em" }}>NO SCORES YET</div>
+                  <div style={{
+                    width: "100%", maxWidth: "440px",
+                    margin: "20px auto",
+                    padding: "32px 24px",
+                    borderRadius: "20px",
+                    background: "linear-gradient(180deg, rgba(167,139,250,0.12) 0%, rgba(20,10,50,0.8) 100%)",
+                    border: "1.5px solid rgba(167,139,250,0.4)",
+                    boxShadow: "0 0 30px rgba(167,139,250,0.2), 0 12px 30px rgba(0,0,0,0.5)",
+                    textAlign: "center",
+                  }}>
+                    <div style={{ fontSize: "44px", marginBottom: "10px" }}>🏆</div>
+                    <div style={{
+                      color: "white", fontSize: "16px", fontWeight: 900, letterSpacing: "0.04em",
+                      textShadow: "0 0 12px rgba(167,139,250,0.7)",
+                    }}>
+                      Be the first on the board
+                    </div>
+                    <div style={{
+                      color: "rgba(200,180,255,0.75)", fontSize: "12px",
+                      marginTop: "10px", lineHeight: 1.6,
+                    }}>
+                      No {gameTab === "rhythm" ? "Rhythm Rush" : "Simon Memory"} scores yet this week.
+                      Play a round and your name lands on the leaderboard.
+                    </div>
+                    <button
+                      onClick={() => router.push(`/games/${gameTab}`)}
+                      style={{
+                        marginTop: "18px",
+                        padding: "11px 24px", borderRadius: "999px",
+                        background: "linear-gradient(180deg, #c084fc 0%, #7c3aed 100%)",
+                        border: "none",
+                        color: "white", fontSize: "12px", fontWeight: 900, letterSpacing: "0.12em",
+                        cursor: "pointer",
+                        boxShadow: "0 0 20px rgba(124,58,237,0.5), 0 6px 14px rgba(0,0,0,0.4)",
+                      }}
+                    >
+                      PLAY {gameTab === "rhythm" ? "RHYTHM" : "SIMON"} →
+                    </button>
                   </div>
                 ) : (
                   <>
@@ -792,6 +812,42 @@ function LeaderboardInner() {
                         return <PlayerRow key={e.player} entry={e} rank={rank} color={color} isMe={isMe} />;
                       })}
                     </div>
+
+                    {/* Player-not-on-board chip — when the connected wallet
+                        has not posted a score this season they see no
+                        familiar row on the list. Show a small CTA so they
+                        know how to get on the board. Skipped if they're
+                        already in `entries` (they have a row to find). */}
+                    {address && !entries.find(e => e.player.toLowerCase() === address.toLowerCase()) && entries.length > 3 && (
+                      <div style={{
+                        width: "100%", maxWidth: "520px", marginTop: "12px",
+                        padding: "12px 16px", borderRadius: "14px",
+                        background: "rgba(167,139,250,0.1)",
+                        border: "1px solid rgba(167,139,250,0.35)",
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        gap: "10px", flexWrap: "wrap",
+                      }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ color: "white", fontSize: "12px", fontWeight: 900, letterSpacing: "0.04em" }}>
+                            You&apos;re not on the board yet
+                          </div>
+                          <div style={{ color: "rgba(200,180,255,0.7)", fontSize: "10.5px", marginTop: "2px" }}>
+                            Play one round to claim your rank.
+                          </div>
+                        </div>
+                        <button onClick={() => router.push(`/games/${gameTab}`)}
+                          style={{
+                            padding: "8px 16px", borderRadius: "999px",
+                            background: "linear-gradient(180deg, #c084fc 0%, #7c3aed 100%)",
+                            border: "none",
+                            color: "white", fontSize: "10px", fontWeight: 900, letterSpacing: "0.12em",
+                            cursor: "pointer",
+                            boxShadow: "0 0 14px rgba(124,58,237,0.5)",
+                          }}>
+                          PLAY ▸
+                        </button>
+                      </div>
+                    )}
 
                     {/* Sparse-list empty state — instead of a huge void
                         below the podium when there are only 1-3 entries,

@@ -360,7 +360,9 @@ export default function GamesPage() {
       if (compLeader && comp?.weeksLeft > 0) items.push({
         icon: "🏆", color: "#fbbf24",
         title: `${shortName(compLeader.wallet, compLeader.username)} leads 3-Week Cup`,
-        subtitle: `${compLeader.total} pts · ${comp.weeksLeft} weeks left`,
+        subtitle: comp.weeksLeft === 1
+          ? `${compLeader.total} pts · Final week`
+          : `${compLeader.total} pts · ${comp.weeksLeft} weeks left`,
       });
       setNews(items.slice(0, 4));
     });
@@ -512,9 +514,15 @@ export default function GamesPage() {
             });
           }
           if (compInfo) {
+            // weeksLeft counts the current week as remaining, so "1" means
+            // we ARE in the final week, not "one more week to go." Display
+            // the honest message in either case.
+            const isFinal = compInfo.weeksLeft === 1;
             events.push({
               icon: "🏆", color: "#fbbf24",
-              title: `3-Week Cup — ${compInfo.weeksLeft} week${compInfo.weeksLeft !== 1 ? "s" : ""} left`,
+              title: isFinal
+                ? `3-Week Cup — Final week, ends soon`
+                : `3-Week Cup — ${compInfo.weeksLeft} weeks left`,
               subtitle: `$${compInfo.total} pool · Cumulative · View →`,
               // Deep-link to the Seasons tab where the Cup prizes, your
               // standing, and the full cumulative ranking list live.

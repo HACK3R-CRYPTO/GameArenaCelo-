@@ -132,23 +132,6 @@ type CompetitionData = {
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 
-// ─── Dummy data for preview ────────────────────────────────────────────────────
-const DUMMY_ENTRIES: Entry[] = [
-  { player: "0xronayan0000000000000000000000000000a001", username: "Ronayan", score: 985, timestamp: 0 },
-  { player: "0xmarina00000000000000000000000000000a002", username: "Marina", score: 942, timestamp: 0 },
-  { player: "0xnedahom0000000000000000000000000000a003", username: "Nedahom", score: 918, timestamp: 0 },
-  { player: "0xamanko00000000000000000000000000000a004", username: "Amanko", score: 870, timestamp: 0 },
-  { player: "0xnichaina000000000000000000000000000a005", username: "Nichaina", score: 844, timestamp: 0 },
-  { player: "0xbottak00000000000000000000000000000a006", username: "Bottak", score: 821, timestamp: 0 },
-  { player: "0xlumos000000000000000000000000000000a007", username: "lumos", score: 796, timestamp: 0 },
-  { player: "0xminimie0000000000000000000000000000a008", username: "Minimie", score: 754, timestamp: 0 },
-  { player: "0xzuruonyx000000000000000000000000000a009", username: "zuruonyx", score: 720, timestamp: 0 },
-  { player: "0xdevairmd000000000000000000000000000a010", username: "Devairmd", score: 688, timestamp: 0 },
-  { player: "0xmarvysmind00000000000000000000000000a011", username: "Marvysmind", score: 651, timestamp: 0 },
-  { player: "0xprince000000000000000000000000000000a012", username: "prince", score: 613, timestamp: 0 },
-  { player: "0xsshdopey000000000000000000000000000a013", username: "sshdopey", score: 590, timestamp: 0 },
-];
-
 function fmtName(addr: string, username?: string | null) {
   if (username) return username;
   return `${addr.slice(0, 4)}...${addr.slice(-3)}`;
@@ -471,7 +454,7 @@ function LeaderboardInner() {
   // 72-hour Arena Cup — shared hook returns null outside the event window,
   // so the banner below only renders while the challenge is live.
   const challenge = useChallenge(address);
-  const [entries, setEntries] = useState<Entry[]>(DUMMY_ENTRIES);
+  const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(false);
   const [streak, setStreak] = useState<{ streak: number; playedToday: boolean } | null>(null);
 
@@ -553,10 +536,12 @@ function LeaderboardInner() {
     try {
       const res = await fetch(`${BACKEND_URL}/api/leaderboard?game=${gameTab}&offset=0&limit=20`);
       const data = await res.json();
-      const fetched = data.leaderboard || [];
-      setEntries(fetched.length > 0 ? fetched : DUMMY_ENTRIES);
+      // Real entries only — never silently swap in DUMMY_ENTRIES. Showing
+      // fake names ("Ronayan", "Marina") was confusing real players who
+      // could not find themselves on the board. Empty state is honest.
+      setEntries(data.leaderboard || []);
     } catch {
-      setEntries(DUMMY_ENTRIES);
+      setEntries([]);
     } finally {
       setLoading(false);
     }

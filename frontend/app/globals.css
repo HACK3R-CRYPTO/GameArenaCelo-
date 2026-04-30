@@ -211,6 +211,49 @@ button[aria-label$="button"],
 }
 .slime-idle { animation: slime-idle 3.6s ease-in-out infinite; transform-origin: 50% 100%; }
 
+/* ─── Pet mood modifiers ──────────────────────────────────────────────────
+   Mood is layered on top of the base idle animation (egg-wobble or slime-
+   idle) by adjusting animation-duration + applying a filter. Color alone
+   reads as a UI bug; what makes the pet feel alive across moods is the
+   change in tempo. Happy bounces faster; worried barely moves. */
+
+/* Happy — faster idle, slight saturation boost (filter is set inline so
+   it composes with habitat lighting). */
+.pet-mood-happy.slime-idle { animation-duration: 2.4s; }
+.pet-mood-happy.egg-wobble  { animation-duration: 2.6s; }
+
+/* Sleepy — slow bob, sprite stays full-color so it's recognizable.
+   Pair with the 💤 overlay rendered above the pet. */
+.pet-mood-sleepy.slime-idle { animation-duration: 6s; }
+.pet-mood-sleepy.egg-wobble  { animation-duration: 6.5s; }
+
+/* Sad — even slower, droopy posture (slight downward bias via translateY).
+   Filter (sat 0.7 / brightness 0.92) is applied inline. */
+.pet-mood-sad.slime-idle { animation-duration: 5s; }
+.pet-mood-sad.egg-wobble  { animation-duration: 5.5s; }
+
+/* Worried — barely moves. The 💧 overlay slides down occasionally as the
+   focal point of motion. */
+.pet-mood-worried.slime-idle { animation-duration: 8s; }
+.pet-mood-worried.egg-wobble  { animation-duration: 9s; }
+
+/* 💤 sleepy overlay — gentle fade up, drift right, fade out */
+@keyframes pet-z-float {
+  0%   { opacity: 0; transform: translate(0, 0) scale(0.6); }
+  20%  { opacity: 0.9; }
+  100% { opacity: 0; transform: translate(10px, -16px) scale(1); }
+}
+.pet-z-overlay { animation: pet-z-float 3.5s ease-out infinite; }
+
+/* 💧 worried tear — slow slide down, infrequent (long delay between cycles) */
+@keyframes pet-tear-fall {
+  0%   { opacity: 0; transform: translateY(-2px); }
+  10%  { opacity: 0.85; }
+  60%  { opacity: 0.85; transform: translateY(8px); }
+  100% { opacity: 0; transform: translateY(14px); }
+}
+.pet-tear-overlay { animation: pet-tear-fall 6s ease-in infinite; }
+
 /* Habitat bubble (rises up inside the scene) */
 @keyframes habitat-bubble-rise {
   0%   { opacity: 0; transform: translateY(0); }

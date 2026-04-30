@@ -15,6 +15,7 @@ import { HabitatsPanel } from "@/components/HabitatsPanel";
 import { HabitatBackground } from "@/components/HabitatBackground";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useHabitats } from "@/hooks/useHabitats";
+import { moodFor, bubblesFor, idleClassFor, filterFor, overlayFor, labelFor, type PetMood } from "@/lib/petMood";
 import { CONTRACT_ADDRESSES, ERC20_ABI } from "@/lib/contracts";
 import { formatUnits } from "viem";
 
@@ -455,15 +456,18 @@ function SettingsRow({ icon, label, color, children }: { icon: string; label: st
 }
 
 // ─── Pet Slot — compact pet display that lives inside the trainer card ────────
-function PetSlot({ pet, compact = false, playerLevel = 1 }: { pet: PetStage; compact?: boolean; playerLevel?: number }) {
+function PetSlot({
+  pet, compact = false, playerLevel = 1, mood = "neutral", streak = 0,
+}: {
+  pet: PetStage; compact?: boolean; playerLevel?: number;
+  mood?: PetMood; streak?: number;
+}) {
   const isEgg = pet.id === "egg";
   const [poking, setPoking] = useState(false);
   const [bubble, setBubble] = useState<string | null>(null);
   const { equipped: habitat } = useHabitats(playerLevel);
 
-  const phrases = isEgg
-    ? ["It's warm.", "Cozy in here.", "Boop!", "I hear tapping!"]
-    : ["Hi!", "Boop!", "Let's play!", "Squish!"];
+  const phrases = bubblesFor(mood, { isEgg, streak });
 
   const handlePoke = () => {
     setPoking(false);
@@ -473,7 +477,10 @@ function PetSlot({ pet, compact = false, playerLevel = 1 }: { pet: PetStage; com
     setTimeout(() => setBubble(null), 1500);
   };
 
-  const idleClass = poking ? "pet-poke" : (isEgg ? "egg-wobble" : "slime-idle");
+  const idleClass = poking ? "pet-poke" : idleClassFor(mood, isEgg);
+  const moodFilter = filterFor(mood);
+  const overlayGlyph = overlayFor(mood);
+  const moodLabel = labelFor(mood);
 
   return (
     <div
@@ -508,6 +515,40 @@ function PetSlot({ pet, compact = false, playerLevel = 1 }: { pet: PetStage; com
           }} />
         </div>
       )}
+      {/* Mood overlay glyph — 💤 for sleepy, 💧 for worried. Sits above the pet. */}
+      {overlayGlyph && (
+        <div
+          className={mood === "worried" ? "pet-tear-overlay" : "pet-z-overlay"}
+          style={{
+            position: "absolute",
+            top: mood === "worried" ? "32%" : "6px",
+            right: mood === "worried" ? "32%" : "12px",
+            fontSize: compact ? "16px" : "20px",
+            zIndex: 4,
+            pointerEvents: "none",
+            filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.5))",
+          }}
+        >{overlayGlyph}</div>
+      )}
+      {/* Mood label chip — only renders for lapsed moods (sleepy/sad/worried)
+         so engaged players never see UI furniture. Sits at the bottom edge
+         of the slot so it doesn't fight the speech bubble or the pet body. */}
+      {moodLabel && (
+        <div style={{
+          position: "absolute", bottom: "-2px", left: "50%", transform: "translateX(-50%)",
+          padding: "1px 7px", borderRadius: "999px",
+          background: "rgba(0,0,0,0.55)",
+          border: `1px solid ${moodLabel.color}66`,
+          zIndex: 6, pointerEvents: "none",
+          backdropFilter: "blur(4px)",
+        }}>
+          <span style={{
+            color: moodLabel.color,
+            fontSize: "8px", fontWeight: 900, letterSpacing: "0.12em",
+            textTransform: "uppercase", whiteSpace: "nowrap",
+          }}>{moodLabel.text}</span>
+        </div>
+      )}
       {/* Soft ground glow — keeps the pet anchored visually inside the habitat */}
       <div style={{
         position: "absolute", bottom: "6px", left: "50%", transform: "translateX(-50%)",
@@ -527,7 +568,11 @@ function PetSlot({ pet, compact = false, playerLevel = 1 }: { pet: PetStage; com
         <img src={pet.src} alt={pet.name} draggable={false}
           style={{
             width: "85%", height: "85%", objectFit: "contain",
-            filter: `drop-shadow(0 0 12px ${pet.color}aa) drop-shadow(0 6px 8px rgba(0,0,0,0.5))`,
+            filter: [
+              `drop-shadow(0 0 12px ${pet.color}aa)`,
+              `drop-shadow(0 6px 8px rgba(0,0,0,0.5))`,
+              moodFilter,
+            ].filter(Boolean).join(" "),
           }} />
       </div>
     </div>
@@ -848,12 +893,25 @@ function ProfileInner() {
   const [shareOpen, setShareOpen] = useState(false);
 
   // Real XP / Level from backend (Phase 2). Falls back to derived value while loading.
-  const [userMeta, setUserMeta] = useState<{ xp: number; level: number; xpInLevel: number; xpToNext: number } | null>(null);
+  // streak + lastPlayDate + playedToday feed the pet mood derivation; without
+  // them the pet would always render as `neutral` regardless of engagement.
+  const [userMeta, setUserMeta] = useState<{
+    xp: number; level: number; xpInLevel: number; xpToNext: number;
+    streak: number; playedToday: boolean; lastPlayDate: string | null;
+  } | null>(null);
   useEffect(() => {
     if (!address) { setUserMeta(null); return; }
     fetch(`${BACKEND_URL}/api/user/${address}`)
       .then(r => r.json())
-      .then(d => setUserMeta({ xp: d.xp || 0, level: d.level || 1, xpInLevel: d.xpInLevel || 0, xpToNext: d.xpToNext || 100 }))
+      .then(d => setUserMeta({
+        xp: d.xp || 0,
+        level: d.level || 1,
+        xpInLevel: d.xpInLevel || 0,
+        xpToNext: d.xpToNext || 100,
+        streak: d.streak || 0,
+        playedToday: !!d.playedToday,
+        lastPlayDate: d.lastPlayDate || null,
+      }))
       .catch(() => setUserMeta(null));
   }, [address]);
 
@@ -861,6 +919,15 @@ function ProfileInner() {
   const xpCurrent = userMeta?.xpInLevel ?? 0;
   const xpToNext = userMeta?.xpToNext ?? 100;
   const xpPct = Math.round((xpCurrent / xpToNext) * 100);
+
+  // Pet mood — derived purely from already-fetched signals, no extra request.
+  // Same thresholds as the push-notification re-engagement crons so the door-
+  // bell copy and the pet's emotional state stay in sync across channels.
+  const petMood: PetMood = moodFor({
+    streak: userMeta?.streak ?? 0,
+    lastPlayDate: userMeta?.lastPlayDate ?? null,
+    playedToday: userMeta?.playedToday ?? false,
+  });
   // Fetch player's real leaderboard rank — best across both games
   const [playerRank, setPlayerRank] = useState<number>(0);
   useEffect(() => {
@@ -1202,7 +1269,13 @@ function ProfileInner() {
                     </div>
 
                     {/* RIGHT — Pet (compact on mobile so center gets space) */}
-                    <PetSlot pet={petForLevel(playerLevel)} compact={isMobile} playerLevel={playerLevel} />
+                    <PetSlot
+                      pet={petForLevel(playerLevel)}
+                      compact={isMobile}
+                      playerLevel={playerLevel}
+                      mood={petMood}
+                      streak={userMeta?.streak ?? 0}
+                    />
                   </div>
 
                   {/* BOTTOM ROW — combined XP / pet evolution bar (full width, dual meaning) */}

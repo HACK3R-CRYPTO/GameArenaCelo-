@@ -678,15 +678,12 @@ export default function SimonGamePage() {
         onClose={() => setPetEvolveToPet(null)}
       />
 
-      {/* ═══ PUSH OPT-IN — fires after a meaningful win so the ask lands
-            after value is delivered, not on first paint. Only ever shown
-            once per device via localStorage gating inside the modal. ═══ */}
+      {/* ═══ PUSH OPT-IN — fires after any successful submit so the ask
+            lands after value is delivered, not on first paint. Only ever
+            shown once per device via localStorage gating inside the modal. ═══ */}
       <PushOptInModal
         walletAddress={address}
-        trigger={!!submitResult && (
-          (submitResult.isNewPb ?? false) ||
-          (submitResult.leveledUp ?? false)
-        )}
+        trigger={!!submitResult}
       />
     </div>
   );

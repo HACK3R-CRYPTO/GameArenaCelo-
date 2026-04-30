@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { EnableNotificationsChip } from "@/components/EnableNotificationsChip";
 
 const D = "/splash_screen_icons/dice.png";
 const G = "/splash_screen_icons/gamepad.png";
@@ -721,6 +722,10 @@ export default function HomePage() {
             animation: "bounce-scale-in 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) both",
           }}
         />
+
+        {/* Passive opt-in chip — only renders for connected wallets that
+            haven't subscribed yet. Auto-hides once they tap it. */}
+        <EnableNotificationsChip />
 
         {/* Buttons — side-by-side from 360px up. On a 360px phone the
             two CTAs + 16px gap fit in a 344px content area: 2×150 + 16 + 28

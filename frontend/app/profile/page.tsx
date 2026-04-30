@@ -13,7 +13,7 @@ import MobileStreakChip from "@/components/MobileStreakChip";
 import ShareCard from "@/components/ShareCard";
 import { HabitatsPanel } from "@/components/HabitatsPanel";
 import { HabitatBackground } from "@/components/HabitatBackground";
-import { NotificationSettings } from "@/components/NotificationSettings";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useHabitats } from "@/hooks/useHabitats";
 import { CONTRACT_ADDRESSES, ERC20_ABI } from "@/lib/contracts";
 import { formatUnits } from "viem";
@@ -786,8 +786,19 @@ function ProfileInner() {
   const setMusicVol = (v: number) => updateSettings({ musicVol: v });
   const setSfxVol = (v: number) => updateSettings({ sfxVol: v });
   const setAppAudioVol = (v: number) => updateSettings({ appAudioVol: v });
-  const setNotifOn = (v: boolean) => updateSettings({ notifOn: v });
   const setHapticsOn = (v: boolean) => updateSettings({ hapticsOn: v });
+
+  // Real push notification subscription state. The Settings toggle calls
+  // subscribe()/unsubscribe() so the existing 🔔 row is the actual control —
+  // no separate panel. The local notifOn flag mirrors the real state for
+  // any in-app fallback that doesn't go through web push.
+  const { state: pushState, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePushNotifications(address);
+  const pushOn = pushState === "subscribed";
+  const pushBusy = pushState === "subscribing";
+  const setNotifOn = async (v: boolean) => {
+    if (v) await pushSubscribe(); else await pushUnsubscribe();
+    updateSettings({ notifOn: v });
+  };
 
   const shortAddr = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Not connected";
 
@@ -1602,21 +1613,12 @@ function ProfileInner() {
               {/* SETTINGS TAB */}
               {activeTab === "settings" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  {/* NOTIFICATIONS */}
-                  <div style={{
-                    fontSize: "10px", fontWeight: 900, letterSpacing: "0.2em",
-                    color: "rgba(200,180,255,0.8)",
-                    textShadow: "0 0 14px rgba(160,100,255,0.8)",
-                    paddingLeft: "4px",
-                  }}>── NOTIFICATIONS ──</div>
-                  <NotificationSettings />
-
                   {/* AUDIO */}
                   <div style={{
                     fontSize: "10px", fontWeight: 900, letterSpacing: "0.2em",
                     color: "rgba(200,180,255,0.8)",
                     textShadow: "0 0 14px rgba(160,100,255,0.8)",
-                    paddingLeft: "4px", marginTop: "6px",
+                    paddingLeft: "4px",
                   }}>── AUDIO ──</div>
                   <SettingsRow icon="🎵" label="Music" color="#a78bfa">
                     <div style={{ display: "flex", alignItems: "center", gap: "10px", width: "180px" }}>
@@ -1648,7 +1650,21 @@ function ProfileInner() {
                     <ToggleSwitch on={hapticsOn} color="#a78bfa" onChange={() => setHapticsOn(!hapticsOn)} />
                   </SettingsRow>
                   <SettingsRow icon="🔔" label="Push Notifications" color="#a78bfa">
-                    <ToggleSwitch on={notifOn} color="#a78bfa" onChange={() => setNotifOn(!notifOn)} />
+                    {pushState === "denied" ? (
+                      <span style={{ color: "rgba(252,165,165,0.85)", fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.04em" }}>
+                        Blocked in browser
+                      </span>
+                    ) : pushState === "unsupported" ? (
+                      <span style={{ color: "rgba(200,180,255,0.5)", fontSize: "9.5px", fontWeight: 700 }}>
+                        Not supported
+                      </span>
+                    ) : (
+                      <ToggleSwitch
+                        on={pushOn}
+                        color="#a78bfa"
+                        onChange={() => !pushBusy && setNotifOn(!pushOn)}
+                      />
+                    )}
                   </SettingsRow>
 
                   {/* ACCOUNT */}

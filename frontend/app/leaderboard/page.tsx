@@ -740,9 +740,44 @@ function LeaderboardInner() {
                 {loading ? (
                   <div style={{ padding: "60px", color: "rgba(200,180,255,0.5)", fontSize: "11px", letterSpacing: "0.15em" }}>LOADING...</div>
                 ) : entries.length === 0 ? (
-                  <div style={{ padding: "40px", textAlign: "center" }}>
-                    <div style={{ fontSize: "40px", marginBottom: "10px" }}>🎮</div>
-                    <div style={{ color: "rgba(200,180,255,0.5)", fontSize: "11px", letterSpacing: "0.15em" }}>NO SCORES YET</div>
+                  <div style={{
+                    width: "100%", maxWidth: "440px",
+                    margin: "20px auto",
+                    padding: "32px 24px",
+                    borderRadius: "20px",
+                    background: "linear-gradient(180deg, rgba(167,139,250,0.12) 0%, rgba(20,10,50,0.8) 100%)",
+                    border: "1.5px solid rgba(167,139,250,0.4)",
+                    boxShadow: "0 0 30px rgba(167,139,250,0.2), 0 12px 30px rgba(0,0,0,0.5)",
+                    textAlign: "center",
+                  }}>
+                    <div style={{ fontSize: "44px", marginBottom: "10px" }}>🏆</div>
+                    <div style={{
+                      color: "white", fontSize: "16px", fontWeight: 900, letterSpacing: "0.04em",
+                      textShadow: "0 0 12px rgba(167,139,250,0.7)",
+                    }}>
+                      Be the first on the board
+                    </div>
+                    <div style={{
+                      color: "rgba(200,180,255,0.75)", fontSize: "12px",
+                      marginTop: "10px", lineHeight: 1.6,
+                    }}>
+                      No {gameTab === "rhythm" ? "Rhythm Rush" : "Simon Memory"} scores yet this week.
+                      Play a round and your name lands on the leaderboard.
+                    </div>
+                    <button
+                      onClick={() => router.push(`/games/${gameTab}`)}
+                      style={{
+                        marginTop: "18px",
+                        padding: "11px 24px", borderRadius: "999px",
+                        background: "linear-gradient(180deg, #c084fc 0%, #7c3aed 100%)",
+                        border: "none",
+                        color: "white", fontSize: "12px", fontWeight: 900, letterSpacing: "0.12em",
+                        cursor: "pointer",
+                        boxShadow: "0 0 20px rgba(124,58,237,0.5), 0 6px 14px rgba(0,0,0,0.4)",
+                      }}
+                    >
+                      PLAY {gameTab === "rhythm" ? "RHYTHM" : "SIMON"} →
+                    </button>
                   </div>
                 ) : (
                   <>
@@ -772,6 +807,42 @@ function LeaderboardInner() {
                         return <PlayerRow key={e.player} entry={e} rank={rank} color={color} isMe={isMe} />;
                       })}
                     </div>
+
+                    {/* Player-not-on-board chip — when the connected wallet
+                        has not posted a score this season they see no
+                        familiar row on the list. Show a small CTA so they
+                        know how to get on the board. Skipped if they're
+                        already in `entries` (they have a row to find). */}
+                    {address && !entries.find(e => e.player.toLowerCase() === address.toLowerCase()) && entries.length > 3 && (
+                      <div style={{
+                        width: "100%", maxWidth: "520px", marginTop: "12px",
+                        padding: "12px 16px", borderRadius: "14px",
+                        background: "rgba(167,139,250,0.1)",
+                        border: "1px solid rgba(167,139,250,0.35)",
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        gap: "10px", flexWrap: "wrap",
+                      }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ color: "white", fontSize: "12px", fontWeight: 900, letterSpacing: "0.04em" }}>
+                            You&apos;re not on the board yet
+                          </div>
+                          <div style={{ color: "rgba(200,180,255,0.7)", fontSize: "10.5px", marginTop: "2px" }}>
+                            Play one round to claim your rank.
+                          </div>
+                        </div>
+                        <button onClick={() => router.push(`/games/${gameTab}`)}
+                          style={{
+                            padding: "8px 16px", borderRadius: "999px",
+                            background: "linear-gradient(180deg, #c084fc 0%, #7c3aed 100%)",
+                            border: "none",
+                            color: "white", fontSize: "10px", fontWeight: 900, letterSpacing: "0.12em",
+                            cursor: "pointer",
+                            boxShadow: "0 0 14px rgba(124,58,237,0.5)",
+                          }}>
+                          PLAY ▸
+                        </button>
+                      </div>
+                    )}
 
                     {/* Sparse-list empty state — instead of a huge void
                         below the podium when there are only 1-3 entries,

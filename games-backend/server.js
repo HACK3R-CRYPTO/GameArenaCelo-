@@ -2410,6 +2410,52 @@ setInterval(sendStreakWarnings, 60 * 60 * 1000);
 // Cup deadline cron — every 15 min so the 1-hour-before-end window is always caught
 setInterval(sendCupDeadlineWarnings, 15 * 60 * 1000);
 
+// ─── Re-engagement cron — lapsed-user pings ──────────────────────────────────
+// Runs every 6 hours. Targets users who last played exactly 1, 3, 7, or 14
+// days ago (Duolingo escalation pattern). Once-per-day dedup via
+// notification_log so a player can't get pinged twice in one day. After
+// day 14 we stay silent — no chasing dead users.
+async function sendReengagementPings() {
+  try {
+    const days = [1, 3, 7, 14];
+    let totalSent = 0;
+    for (const d of days) {
+      const target = new Date(Date.now() - d * 86400 * 1000).toISOString().slice(0, 10);
+      const { data: candidates } = await supabase
+        .from('users')
+        .select('wallet_address, xp, last_play_date')
+        .eq('last_play_date', target)
+        .limit(500);
+      if (!candidates || candidates.length === 0) continue;
+
+      for (const u of candidates) {
+        // Honor reengagement mute
+        const { data: prefs } = await supabase
+          .from('notification_prefs')
+          .select('reengagement')
+          .eq('wallet_address', u.wallet_address)
+          .limit(1);
+        if (prefs && prefs[0] && prefs[0].reengagement === false) continue;
+
+        const stage = push.petStage(levelFromXp(u.xp || 0));
+        // Resolve username for personalization (cached after first lookup)
+        const username = await resolveUsername(u.wallet_address);
+        const payload = push.reengagementNotification(stage, d, username);
+        if (!payload) continue;
+        const ok = await push.sendToWallet(supabase, u.wallet_address, `reengagement_d${d}`, payload);
+        if (ok) totalSent++;
+      }
+    }
+    if (totalSent > 0) console.log(`💤 Re-engagement pings sent to ${totalSent} lapsed wallets`);
+  } catch (e) {
+    console.warn('reengagement cron failed:', e?.message || e);
+  }
+}
+
+// Run on startup + every 6 hours so all four lapse buckets get covered each day.
+sendReengagementPings();
+setInterval(sendReengagementPings, 6 * 60 * 60 * 1000);
+
 // Seal seasons on startup and every hour
 sealCompletedSeasons();
 setInterval(sealCompletedSeasons, 60 * 60 * 1000);

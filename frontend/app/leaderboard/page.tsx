@@ -1285,9 +1285,11 @@ function LeaderboardInner() {
                           border: "1px solid rgba(251,191,36,0.4)",
                           textAlign: "right",
                         }}>
-                          <div style={{ color: "rgba(254,215,170,0.7)", fontSize: "8px", fontWeight: 800, letterSpacing: "0.14em" }}>WEEKS LEFT</div>
+                          <div style={{ color: "rgba(254,215,170,0.7)", fontSize: "8px", fontWeight: 800, letterSpacing: "0.14em" }}>
+                            {competition.weeksLeft === 1 ? "FINAL WEEK" : "WEEKS LEFT"}
+                          </div>
                           <div style={{ color: "#fbbf24", fontSize: "16px", fontWeight: 900, lineHeight: 1 }}>
-                            {competition.weeksLeft}
+                            {competition.weeksLeft === 1 ? "🏁" : competition.weeksLeft}
                           </div>
                         </div>
                       </div>

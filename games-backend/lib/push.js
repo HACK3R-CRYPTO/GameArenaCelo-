@@ -66,13 +66,22 @@ function streakNotification(stage, streakDays) {
   };
 }
 
-// Cup deadline reminder — fires 1 hour before cup ends if the player has at
-// least one play but isn't already top-N qualified. Personalized with rank.
-function cupDeadlineNotification(rank, totalPrizePool) {
+// Cup deadline reminder — fires roughly 1 hour before the cup ends.
+// Personalized with the player's current standing relative to the prize line.
+function cupDeadlineNotification(rank, qualifyAt, totalPrizePool) {
+  if (rank > 0 && rank <= qualifyAt) {
+    return {
+      title: '🏆 You\'re in the prize zone',
+      body: `1 hour left. Hold #${rank} or climb — $${totalPrizePool} pool.`,
+      tag: 'cup-deadline',
+      url: '/leaderboard',
+      requireInteraction: true,
+    };
+  }
   return {
-    title: '🏆 1 hour left in the Arena Cup',
+    title: '🏆 1 hour left to qualify',
     body: rank > 0
-      ? `You're #${rank}. Push for top — $${totalPrizePool} pool.`
+      ? `You're #${rank}. Push past #${qualifyAt} to win — $${totalPrizePool} pool.`
       : `Last chance to qualify. $${totalPrizePool} pool.`,
     tag: 'cup-deadline',
     url: '/leaderboard',
@@ -80,13 +89,37 @@ function cupDeadlineNotification(rank, totalPrizePool) {
   };
 }
 
-// Rank change — someone just took your spot.
-function rankChangeNotification(opponent, newRank) {
+// Rank change — someone just bumped you off a podium spot. Only fires for
+// top-3 displacement because that's the emotionally significant moment.
+function rankChangeNotification(opponent, newRank, game) {
+  const gameLabel = game === 'rhythm' ? 'Rhythm Rush' : 'Simon Memory';
+  const placeMedal = newRank === 4 ? '🥉→4️⃣' : newRank === 3 ? '🥈→🥉' : '🥇→🥈';
   return {
-    title: '📉 You got passed',
-    body: `${opponent} just took #${newRank - 1}. Take it back?`,
-    tag: 'rank-change',
-    url: '/leaderboard',
+    title: `📉 You dropped to #${newRank}`,
+    body: `${opponent} just passed you on ${gameLabel}. Take it back? ${placeMedal}`,
+    tag: `rank-change-${game}-${new Date().toISOString().slice(0,10)}`,
+    url: `/leaderboard?game=${game}`,
+  };
+}
+
+// Achievement unlocked — fired inline from submit-score, not via cron.
+function achievementNotification(name, icon) {
+  return {
+    title: `${icon || '🏆'} Achievement unlocked`,
+    body: `${name}`,
+    tag: `achievement-${name.toLowerCase().replace(/\s+/g, '-')}`,
+    url: '/profile?tab=achievements',
+  };
+}
+
+// Generic broadcast — admin sends "we shipped X" / "new cup is live".
+// No category-specific dedup beyond the shared notification_log table.
+function announcementNotification({ title, body, url, tag }) {
+  return {
+    title: title || '📣 GameArena update',
+    body: body || '',
+    url: url || '/games',
+    tag: tag || `announcement-${new Date().toISOString().slice(0,10)}`,
   };
 }
 
@@ -187,14 +220,54 @@ async function sendToWallet(supabase, walletAddress, category, payload) {
   return true;
 }
 
+// Broadcast to every subscribed wallet. Used by admin POST /api/push/broadcast.
+// Honors per-wallet category mute via notification_prefs.reengagement so
+// players who turned off all promo can't be force-fed announcements.
+async function sendBroadcast(supabase, payload) {
+  if (!VAPID_PUBLIC || !VAPID_PRIVATE) return { sent: 0, skipped: 0 };
+
+  // Pull all subscriptions and the prefs map in parallel
+  const [{ data: subs }, { data: prefs }] = await Promise.all([
+    supabase.from('push_subscriptions').select('wallet_address, endpoint, p256dh, auth'),
+    supabase.from('notification_prefs').select('wallet_address, reengagement'),
+  ]);
+  const muted = new Set((prefs || []).filter(p => p.reengagement === false).map(p => p.wallet_address));
+
+  let sent = 0, skipped = 0;
+  const dead = [];
+  const body = JSON.stringify(payload);
+
+  for (const s of (subs || [])) {
+    if (muted.has(s.wallet_address)) { skipped++; continue; }
+    try {
+      await webpush.sendNotification(
+        { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+        body,
+      );
+      sent++;
+    } catch (e) {
+      if (e && (e.statusCode === 410 || e.statusCode === 404)) dead.push(s.endpoint);
+    }
+  }
+
+  // Clean dead endpoints
+  if (dead.length > 0) {
+    await supabase.from('push_subscriptions').delete().in('endpoint', dead);
+  }
+  return { sent, skipped, cleaned: dead.length };
+}
+
 module.exports = {
   petStage,
   streakNotification,
   cupDeadlineNotification,
   rankChangeNotification,
   reengagementNotification,
+  achievementNotification,
+  announcementNotification,
   saveSubscription,
   getSubscriptions,
   deleteSubscription,
   sendToWallet,
+  sendBroadcast,
 };

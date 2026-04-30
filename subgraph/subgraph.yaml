@@ -1,0 +1,86 @@
+specVersion: 1.0.0
+description: GameArena — competitive gaming arena on Celo. Indexes player progression, scores, habitat ownership, and wager activity across the production contracts.
+schema:
+  file: ./schema.graphql
+
+dataSources:
+  # GamePass NFT — every player's identity and score history
+  - kind: ethereum
+    name: GamePass
+    network: celo
+    source:
+      address: "0xBB044d6780885A4cDb7E6F40FCc92FF7b051DAdE"
+      abi: GamePass
+      startBlock: 63000000
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Player
+        - Score
+        - DailyStat
+        - GlobalStat
+      abis:
+        - name: GamePass
+          file: ./abis/GamePass.json
+      eventHandlers:
+        - event: PassMinted(indexed address,indexed uint256,string)
+          handler: handlePassMinted
+        - event: UsernameChanged(indexed address,string,string)
+          handler: handleUsernameChanged
+        - event: ScoreRecorded(indexed address,indexed uint8,uint256,indexed uint256,uint256)
+          handler: handleScoreRecorded
+      file: ./src/gamepass.ts
+
+  # HabitatRegistry — habitat tier unlocks and UBI donations
+  - kind: ethereum
+    name: HabitatRegistry
+    network: celo
+    source:
+      address: "0x8888FEb43ac1833c683D0474204aa55A55BD010F"
+      abi: HabitatRegistry
+      startBlock: 65552895
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Player
+        - PlayerHabitat
+        - DailyStat
+        - GlobalStat
+      abis:
+        - name: HabitatRegistry
+          file: ./abis/HabitatRegistry.json
+      eventHandlers:
+        - event: HabitatUnlocked(indexed address,indexed uint8,uint256,uint256,uint256)
+          handler: handleHabitatUnlocked
+      file: ./src/habitat.ts
+
+  # SoloWager — solo G$ wager creates and resolutions
+  - kind: ethereum
+    name: SoloWager
+    network: celo
+    source:
+      address: "0xc78A8A027e07Ae5d52981f627bbac973a8d77eFb"
+      abi: SoloWager
+      startBlock: 63222929
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Player
+        - Wager
+        - DailyStat
+        - GlobalStat
+      abis:
+        - name: SoloWager
+          file: ./abis/SoloWager.json
+      eventHandlers:
+        - event: WagerCreated(indexed uint256,indexed address,uint256,uint8)
+          handler: handleWagerCreated
+        - event: WagerResolved(indexed uint256,indexed address,bool,uint256)
+          handler: handleWagerResolved
+      file: ./src/wager.ts

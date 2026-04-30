@@ -1,0 +1,91 @@
+# GameArena subgraph schema. Indexes the four production contracts on
+# Celo mainnet and exposes leaderboards, ownership, and aggregate stats
+# without hitting Supabase.
+
+type Player @entity {
+  id: ID!                         # wallet address (lowercase)
+  username: String                # set on PassMinted, updated on UsernameChanged
+  passTokenId: BigInt             # NFT token id
+  passMintedAt: BigInt            # block timestamp
+
+  # Score totals (per game type, lifetime cumulative)
+  totalGames: BigInt!
+  rhythmPlays: BigInt!
+  simonPlays: BigInt!
+  bestRhythmScore: BigInt!
+  bestSimonScore: BigInt!
+  lastPlayedAt: BigInt
+
+  # Habitat ownership (paid tiers only; free tiers are level-derived off-chain)
+  ownedHabitats: [PlayerHabitat!]! @derivedFrom(field: "player")
+  highestHabitatTier: Int!        # 0 if none owned
+  totalUbiDonated: BigInt!        # sum of UBI portion (85% of every habitat unlock)
+
+  # Wagering
+  totalWagers: BigInt!
+  totalWageredG: BigInt!
+  totalWonG: BigInt!
+  wagersWon: BigInt!
+  wagersLost: BigInt!
+}
+
+type PlayerHabitat @entity {
+  id: ID!                         # `${player}-${tier}`
+  player: Player!
+  tier: Int!
+  unlockedAt: BigInt!             # block timestamp
+  totalPaid: BigInt!
+  ubiAmount: BigInt!
+  treasuryAmount: BigInt!
+  txHash: Bytes!
+}
+
+type Score @entity(immutable: true) {
+  id: ID!                         # txHash + log index
+  player: Player!
+  gameType: Int!                  # 0 = rhythm, 1 = simon
+  score: BigInt!
+  season: BigInt!
+  totalGamesAtTime: BigInt!
+  blockTimestamp: BigInt!
+  txHash: Bytes!
+}
+
+type Wager @entity {
+  id: ID!                         # contract wagerId
+  player: Player!
+  amount: BigInt!
+  gameType: Int!
+  status: Int!                    # 0 pending, 1 won, 2 lost, 3 cancelled
+  payout: BigInt!
+  createdAt: BigInt!
+  resolvedAt: BigInt
+  txHash: Bytes!
+}
+
+# Daily aggregate (UTC day) for charts and stats panels
+type DailyStat @entity {
+  id: ID!                         # day timestamp (UTC midnight, seconds)
+  date: BigInt!
+  newPlayers: BigInt!             # PassMinted events that day
+  scoresRecorded: BigInt!
+  rhythmPlays: BigInt!
+  simonPlays: BigInt!
+  habitatUnlocks: BigInt!
+  ubiDonatedG: BigInt!            # G$ to UBI from habitat unlocks that day
+  wagersCreated: BigInt!
+}
+
+type GlobalStat @entity {
+  id: ID!                         # always "global"
+  totalPlayers: BigInt!
+  totalScores: BigInt!
+  totalRhythmPlays: BigInt!
+  totalSimonPlays: BigInt!
+  totalHabitatUnlocks: BigInt!
+  totalUbiDonatedG: BigInt!
+  totalTreasuryG: BigInt!
+  totalWagers: BigInt!
+  totalWageredG: BigInt!
+  lastUpdatedAt: BigInt!
+}

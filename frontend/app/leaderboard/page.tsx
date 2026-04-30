@@ -8,6 +8,7 @@ import BottomNav from "@/components/BottomNav";
 import MobileStreakChip from "@/components/MobileStreakChip";
 import { useChallenge } from "@/components/ChallengeBanner";
 import { HabitatChip } from "@/components/HabitatChip";
+import { fetchLeaderboard } from "@/lib/subgraph";
 
 // ─── Splash icons ──────────────────────────────────────────────────────────────
 const D = "/splash_screen_icons/dice.png";
@@ -534,12 +535,18 @@ function LeaderboardInner() {
   const fetchEntries = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/leaderboard?game=${gameTab}&offset=0&limit=20`);
-      const data = await res.json();
-      // Real entries only — never silently swap in DUMMY_ENTRIES. Showing
-      // fake names ("Ronayan", "Marina") was confusing real players who
-      // could not find themselves on the board. Empty state is honest.
-      setEntries(data.leaderboard || []);
+      // Match the backend's season math exactly so the leaderboard rolls
+      // over the moment a new season starts, not 7 days later. Backend uses
+      // SEASON_EPOCH = 1770249600 with 7-day weeks; we mirror it here.
+      const SEASON_EPOCH = 1770249600;
+      const WEEK_SECONDS = 7 * 86400;
+      const nowSec = Math.floor(Date.now() / 1000);
+      const elapsed = nowSec - SEASON_EPOCH;
+      const seasonNumber = Math.floor(elapsed / WEEK_SECONDS) + 1;
+      const seasonStart = SEASON_EPOCH + (seasonNumber - 1) * WEEK_SECONDS;
+      const gameType = gameTab === "rhythm" ? 0 : 1;
+      const fetched = await fetchLeaderboard(gameType, seasonStart, 20);
+      setEntries(fetched);
     } catch {
       setEntries([]);
     } finally {

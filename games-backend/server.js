@@ -638,6 +638,12 @@ function cacheInvalidatePrefix(prefix) {
   }
 }
 
+// ─── Subgraph client — source of truth for on-chain reads ────────────────────
+// The subgraph owns every read that depends on score history, player
+// identity, habitat ownership, and aggregates. Supabase keeps off-chain
+// state only (XP, missions, streaks, achievements, equipped preference).
+const subgraph = require('./lib/subgraph');
+
 async function getLeaderboard(game, limit = 50, seasonFilter = true) {
   const cacheKey = `lb:${game}:${seasonFilter ? 'season' : 'all'}:${limit}`;
   const cached = cacheGet(cacheKey);
@@ -1037,9 +1043,18 @@ app.post('/api/submit-score', requireSecret, gameSubmitLimiter, async (req, res)
     console.warn('achievement check failed:', e.message);
   }
 
-  // Get rank
-  const leaderboard = await getLeaderboard(game);
-  const rank = leaderboard.findIndex(e => e.wallet_address === lower) + 1;
+  // Rank is read from the subgraph — single source of truth for on-chain
+  // scores. The on-chain ScoreRecorded event is what the subgraph indexes,
+  // and we already require an on-chain proof above, so by the time we hit
+  // here the player's score is canonical.
+  let rank = 0;
+  try {
+    const seasonStart = SEASON_EPOCH + (season - 1) * SEASON_DAYS * 86400;
+    const gameTypeInt = game === 'rhythm' ? 0 : 1;
+    rank = await subgraph.seasonRank(lower, score, gameTypeInt, seasonStart);
+  } catch (e) {
+    console.warn('rank lookup failed:', e?.message || e);
+  }
 
   console.log(`✅ [${game}] ${lower.slice(0, 8)}... → ${score} pts (rank #${rank}) +${xpEarned} XP ${txHash ? `tx: ${txHash.slice(0, 10)}...` : ''}`);
 
@@ -1056,6 +1071,9 @@ app.post('/api/submit-score', requireSecret, gameSubmitLimiter, async (req, res)
 });
 
 // ─── GET /api/leaderboard?game=rhythm|simon ─────────────────────────────────
+// Reads from the Goldsky subgraph (on-chain truth), not Supabase. Supabase
+// is reserved for off-chain state only — this endpoint is purely a view of
+// indexed score events.
 app.get('/api/leaderboard', async (req, res) => {
   const game = req.query.game;
   if (!['rhythm', 'simon'].includes(game)) {
@@ -1066,96 +1084,110 @@ app.get('/api/leaderboard', async (req, res) => {
   const page = offset > 0 ? null : Math.max(1, parseInt(req.query.page) || 1);
   const start = offset > 0 ? offset : (page - 1) * limit;
 
-  const all = await getLeaderboard(game);
+  // Pull current-season leaderboard from the subgraph
+  const seasonStart = SEASON_EPOCH + (currentSeasonNumber() - 1) * SEASON_DAYS * 86400;
+  const gameTypeInt = game === 'rhythm' ? 0 : 1;
+  let all = [];
+  try {
+    all = await subgraph.leaderboard(gameTypeInt, seasonStart, 100);
+  } catch (e) {
+    console.warn('subgraph leaderboard failed:', e?.message || e);
+  }
   const total = all.length;
   const slice = all.slice(start, start + limit);
 
-  // Fetch streaks for all players in this slice in one query
+  // Streaks are off-chain (Supabase). Username comes from the subgraph row.
+  // Single batch query keeps Supabase egress minimal — one tiny read per
+  // page instead of one per row.
   const wallets = slice.map(e => e.wallet_address.toLowerCase());
-  const { data: streakRows } = await supabase
-    .from('users')
-    .select('wallet_address, play_streak')
-    .in('wallet_address', wallets);
-  const streakMap = new Map((streakRows || []).map(r => [r.wallet_address.toLowerCase(), r.play_streak || 0]));
+  let streakMap = new Map();
+  if (wallets.length > 0) {
+    const { data: streakRows } = await supabase
+      .from('users')
+      .select('wallet_address, play_streak')
+      .in('wallet_address', wallets);
+    streakMap = new Map((streakRows || []).map(r => [r.wallet_address.toLowerCase(), r.play_streak || 0]));
+  }
 
-  const enriched = await Promise.all(slice.map(async (e) => ({
+  const enriched = slice.map(e => ({
     player: e.wallet_address,
     score: e.score,
-    gameTime: e.game_time,
-    wagered: e.wagered,
     timestamp: Math.floor(new Date(e.created_at).getTime() / 1000),
     tx_hash: e.tx_hash,
-    username: await resolveUsername(e.wallet_address) || null,
+    username: e.username,
     streak: streakMap.get(e.wallet_address.toLowerCase()) || 0,
-  })));
+  }));
   const listTotal = Math.max(0, total - (offset > 0 ? offset : 0));
   res.json({ leaderboard: enriched, total, page, limit, pages: Math.ceil(listTotal / limit) });
 });
 
 // ─── GET /api/activity ──────────────────────────────────────────────────────
+// Recent score events from the subgraph. Profile pages pass ?player=0x...
+// to scope to a single wallet; the global feed shows the last 10 plays.
 app.get('/api/activity', async (req, res) => {
-  // Optional ?player=0x... scopes the result to a single wallet so profile
-  // pages never have to filter on the client (which is fragile and misses
-  // matches outside the limit window). Bump the default limit to 20 since
-  // the feed view uses this too and benefits from a longer history.
   const player = typeof req.query.player === 'string' ? req.query.player : null;
   const limit = player ? 30 : 10;
-  const entries = await getActivity(limit, player);
-  const enriched = await Promise.all(entries.map(async (e) => ({
+  let entries = [];
+  try {
+    entries = await subgraph.recentActivity(limit, player);
+  } catch (e) {
+    console.warn('subgraph activity failed:', e?.message || e);
+  }
+  const enriched = entries.map(e => ({
     player: e.wallet_address,
     game: e.game,
     score: e.score,
     tx_hash: e.tx_hash,
     timestamp: Math.floor(new Date(e.created_at).getTime() / 1000),
-    username: await resolveUsername(e.wallet_address) || null,
-  })));
+    username: e.username,
+  }));
   res.json({ activity: enriched });
 });
 
 // ─── GET /api/stats ─────────────────────────────────────────────────────────
+// All aggregates come from the subgraph's GlobalStat row in one query —
+// no more pulling thousands of activity rows just to count them.
 app.get('/api/stats', async (_, res) => {
   const cached = cacheGet('stats:global');
   if (cached) return res.json(cached);
   const season = currentSeasonNumber();
   const { start, end } = seasonBounds(season);
-  const startDate = new Date(start * 1000).toISOString();
 
-  const totalUsers = await getUserCount();
+  let g = null;
+  try {
+    g = await subgraph.globalStats();
+  } catch (e) {
+    console.warn('subgraph stats failed:', e?.message || e);
+  }
 
-  // Season-specific users
-  const { data: seasonScores } = await supabase
-    .from('scores')
-    .select('wallet_address')
-    .gte('created_at', startDate);
-  const seasonUsers = new Set((seasonScores || []).map(s => s.wallet_address)).size;
+  const totalUsers     = g ? Number(g.totalPlayers)      : 0;
+  const totalGames     = g ? Number(g.totalScores)       : 0;
+  const rhythmPlayers  = g ? Number(g.totalRhythmPlays)  : 0;
+  const simonPlayers   = g ? Number(g.totalSimonPlays)   : 0;
+  const totalWagered   = g ? Number(BigInt(g.totalWageredG || '0') / 10n ** 16n) / 100 : 0;
 
-  // Total games from activity
-  const { count: totalGames } = await supabase
-    .from('activity')
-    .select('*', { count: 'exact', head: true });
+  // Season-active users — one tiny subgraph query for current season scores
+  let seasonUsers = 0;
+  try {
+    const seasonScores = await subgraph.gql(
+      `query SU($s: BigInt!) {
+        scores(first: 500, where: { blockTimestamp_gte: $s }) { player { id } }
+      }`,
+      { s: start.toString() },
+    );
+    seasonUsers = new Set((seasonScores.scores || []).map(r => r.player.id)).size;
+  } catch (_) { }
 
-  // Game counts
-  const { count: rhythmPlayers } = await supabase
-    .from('scores')
-    .select('*', { count: 'exact', head: true })
-    .eq('game', 'rhythm');
-  const { count: simonPlayers } = await supabase
-    .from('scores')
-    .select('*', { count: 'exact', head: true })
-    .eq('game', 'simon');
+  // Top scores from subgraph (also one query each)
+  const seasonStartUnix = start;
+  const [topR, topS] = await Promise.all([
+    subgraph.leaderboard(0, seasonStartUnix, 1).catch(() => []),
+    subgraph.leaderboard(1, seasonStartUnix, 1).catch(() => []),
+  ]);
+  const leaderboardR = topR.length ? topR : [{ score: 0 }];
+  const leaderboardS = topS.length ? topS : [{ score: 0 }];
 
-  // Top scores
-  const leaderboardR = await getLeaderboard('rhythm', 1);
-  const leaderboardS = await getLeaderboard('simon', 1);
-
-  // Total wagered
-  const { data: wageredData } = await supabase
-    .from('scores')
-    .select('wagered')
-    .not('wagered', 'is', null);
-  const totalWagered = (wageredData || []).reduce((sum, e) => sum + Number(e.wagered || 0), 0);
-
-  // Prize pot
+  // Prize pot still on chain
   let estimatedPrizePot = '0.00';
   try {
     const bal = await getTreasuryBalance();

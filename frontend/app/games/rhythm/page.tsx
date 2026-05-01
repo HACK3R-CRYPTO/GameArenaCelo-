@@ -36,8 +36,12 @@ function petForLevel(level: number): PetStage {
 
 // ─── Game constants ───────────────────────────────────────────────────────────
 const TRACK_DURATION = 45;        // seconds — gives space for verse/hook to repeat
-const PERFECT_WINDOW = 0.12;      // ±120ms (slightly forgiving — better feel)
-const GOOD_WINDOW = 0.28;      // ±280ms
+// PERFECT was ±120ms — too forgiving, players were hitting near-100% perfect
+// runs without effort. Tightened to ±80ms, which matches Magic Tiles 3 and
+// most mobile rhythm games. GOOD stays at ±280ms so casual play still feels
+// fair; the gap between PERFECT and GOOD is now where skill matters.
+const PERFECT_WINDOW = 0.08;      // ±80ms — skill threshold
+const GOOD_WINDOW = 0.28;      // ±280ms — casual safety net
 const BPM = 120;       // 120 BPM → 0.5s per beat (readable)
 const BEAT = 60 / BPM;
 
@@ -72,27 +76,29 @@ const LANES: LaneTheme[] = [
   { wall: "#003a00", face: "linear-gradient(160deg, #86efac 0%, #22c55e 50%, #15803d 100%)", glow: "rgba(34,197,94,0.8)", accent: "#22c55e" },
 ];
 
-// ─── Note chart — Ode to Joy in C major ──────────────────────────────────────
+// ─── Note chart — London Bridge Is Falling Down, C major ────────────────────
 // Piano Tiles principle: the sequence of taps IS the melody. Every tile has
 // a lane (visual) AND a freq (the note it plays when tapped). Lanes run
 // low-left to high-right so tapping across the screen feels like walking
 // up a piano keyboard.
 //
-// Mapping (diatonic, two notes per lane):
+// Mapping (diatonic):
 //   lane 0 → C5, D5   (bottom of the scale)
-//   lane 1 → E5, F5   (mid-low)
-//   lane 2 → G5, A5   (mid-high)
-//   lane 3 → B5, C6   (top)
+//   lane 1 → E5       (mid-low)
+//   lane 2 → F5       (mid)
+//   lane 3 → G5, A5   (top — both share since London Bridge climbs to A)
 //
-// Song: Beethoven's Ode to Joy. Four-bar phrases that repeat with small
-// variations, classic verse / bridge / verse / climax shape, all in 4/4 at
-// 120 BPM, which slots perfectly into the existing 45s game timeline and
-// drum track.
+// Song: "London Bridge Is Falling Down" — traditional English nursery rhyme.
+// Switched in for this new season. Stays in C major so the I-V-vi-IV-I-V
+// chord progression and audio scheduling carry over without rework. London
+// Bridge is one note higher than Saints (it climbs to A5), so the high
+// lane (3) holds both G and A — the rocking back-and-forth between them
+// at the start IS the song's recognizable hook.
 type NoteDef = { id: number; lane: number; time: number; travel: number; freq: number };
 
-// C major scale pitches — Ode to Joy sits between C5 and G5.
+// C major scale pitches — London Bridge spans D5 → A5.
 const P_C5 = 523.25, P_D5 = 587.33, P_E5 = 659.25, P_F5 = 698.46,
-  P_G5 = 783.99;
+  P_G5 = 783.99, P_A5 = 880.00;
 
 function buildChart(): NoteDef[] {
   const notes: NoteDef[] = [];
@@ -100,25 +106,31 @@ function buildChart(): NoteDef[] {
   const push = (lane: number, time: number, travel: number, freq: number) =>
     notes.push({ id: id++, lane, time, travel, freq });
 
-  // The full eight-phrase Ode to Joy right-hand melody, C major. Drawn
-  // straight from Mantius Cazaubon's beginner piano tutorial:
-  //   P1: E E F G G F E D        (8 notes)
-  //   P2: C C D E E D D          (7)
-  //   P3: E E F G G F E D        (8, same as P1)
-  //   P4: C C D E D C C          (7, first resolution on C)
-  //   P5: D D E C D E F E C      (9, bridge opens)
-  //   P6: D E F E D C D G        (8, bridge closes on G to lift back to P7)
-  //   P7: E E F G G F E D        (8, same as P1)
-  //   P8: C C D E D C C          (7, final resolution)
+  // London Bridge canonical melody — exact pitches from noobnotes/Skoove,
+  // no padding. Two full verses (P1-P4 and P5-P8), then an eighth-note
+  // climax reprise (P9) of the opening hook for skill expression. The
+  // half-step climax is THE place where "perfect" runs separate skilled
+  // players from casual ones — coupled with the ±80ms PERFECT window,
+  // the leaderboard gap forms here.
+  //   P1: G A G F E F G         (7, "London Bridge is falling down")
+  //   P2: D E F E F G           (6, "falling down, falling down")
+  //   P3: G A G F E F G         (7, repeat opening line)
+  //   P4: D G E C               (4, "my fair lady" — clean tonic resolve)
+  //   P5: G A G F E F G         (7, verse 2 opening)
+  //   P6: D E F E F G           (6, verse 2 second line)
+  //   P7: G A G F E F G         (7, verse 2 third line)
+  //   P8: D G E C               (4, verse 2 final cadence)
+  //   P9: G A G F E F G         (7, eighth-note climax — half tempo, skill check)
   type Pitch = number;
-  const P1: Pitch[] = [P_E5, P_E5, P_F5, P_G5, P_G5, P_F5, P_E5, P_D5];
-  const P2: Pitch[] = [P_C5, P_C5, P_D5, P_E5, P_E5, P_D5, P_D5];
+  const P1: Pitch[] = [P_G5, P_A5, P_G5, P_F5, P_E5, P_F5, P_G5];
+  const P2: Pitch[] = [P_D5, P_E5, P_F5, P_E5, P_F5, P_G5];
   const P3: Pitch[] = P1;
-  const P4: Pitch[] = [P_C5, P_C5, P_D5, P_E5, P_D5, P_C5, P_C5];
-  const P5: Pitch[] = [P_D5, P_D5, P_E5, P_C5, P_D5, P_E5, P_F5, P_E5, P_C5];
-  const P6: Pitch[] = [P_D5, P_E5, P_F5, P_E5, P_D5, P_C5, P_D5, P_G5];
+  const P4: Pitch[] = [P_D5, P_G5, P_E5, P_C5];
+  const P5: Pitch[] = P1;
+  const P6: Pitch[] = P2;
   const P7: Pitch[] = P1;
   const P8: Pitch[] = P4;
+  const P9: Pitch[] = P1;  // climax reprise — same pitches, half the time
 
   // Lane map — low-left to high-right. C D on lane 0, E on lane 1, F on
   // lane 2, G on lane 3. Spreads the six-note Ode palette across all four
@@ -143,29 +155,38 @@ function buildChart(): NoteDef[] {
   //   each phrase so the ear hears the phrasing. Travel tightens as the
   //   song progresses so early tiles are readable and the finale drives.
 
-  // Phrase 1 (4.0s → 7.5s): E E F G G F E D
+  // ─── Verse 1 — quarter notes, teaches the melody ─────────────────────────
+  // Phrase 1 (4.0s → 7.5s): G A G F E F G — "London Bridge is falling down"
   stamp(P1, 4.0, TRAVEL_INTRO);
 
-  // Phrase 2 (8.0s → 11.0s): C C D E E D D
+  // Phrase 2 (8.0s → 11.0s): D E F E F G — "falling down, falling down"
   stamp(P2, 8.0, TRAVEL_INTRO);
 
-  // Phrase 3 (11.5s → 15.0s): E E F G G F E D
+  // Phrase 3 (11.5s → 15.0s): G A G F E F G — repeat opening line
   stamp(P3, 11.5, TRAVEL_VERSE);
 
-  // Phrase 4 (15.5s → 18.5s): C C D E D C C — first resolution
+  // Phrase 4 (15.5s → 17.5s): D G E C — "my fair lady" cadence
   stamp(P4, 15.5, TRAVEL_VERSE);
 
-  // Phrase 5 (19.0s → 23.0s): D D E C D E F E C — bridge opens
-  stamp(P5, 19.0, TRAVEL_VERSE);
+  // ─── Verse 2 — same melody, internalisation phase ────────────────────────
+  // Phrase 5 (18.0s → 21.5s): G A G F E F G
+  stamp(P5, 18.0, TRAVEL_VERSE);
 
-  // Phrase 6 (23.5s → 27.0s): D E F E D C D G — bridge closes on the G lift
-  stamp(P6, 23.5, TRAVEL_BUILD);
+  // Phrase 6 (22.0s → 25.0s): D E F E F G
+  stamp(P6, 22.0, TRAVEL_BUILD);
 
-  // Phrase 7 (27.5s → 31.0s): E E F G G F E D — return to the main theme
-  stamp(P7, 27.5, TRAVEL_BUILD);
+  // Phrase 7 (25.5s → 29.0s): G A G F E F G
+  stamp(P7, 25.5, TRAVEL_BUILD);
 
-  // Phrase 8 (31.5s → 34.5s): C C D E D C C — final resolution on tonic
-  stamp(P8, 31.5, TRAVEL_DROP);
+  // Phrase 8 (29.5s → 31.5s): D G E C — verse 2 final cadence
+  stamp(P8, 29.5, TRAVEL_DROP);
+
+  // ─── Climax (32.5s → 34.25s): EIGHTH-NOTE reprise of the opening hook ────
+  // Same 7 pitches as P1, played at half the time (250ms apart instead of
+  // 500ms). This is THE skill check — coupled with the ±80ms PERFECT
+  // window, it's where consistent perfect runs separate skilled players
+  // from casual ones. The leaderboard gap forms here.
+  stamp(P9, 32.5, TRAVEL_DROP, BEAT / 2);
 
   // ─── RITARDANDO (36.0s → 43.0s): held tonic — the "Freude!" resolution.
   //   The tutorial ends P8 with "C C" held; rhythm games need the timeline
@@ -193,26 +214,25 @@ type Burst = { id: number; x: number; y: number; color: string; born: number };
 // ─── Page ──────────────────────────────────────────────────────────────────────
 type Phase = "idle" | "countdown" | "playing" | "encore" | "finished";
 
-// Encore pool — loops the singable half of Ode to Joy (phrases 1 and 2)
-// and the second-half answer (phrases 3 and 4). The player hears the real
-// tune cycle underneath the accelerating tile pace.
-//   P1 + P2: E E F G G F E D | C C D E E D D
-//   P3 + P4: E E F G G F E D | C C D E D C C
+// Encore pool — one full canonical verse of London Bridge: opening line,
+// falling-down answer, repeat opening, my-fair-lady cadence. Player hears
+// the unmodified nursery rhyme cycle as tile pace accelerates.
+//   P1 + P2: G A G F E F G | D E F E F G
+//   P3 + P4: G A G F E F G | D G E C
 // Lane mapping matches buildChart.laneFor:
-//   C, D → lane 0   E → lane 1   F → lane 2   G → lane 3
+//   C, D → lane 0   E → lane 1   F → lane 2   G, A → lane 3
 const ENCORE_POOL: [number, number][] = [
-  // Phrase 1 — E E F G G F E D
-  [1, P_E5], [1, P_E5], [2, P_F5], [3, P_G5],
-  [3, P_G5], [2, P_F5], [1, P_E5], [0, P_D5],
-  // Phrase 2 — C C D E E D D
-  [0, P_C5], [0, P_C5], [0, P_D5], [1, P_E5],
-  [1, P_E5], [0, P_D5], [0, P_D5],
-  // Phrase 3 — E E F G G F E D (same as P1)
-  [1, P_E5], [1, P_E5], [2, P_F5], [3, P_G5],
-  [3, P_G5], [2, P_F5], [1, P_E5], [0, P_D5],
-  // Phrase 4 — C C D E D C C, resolves on the tonic
-  [0, P_C5], [0, P_C5], [0, P_D5], [1, P_E5],
-  [0, P_D5], [0, P_C5], [0, P_C5],
+  // Phrase 1 — G A G F E F G (London Bridge is falling down)
+  [3, P_G5], [3, P_A5], [3, P_G5], [2, P_F5],
+  [1, P_E5], [2, P_F5], [3, P_G5],
+  // Phrase 2 — D E F E F G (falling down, falling down)
+  [0, P_D5], [1, P_E5], [2, P_F5], [1, P_E5],
+  [2, P_F5], [3, P_G5],
+  // Phrase 3 — G A G F E F G (repeat opening)
+  [3, P_G5], [3, P_A5], [3, P_G5], [2, P_F5],
+  [1, P_E5], [2, P_F5], [3, P_G5],
+  // Phrase 4 — D G E C (my fair lady, clean tonic resolve)
+  [0, P_D5], [3, P_G5], [1, P_E5], [0, P_C5],
 ];
 
 export default function RhythmGamePage() {
@@ -321,13 +341,15 @@ export default function RhythmGamePage() {
   }, []);
 
   // Schedule the 45-second backing track: a musical C major bassline + hi-hats.
-  // Voiced in C major so it consonates with the Ode to Joy melody the player
-  // taps out on top. Pitched bass plays the chord roots so a bell on top plus
-  // a bass root = full triad in your ear.
+  // Voiced in C major so it consonates with the London Bridge melody the
+  // player taps out on top. Pitched bass plays the chord roots so a bell on
+  // top plus a bass root = full triad in your ear.
   //
   // Sections follow the chart exactly (45s total):
   //   intro   (0–9s)    → hats only → soft C2 pulse starting t=4
-  //   verse1  (9–15s)   → I-V-vi-IV classic Ode to Joy progression, beats 1 & 3
+  //   verse1  (9–15s)   → I-V-vi-IV progression — works for any C-major
+  //                       hymn/folk melody we slot in (Ode to Joy, Saints,
+  //                       London Bridge all share the tonal centre)
   //   build1  (15–21s)  → C major arpeggio on every beat, ascending
   //   drop1   (21–29s)  → driving I-V pattern on every beat
   //   break   (29–30s)  → hats only — the calm before the reprise
@@ -354,7 +376,9 @@ export default function RhythmGamePage() {
     }
 
     // ── VERSE 1 progression (9.0s–15.0s): I-V-vi-IV-I-V
-    // Classic Ode to Joy harmonisation in C major: C G Am F C G.
+    // C G Am F C G in C major — generic enough to harmonise any folk/hymn
+    // melody we slot into the chart. Resolves to the tonic; the Am passing
+    // chord adds colour without dragging.
     const verseChords = [C2, G2, A2, F2, C2, G2];
     for (let i = 0; i < verseChords.length; i++) {
       scheduleBass(ctx, audioStartTime + 9.0 + i * BEAT, verseChords[i], 0.38);

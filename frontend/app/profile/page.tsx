@@ -15,7 +15,7 @@ import { HabitatsPanel } from "@/components/HabitatsPanel";
 import { HabitatBackground } from "@/components/HabitatBackground";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useHabitats } from "@/hooks/useHabitats";
-import { moodFor, bubblesFor, idleClassFor, filterFor, overlayFor, type PetMood } from "@/lib/petMood";
+import { moodFor, bubblesFor, idleClassFor, filterFor, overlayFor, sceneOverlayFor, postureFor, type PetMood } from "@/lib/petMood";
 import { CONTRACT_ADDRESSES, ERC20_ABI } from "@/lib/contracts";
 import { formatUnits } from "viem";
 
@@ -480,6 +480,8 @@ function PetSlot({
   const idleClass = poking ? "pet-poke" : idleClassFor(mood, isEgg);
   const moodFilter = filterFor(mood);
   const overlayGlyph = overlayFor(mood);
+  const sceneOverlay = sceneOverlayFor(mood);
+  const posture = postureFor(mood);
 
   return (
     <div
@@ -495,6 +497,19 @@ function PetSlot({
     >
       {/* Habitat backdrop — sits behind everything else */}
       <HabitatBackground habitat={habitat} radius={14} glow={true} />
+      {/* Scene mood overlay — dims/tints the world per mood since we can't
+          change the sprite's expression. The slime stays cute; the room
+          around it carries the emotional shift. */}
+      {sceneOverlay && (
+        <div style={{
+          position: "absolute", inset: 0,
+          borderRadius: "14px",
+          background: sceneOverlay,
+          pointerEvents: "none",
+          zIndex: 2,
+          mixBlendMode: mood === "happy" ? "screen" : "multiply",
+        }} />
+      )}
       {bubble && (
         <div className="pet-bubble" style={{
           position: "absolute", top: "-10px", left: "50%", transform: "translateX(-50%)",
@@ -541,10 +556,15 @@ function PetSlot({
         zIndex: 1,
       }} />
       <div className={idleClass} style={{
-        position: "relative", zIndex: 2,
+        position: "relative", zIndex: 3,
         width: "100%", height: "100%",
         display: "flex", alignItems: "flex-end", justifyContent: "center",
         pointerEvents: "none",
+        // Body language — tilt/scale per mood. Wraps the idle animation so
+        // both compose: sprite still bobs, but bobs from a tilted base pose.
+        transform: posture,
+        transformOrigin: "50% 100%",
+        transition: "transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
       }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={pet.src} alt={pet.name} draggable={false}

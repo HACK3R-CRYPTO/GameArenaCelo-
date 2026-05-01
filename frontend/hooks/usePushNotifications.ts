@@ -80,16 +80,27 @@ export function usePushNotifications(walletAddress?: string) {
       navigator.serviceWorker.getRegistration().then(async (reg) => {
         if (!reg) { setState("granted"); return; }
         const sub = await reg.pushManager.getSubscription();
+
+        // Opt-out is checked FIRST and unconditionally. sub.unsubscribe()
+        // can silently fail in some browsers, leaving a dangling local
+        // subscription. If that happens, jumping to "subscribed" here
+        // would override the user's deliberate OFF choice. Force-clean
+        // the dangling sub instead and stay at "granted".
+        if (isOptedOut()) {
+          if (sub) {
+            try { await sub.unsubscribe(); } catch { /* best-effort */ }
+          }
+          setState("granted");
+          return;
+        }
+
         if (sub) {
           setState("subscribed");
           return;
         }
-        // No subscription but permission granted. Two cases:
-        //  a) cache cleared / new device → silently re-attach
-        //  b) user deliberately turned it OFF → stay off, respect their choice
-        // The opt-out flag is set in unsubscribe() and cleared in subscribe(),
-        // so it's the only way to tell those apart.
-        if (walletAddress && !isOptedOut()) {
+        // No subscription, not opted out → cache clear / new device path.
+        // Silently re-attach so the user doesn't have to re-tap.
+        if (walletAddress) {
           const ok = await silentlyResubscribeIfPossible(walletAddress);
           setState(ok ? "subscribed" : "granted");
         } else {

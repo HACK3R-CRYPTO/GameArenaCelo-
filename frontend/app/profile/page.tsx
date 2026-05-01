@@ -15,6 +15,7 @@ import { HabitatsPanel } from "@/components/HabitatsPanel";
 import { HabitatBackground } from "@/components/HabitatBackground";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useHabitats } from "@/hooks/useHabitats";
+import { UnblockNotificationsModal } from "@/components/UnblockNotificationsModal";
 import { moodFor, bubblesFor, idleClassFor, filterFor, overlayFor, sceneOverlayFor, postureFor, type PetMood } from "@/lib/petMood";
 import { CONTRACT_ADDRESSES, ERC20_ABI } from "@/lib/contracts";
 import { formatUnits } from "viem";
@@ -893,6 +894,9 @@ function ProfileInner() {
   // Shareable player card — modal opens on demand so we never pay the
   // html-to-image cost until the player actually wants to export.
   const [shareOpen, setShareOpen] = useState(false);
+  // Help modal that shows browser-aware unblock steps when push permission
+  // is denied — browsers won't let us re-prompt programmatically.
+  const [unblockHelpOpen, setUnblockHelpOpen] = useState(false);
 
   // Real XP / Level from backend (Phase 2). Falls back to derived value while loading.
   // streak + lastPlayDate + playedToday feed the pet mood derivation; without
@@ -1712,9 +1716,22 @@ function ProfileInner() {
                   </SettingsRow>
                   <SettingsRow icon="🔔" label="Push Notifications" color="#a78bfa">
                     {pushState === "denied" ? (
-                      <span style={{ color: "rgba(252,165,165,0.85)", fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.04em" }}>
-                        Blocked in browser
-                      </span>
+                      <button
+                        onClick={() => setUnblockHelpOpen(true)}
+                        style={{
+                          background: "rgba(252,165,165,0.12)",
+                          border: "1px solid rgba(252,165,165,0.45)",
+                          borderRadius: "999px",
+                          padding: "4px 10px",
+                          color: "rgba(252,165,165,0.95)",
+                          fontSize: "9.5px", fontWeight: 800, letterSpacing: "0.06em",
+                          cursor: "pointer",
+                          display: "inline-flex", alignItems: "center", gap: "5px",
+                        }}
+                      >
+                        Blocked — fix
+                        <span style={{ fontSize: "11px", lineHeight: 1 }}>›</span>
+                      </button>
                     ) : pushState === "unsupported" ? (
                       <span style={{ color: "rgba(200,180,255,0.5)", fontSize: "9.5px", fontWeight: 700 }}>
                         Not supported
@@ -1796,6 +1813,9 @@ function ProfileInner() {
           petName={petForLevel(playerLevel).name}
           avatarUrl={avatarUrl(address, username)}
         />
+      )}
+      {unblockHelpOpen && (
+        <UnblockNotificationsModal onClose={() => setUnblockHelpOpen(false)} />
       )}
     </div>
   );

@@ -15,7 +15,7 @@ import { HabitatsPanel } from "@/components/HabitatsPanel";
 import { HabitatBackground } from "@/components/HabitatBackground";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useHabitats } from "@/hooks/useHabitats";
-import { moodFor, bubblesFor, idleClassFor, filterFor, overlayFor, labelFor, type PetMood } from "@/lib/petMood";
+import { moodFor, bubblesFor, idleClassFor, filterFor, overlayFor, type PetMood } from "@/lib/petMood";
 import { CONTRACT_ADDRESSES, ERC20_ABI } from "@/lib/contracts";
 import { formatUnits } from "viem";
 
@@ -480,7 +480,6 @@ function PetSlot({
   const idleClass = poking ? "pet-poke" : idleClassFor(mood, isEgg);
   const moodFilter = filterFor(mood);
   const overlayGlyph = overlayFor(mood);
-  const moodLabel = labelFor(mood);
 
   return (
     <div
@@ -515,39 +514,22 @@ function PetSlot({
           }} />
         </div>
       )}
-      {/* Mood overlay glyph — 💤 for sleepy, 💧 for worried. Sits above the pet. */}
+      {/* Mood overlay glyph — 💤 for sleepy, 💧 for worried. This is the SOLE
+          textual-equivalent mood cue (no permanent label chip), so it's sized
+          to be confidently legible instead of timid-decorative. */}
       {overlayGlyph && (
         <div
           className={mood === "worried" ? "pet-tear-overlay" : "pet-z-overlay"}
           style={{
             position: "absolute",
-            top: mood === "worried" ? "32%" : "6px",
-            right: mood === "worried" ? "32%" : "12px",
-            fontSize: compact ? "16px" : "20px",
+            top: mood === "worried" ? "30%" : "0px",
+            right: mood === "worried" ? "30%" : "8px",
+            fontSize: compact ? "22px" : "28px",
             zIndex: 4,
             pointerEvents: "none",
-            filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.5))",
+            filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.6))",
           }}
         >{overlayGlyph}</div>
-      )}
-      {/* Mood label chip — only renders for lapsed moods (sleepy/sad/worried)
-         so engaged players never see UI furniture. Sits at the bottom edge
-         of the slot so it doesn't fight the speech bubble or the pet body. */}
-      {moodLabel && (
-        <div style={{
-          position: "absolute", bottom: "-2px", left: "50%", transform: "translateX(-50%)",
-          padding: "1px 7px", borderRadius: "999px",
-          background: "rgba(0,0,0,0.55)",
-          border: `1px solid ${moodLabel.color}66`,
-          zIndex: 6, pointerEvents: "none",
-          backdropFilter: "blur(4px)",
-        }}>
-          <span style={{
-            color: moodLabel.color,
-            fontSize: "8px", fontWeight: 900, letterSpacing: "0.12em",
-            textTransform: "uppercase", whiteSpace: "nowrap",
-          }}>{moodLabel.text}</span>
-        </div>
       )}
       {/* Soft ground glow — keeps the pet anchored visually inside the habitat */}
       <div style={{

@@ -94,20 +94,11 @@ export function filterFor(mood: PetMood): string | undefined {
 
 // Floating overlay glyph rendered above the pet for moods with a clear
 // emoji shorthand. null means no overlay (neutral, happy use motion alone).
+// The overlay is the SOLE textual-equivalent mood signal — bubble copy on
+// tap carries the rest. No permanent label chip: status-bar UI fights with
+// the sprite's expression and reads as Tamagotchi clutter.
 export function overlayFor(mood: PetMood): string | null {
   if (mood === "sleepy")  return "💤";
   if (mood === "worried") return "💧";
-  return null;
-}
-
-// Small diagnostic label shown only for the lapsed moods (sleepy/sad/worried).
-// Active and good states — happy, neutral — return null so the UI stays
-// quiet for engaged players. The label answers the unspoken "why does my
-// pet look like that?" for returning lapsed players. Returns label text +
-// the chip color for the caller to render.
-export function labelFor(mood: PetMood): { text: string; color: string } | null {
-  if (mood === "sleepy")  return { text: "sleepy",  color: "#7dd3fc" };
-  if (mood === "sad")     return { text: "sad",     color: "#a78bfa" };
-  if (mood === "worried") return { text: "worried", color: "#94a3b8" };
   return null;
 }

@@ -21,6 +21,21 @@ function urlBase64ToUint8Array(base64: string): Uint8Array {
 
 export type PushState = "unsupported" | "default" | "granted" | "denied" | "subscribing" | "subscribed";
 
+// "I deliberately turned this OFF" sticky bit. Set when the user toggles
+// OFF in Settings, cleared when they toggle ON again. Without this flag
+// the mount effect can't tell apart "subscription lost from cache clear"
+// (re-attach silently) vs "user unsubscribed on purpose" (leave it off).
+const OPT_OUT_KEY = "gamearena:push:opted-out";
+function isOptedOut(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(OPT_OUT_KEY) === "1";
+}
+function setOptedOut(v: boolean) {
+  if (typeof window === "undefined") return;
+  if (v) window.localStorage.setItem(OPT_OUT_KEY, "1");
+  else window.localStorage.removeItem(OPT_OUT_KEY);
+}
+
 // Browser-level constraint: the FIRST permission grant requires a user
 // gesture (click/tap). We can't bypass that — every browser enforces it.
 // BUT once a user grants permission on our domain, the permission stays
@@ -69,8 +84,12 @@ export function usePushNotifications(walletAddress?: string) {
           setState("subscribed");
           return;
         }
-        // No subscription but permission granted — silently re-attach.
-        if (walletAddress) {
+        // No subscription but permission granted. Two cases:
+        //  a) cache cleared / new device → silently re-attach
+        //  b) user deliberately turned it OFF → stay off, respect their choice
+        // The opt-out flag is set in unsubscribe() and cleared in subscribe(),
+        // so it's the only way to tell those apart.
+        if (walletAddress && !isOptedOut()) {
           const ok = await silentlyResubscribeIfPossible(walletAddress);
           setState(ok ? "subscribed" : "granted");
         } else {
@@ -112,6 +131,10 @@ export function usePushNotifications(walletAddress?: string) {
       });
       if (!r.ok) { setState("granted"); return false; }
 
+      // Subscribed by explicit user action — clear the opt-out sticky bit
+      // so future page loads with permission still granted will re-attach
+      // silently if the subscription is ever lost (cache clear, new device).
+      setOptedOut(false);
       setState("subscribed");
       return true;
     } catch (e) {
@@ -124,10 +147,15 @@ export function usePushNotifications(walletAddress?: string) {
   // Turn notifications off for THIS device. Unsubscribes locally + removes
   // the row from our backend. Does NOT revoke browser permission, so the
   // player can flip it back on later with one tap (no re-prompt).
+  // Sets the opt-out sticky bit so the mount effect doesn't silently re-
+  // attach the subscription on the next page load.
   const unsubscribe = useCallback(async () => {
-    if (!isSupported()) return;
+    // Set opt-out FIRST so even if the unsubscribe steps below race with a
+    // page reload, the next mount still respects the user's choice.
+    setOptedOut(true);
+    if (!isSupported()) { setState("granted"); return; }
     const reg = await navigator.serviceWorker.getRegistration();
-    if (!reg) return;
+    if (!reg) { setState("granted"); return; }
     const sub = await reg.pushManager.getSubscription();
     if (!sub) { setState("granted"); return; }
     try {

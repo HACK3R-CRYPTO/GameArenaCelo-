@@ -102,3 +102,33 @@ export function overlayFor(mood: PetMood): string | null {
   if (mood === "worried") return "💧";
   return null;
 }
+
+// Scene-level mood overlay rendered ON TOP OF the habitat backdrop. Sprite
+// art doesn't change per mood, so we change the WORLD around the pet
+// instead — Pokemon Sleep solves "static character, dynamic emotion" the
+// same way. Returns a CSS background string (used as `background:` value)
+// or null for moods that need no scene treatment.
+export function sceneOverlayFor(mood: PetMood): string | null {
+  // Happy: warm gold dawn glow, very subtle so it doesn't fight habitat colors
+  if (mood === "happy")   return "radial-gradient(ellipse at 50% 30%, rgba(251,191,36,0.18) 0%, transparent 65%)";
+  // Sleepy: indigo night tint, like the room's lights are off
+  if (mood === "sleepy")  return "linear-gradient(180deg, rgba(30,27,75,0.45) 0%, rgba(15,12,40,0.55) 100%)";
+  // Sad: cool blue-gray dim, "the room is colder without you"
+  if (mood === "sad")     return "linear-gradient(180deg, rgba(15,23,42,0.45) 0%, rgba(8,12,30,0.6) 100%)";
+  // Worried: heavier desaturated dim, almost storm-like
+  if (mood === "worried") return "linear-gradient(180deg, rgba(8,12,30,0.6) 0%, rgba(0,0,10,0.7) 100%)";
+  return null;
+}
+
+// Body-language transform applied to the sprite container. Even though we
+// can't change the sprite's face, we CAN change how it sits — tilted
+// forward when sleepy, slumped when sad, hunched when worried, puffed up
+// when happy. Body language reads as emotion at small sizes more reliably
+// than facial detail anyway.
+export function postureFor(mood: PetMood): string | undefined {
+  if (mood === "happy")   return "scale(1.04)";                      // chest puff
+  if (mood === "sleepy")  return "rotate(-4deg) translateY(2px)";    // nodding off
+  if (mood === "sad")     return "rotate(-2deg) translateY(4px) scale(0.97)"; // slumped
+  if (mood === "worried") return "scale(0.93) translateY(3px)";      // hunched, smaller
+  return undefined;
+}

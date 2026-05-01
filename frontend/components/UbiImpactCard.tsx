@@ -76,7 +76,6 @@ export function UbiImpactCard({ onClick }: Props) {
   }, []);
 
   const total = fmtG(globalStat?.totalUbiDonatedG || "0");
-  const totalHabitatUnlocks = Number(globalStat?.totalHabitatUnlocks || 0);
   const totalNum = Number(total.replace(/,/g, ""));
   const totalDisplay = useCountUp(totalNum);
 
@@ -188,7 +187,9 @@ export function UbiImpactCard({ onClick }: Props) {
             marginTop: "8px",
             letterSpacing: "0.04em",
           }}>
-            Community pool routed to UBI · {totalHabitatUnlocks.toLocaleString()} habitat{totalHabitatUnlocks === 1 ? "" : "s"} unlocked
+            {totalNum > 0
+              ? "Routed to verified humans on GoodDollar"
+              : "Be the first to fund verified humans"}
           </div>
         </div>
       </div>

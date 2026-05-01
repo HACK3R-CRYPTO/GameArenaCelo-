@@ -54,6 +54,7 @@ export function SocialImpactSection({ myUbiG }: { myUbiG: bigint }) {
   }, []);
 
   const community = fmtG(global?.totalUbiDonatedG || "0");
+  const communityNum = Number(community.replace(/,/g, ""));
   const my = fmtG(myUbiG.toString());
   const myNum = Number(my);
 
@@ -114,20 +115,26 @@ export function SocialImpactSection({ myUbiG }: { myUbiG: bigint }) {
               marginTop: "3px",
               lineHeight: 1.35,
             }}>
-              Players have given{" "}
-              <span style={{
-                color: "#86efac",
-                fontWeight: 900,
-                textShadow: "0 0 8px rgba(134,239,172,0.4)",
-              }}>{community} G$</span>{" "}
-              to GoodDollar so far
-              {myNum > 0 && (
+              {communityNum > 0 ? (
                 <>
-                  {" · "}
-                  <span style={{ color: "#fbbf24", fontWeight: 800 }}>
-                    You: {my} G$
-                  </span>
+                  Players have given{" "}
+                  <span style={{
+                    color: "#86efac",
+                    fontWeight: 900,
+                    textShadow: "0 0 8px rgba(134,239,172,0.4)",
+                  }}>{community} G$</span>{" "}
+                  to GoodDollar so far
+                  {myNum > 0 && (
+                    <>
+                      {" · "}
+                      <span style={{ color: "#fbbf24", fontWeight: 800 }}>
+                        You: {my} G$
+                      </span>
+                    </>
+                  )}
                 </>
+              ) : (
+                "Be the first to fund verified humans on GoodDollar"
               )}
             </div>
           </div>
